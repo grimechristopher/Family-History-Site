@@ -1,0 +1,50 @@
+{{define "content"}}
+<h1>The family</h1>
+<p class="lede">Another way round the questions. Tap anyone to see what&rsquo;s been said about them.</p>
+
+{{range .Tree}}
+  <section class="pedigree">
+    {{template "treenode" .}}
+  </section>
+{{end}}
+
+{{if .SubjectProgress}}
+  <h2>Also in the family</h2>
+  <p class="lede">Not on the direct line, but there are questions about them.</p>
+  <ul class="slist">
+    {{range .SubjectProgress}}
+      <li class="srow">
+        <a class="srow-name" href="/subjects/{{.Slug}}">{{.DisplayName}}</a>
+        <p class="srow-meta">{{.Answered}} of {{.Total}} answered</p>
+      </li>
+    {{end}}
+  </ul>
+{{end}}
+{{end}}
+
+{{define "treenode"}}
+<div class="tnode tnode-gen{{.Generation}}">
+  {{with .Person}}
+    {{if .SubjectSlug}}
+      <a class="tperson{{if .HasStories}} tperson-told{{end}}" href="/subjects/{{.SubjectSlug}}">
+        <span class="tname">{{.FullName}}</span>
+        {{if .Lifespan}}<span class="tyears">{{.Lifespan}}</span>{{end}}
+        {{if .QuestionCount}}
+          <span class="tcount">{{.AnsweredCount}}/{{.QuestionCount}} answered</span>
+        {{end}}
+      </a>
+    {{else}}
+      <span class="tperson tperson-plain">
+        <span class="tname">{{.FullName}}</span>
+        {{if .Lifespan}}<span class="tyears">{{.Lifespan}}</span>{{end}}
+      </span>
+    {{end}}
+  {{end}}
+
+  {{if .Parents}}
+    <div class="tparents">
+      {{range .Parents}}{{template "treenode" .}}{{end}}
+    </div>
+  {{end}}
+</div>
+{{end}}

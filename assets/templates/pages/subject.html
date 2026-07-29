@@ -1,0 +1,51 @@
+{{define "content"}}
+<h1>{{.Subject.DisplayName}}</h1>
+<p class="lede">
+  {{if .Subject.Total}}{{.Subject.Answered}} of {{.Subject.Total}} questions answered{{else}}No questions about them yet{{end}}
+</p>
+
+{{if .Members}}
+  <ul class="members">
+    {{range .Members}}
+      <li><strong>{{.FullName}}</strong>{{if .Lifespan}} <span class="tyears">{{.Lifespan}}</span>{{end}}</li>
+    {{end}}
+  </ul>
+{{end}}
+
+{{if .Unanswered}}
+  <form method="post" action="/subjects/{{.Subject.Slug}}/focus">
+    <div class="btn-row">
+      <button class="btn" type="submit">Answer just these questions</button>
+    </div>
+  </form>
+{{end}}
+
+<h2>Still waiting{{if .Unanswered}} <span class="count">{{len .Unanswered}}</span>{{end}}</h2>
+{{if .Unanswered}}
+  <ul class="qlist">{{range .Unanswered}}{{template "qrow" .}}{{end}}</ul>
+{{else}}
+  <p class="lede">Nothing left waiting here.</p>
+{{end}}
+
+<h2>Answered{{if .Answered}} <span class="count">{{len .Answered}}</span>{{end}}</h2>
+{{if .Answered}}
+  <ul class="qlist">{{range .Answered}}{{template "qrow" .}}{{end}}</ul>
+{{else}}
+  <p class="lede">Nothing answered here yet.</p>
+{{end}}
+
+{{if .Stories}}
+  <h2>Stories</h2>
+  {{range .Stories}}
+    <article class="answer">
+      <h3>{{.Title}}</h3>
+      <p class="answer-by">{{.AuthorName}}
+        <span class="answer-when">{{.CreatedAt.Format "2 January 2006"}}</span></p>
+      <div class="answer-body">{{.Body}}</div>
+      {{template "photos" .}}
+    </article>
+  {{end}}
+{{end}}
+
+<p><a class="link" href="/tree">Back to the tree</a></p>
+{{end}}

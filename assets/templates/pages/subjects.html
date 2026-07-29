@@ -1,0 +1,21 @@
+{{define "content"}}
+<h1>Everyone</h1>
+<p class="lede">Who the questions are about.</p>
+
+<ul class="slist">
+  {{range .SubjectProgress}}
+    <li class="srow">
+      <a class="srow-name" href="/subjects/{{.Slug}}">{{.DisplayName}}</a>
+      <p class="srow-meta">
+        {{if .Total}}
+          {{.Answered}} of {{.Total}} answered
+        {{else}}
+          no questions yet
+        {{end}}
+        {{if eq .Kind "couple"}} &middot; a couple{{end}}
+        {{if eq .Kind "group"}} &middot; a group{{end}}
+      </p>
+    </li>
+  {{end}}
+</ul>
+{{end}}

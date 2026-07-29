@@ -52,7 +52,7 @@ func New(cfg config.Config, s *store.Store, log *slog.Logger, assetVersion strin
 // all at once means every page can define "content" without colliding.
 func (s *Server) parseTemplates() error {
 	pages := []string{"home", "login", "denied", "callback", "cards",
-		"questions", "question", "stories"}
+		"questions", "question", "stories", "subjects", "subject", "tree"}
 	s.templates = make(map[string]*template.Template, len(pages))
 
 	for _, name := range pages {
@@ -120,6 +120,11 @@ type pageData struct {
 
 	// photos
 	PhotosEnabled bool
+
+	// tree and subject pages
+	Tree    []*treeNode
+	Subject *store.SubjectProgress
+	Members []store.TreePerson
 }
 
 func (s *Server) newPageData(r *http.Request, title string) pageData {
@@ -211,6 +216,11 @@ func (s *Server) Routes() http.Handler {
 
 	mux.Handle("POST /entries/{id}/photos", require(http.HandlerFunc(s.handleUploadPhoto)))
 	mux.Handle("POST /photos/{id}/delete", require(http.HandlerFunc(s.handleDeletePhoto)))
+
+	mux.Handle("GET /tree", require(http.HandlerFunc(s.handleTree)))
+	mux.Handle("GET /subjects", require(http.HandlerFunc(s.handleSubjects)))
+	mux.Handle("GET /subjects/{slug}", require(http.HandlerFunc(s.handleSubject)))
+	mux.Handle("POST /subjects/{slug}/focus", require(http.HandlerFunc(s.handleFocusSubject)))
 
 	return s.securityHeaders(mux)
 }

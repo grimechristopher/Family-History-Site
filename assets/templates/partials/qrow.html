@@ -1,0 +1,15 @@
+{{/* One row in any question list. Shared by the all-questions page and each
+     person's page, so it lives in partials rather than in either page. */}}
+{{define "qrow"}}
+<li class="qrow{{if .Answered}} qrow-done{{end}}">
+  <a class="qrow-body" href="/questions/{{.ID}}">{{.Body}}</a>
+  <p class="qrow-meta">
+    <span class="qrow-subject">{{.SubjectName}}</span>
+    &middot; asked of {{.AskedOfName}}
+    {{if .Answered}}&middot; answered{{end}}
+    {{if .OtherAnswers}}&middot; {{.OtherAnswers}} from others{{end}}
+    {{if .ReplyCount}}&middot; {{.ReplyCount}} {{if eq .ReplyCount 1}}reply{{else}}replies{{end}}{{end}}
+    {{if .ViewerAnswered}}&middot; you answered{{end}}
+  </p>
+</li>
+{{end}}

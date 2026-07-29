@@ -1100,3 +1100,187 @@ func TestSignInViaSupabaseIntrospection(t *testing.T) {
 		t.Errorf("bad token status = %d, want 401", rec.Code)
 	}
 }
+
+// --- phase 5: tree and subject pages ------------------------------------
+
+func TestBuildTreeWalksParents(t *testing.T) {
+	years := func(n int) *int { return &n }
+	id := func(n int64) *int64 { return &n }
+	people := []*store.TreePerson{
+		{ID: 1, Given: "Peter John", Surname: "Hale", BirthYear: years(1958), FatherID: id(2), MotherID: id(3)},
+		{ID: 2, Given: "Peter Samuel", Surname: "Hale", BirthYear: years(1925), FatherID: id(4)},
+		{ID: 3, Given: "Margaret Irene", Surname: "Ward", BirthYear: years(1928)},
+		{ID: 4, Given: "Louis Raymond", Surname: "Hale", BirthYear: years(1894)},
+	}
+
+	roots := buildTree(people, []int64{1}, 4)
+	if len(roots) != 1 {
+		t.Fatalf("roots = %d, want 1", len(roots))
+	}
+	if len(roots[0].Parents) != 2 {
+		t.Fatalf("parents of the root = %d, want 2", len(roots[0].Parents))
+	}
+	// Father first, so the pedigree reads conventionally.
+	if roots[0].Parents[0].Person.FullName() != "Peter Samuel Hale" {
+		t.Errorf("first parent = %q", roots[0].Parents[0].Person.FullName())
+	}
+	if roots[0].Parents[0].Generation != 1 {
+		t.Errorf("generation = %d, want 1", roots[0].Parents[0].Generation)
+	}
+	grandparents := roots[0].Parents[0].Parents
+	if len(grandparents) != 1 || grandparents[0].Person.FullName() != "Louis Raymond Hale" {
+		t.Errorf("grandparents = %+v", grandparents)
+	}
+	if grandparents[0].Generation != 2 {
+		t.Errorf("generation = %d, want 2", grandparents[0].Generation)
+	}
+}
+
+// Real genealogy data contains loops. The walk must terminate regardless.
+func TestBuildTreeSurvivesCyclesAndDepthLimits(t *testing.T) {
+	id := func(n int64) *int64 { return &n }
+	cyclic := []*store.TreePerson{
+		{ID: 1, Given: "A", FatherID: id(2)},
+		{ID: 2, Given: "B", FatherID: id(1)}, // B's father is A: a loop
+	}
+	roots := buildTree(cyclic, []int64{1}, 10)
+	if len(roots) != 1 {
+		t.Fatalf("roots = %d", len(roots))
+	}
+	depth := 0
+	for n := roots[0]; len(n.Parents) > 0; n = n.Parents[0] {
+		depth++
+		if depth > 20 {
+			t.Fatal("cycle was not broken")
+		}
+	}
+
+	// A long chain must stop at the requested depth.
+	var chain []*store.TreePerson
+	for i := int64(1); i <= 10; i++ {
+		p := &store.TreePerson{ID: i, Given: "P"}
+		if i < 10 {
+			next := i + 1
+			p.FatherID = &next
+		}
+		chain = append(chain, p)
+	}
+	roots = buildTree(chain, []int64{1}, 2)
+	depth = 0
+	for n := roots[0]; len(n.Parents) > 0; n = n.Parents[0] {
+		depth++
+	}
+	if depth != 2 {
+		t.Errorf("depth = %d, want 2", depth)
+	}
+}
+
+func TestBuildTreeIgnoresUnknownRoots(t *testing.T) {
+	if got := buildTree(nil, []int64{99}, 3); len(got) != 0 {
+		t.Errorf("got %d roots, want none", len(got))
+	}
+}
+
+// A pedigree only reaches blood ancestors, so a subject with questions that the
+// tree cannot reach must still be listed — otherwise those questions have no
+// route in from this page.
+func TestTreePageListsSubjectsOffThePedigree(t *testing.T) {
+	h := newHarness(t)
+	cookie := h.signIn("dad@example.com")
+	ctx := context.Background()
+
+	// A subject with questions and nobody in the tree, like "Further Back".
+	err := h.store.InTx(ctx, func(db store.DBTX) error {
+		sub, err := store.UpsertSubject(ctx, db, store.Subject{
+			Slug: "further-back", Kind: "group", DisplayName: "Further Back", SortOrder: 99,
+		})
+		if err != nil {
+			return err
+		}
+		_, err = store.UpsertImportedQuestion(ctx, db, store.ImportedQuestion{
+			SubjectID: sub, AskedOfUserID: h.dadID,
+			Body: "Any stories about the Aldermans?", SortOrder: 50, ImportKey: "fb-1",
+		})
+		return err
+	})
+	if err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	body := h.get("/tree", cookie).Body.String()
+	if !strings.Contains(body, "Also in the family") {
+		t.Error("expected a section for subjects off the pedigree")
+	}
+	if !strings.Contains(body, "Further Back") {
+		t.Error("a subject with questions but no tree position must still be reachable")
+	}
+}
+
+func TestSubjectPageGathersQuestionsAndStories(t *testing.T) {
+	h := newHarness(t)
+	cookie := h.signIn("dad@example.com")
+
+	body := h.get("/subjects/peter-samuel-hale", cookie).Body.String()
+	for _, want := range []string{
+		"Peter Samuel Hale",
+		"What kind of cars did he have?",
+		"Answer just these questions", // straight into a focused card stack
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("subject page missing %q", want)
+		}
+	}
+	// Mom's question is about the same subject but belongs on her list too; the
+	// page is per-subject, not per-person, so it should appear.
+	if !strings.Contains(body, "How did they meet?") {
+		t.Error("expected every question about this subject regardless of who was asked")
+	}
+
+	if rec := h.get("/subjects/no-such-person", cookie); rec.Code != http.StatusNotFound {
+		t.Errorf("unknown subject = %d, want 404", rec.Code)
+	}
+}
+
+// The path from "tell me about Grandpa Louis" to actually answering.
+func TestFocusSubjectSwitchesTheCardStack(t *testing.T) {
+	h := newHarness(t)
+	cookie := h.signIn("dad@example.com")
+
+	rec := h.post("/subjects/peter-samuel-hale/focus", url.Values{}, cookie)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303", rec.Code)
+	}
+	if loc := rec.Header().Get("Location"); loc != "/cards" {
+		t.Errorf("Location = %q, want /cards", loc)
+	}
+
+	u, err := h.store.UserByID(context.Background(), h.dadID)
+	if err != nil {
+		t.Fatalf("UserByID: %v", err)
+	}
+	if u.QueueMode != store.QueueOneSubject || u.QueueFocusSubjectID == nil {
+		t.Errorf("queue not focused: mode=%q focus=%v", u.QueueMode, u.QueueFocusSubjectID)
+	}
+
+	if rec := h.post("/subjects/nope/focus", url.Values{}, cookie); rec.Code != http.StatusNotFound {
+		t.Errorf("unknown subject = %d, want 404", rec.Code)
+	}
+}
+
+func TestLifespanFormatting(t *testing.T) {
+	y := func(n int) *int { return &n }
+	cases := []struct {
+		p    store.TreePerson
+		want string
+	}{
+		{store.TreePerson{BirthYear: y(1894), DeathYear: y(1972)}, "1894–1972"},
+		{store.TreePerson{BirthYear: y(1958)}, "b. 1958"},
+		{store.TreePerson{DeathYear: y(1920)}, "d. 1920"},
+		{store.TreePerson{}, ""},
+	}
+	for _, c := range cases {
+		if got := c.p.Lifespan(); got != c.want {
+			t.Errorf("Lifespan() = %q, want %q", got, c.want)
+		}
+	}
+}
