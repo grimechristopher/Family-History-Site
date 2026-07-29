@@ -121,13 +121,13 @@ func TestFindByNameRequiresExactlyOneMatch(t *testing.T) {
 
 func TestExtractYear(t *testing.T) {
 	cases := map[string]int{
-		"12 MAR 1985":        1985,
-		"ABT 1900":           1900,
-		"BET 1910 AND 1912":  1912,
-		"":                   0,
-		"no digits here":     0,
-		"12":                 0,
-		"3 JUN 2011":         2011,
+		"12 MAR 1985":       1985,
+		"ABT 1900":          1900,
+		"BET 1910 AND 1912": 1912,
+		"":                  0,
+		"no digits here":    0,
+		"12":                0,
+		"3 JUN 2011":        2011,
 	}
 	for in, want := range cases {
 		if got := extractYear(in); got != want {

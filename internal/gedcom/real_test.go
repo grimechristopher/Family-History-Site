@@ -127,4 +127,3 @@ func TestRealGedcomDuplicateOutsideWindowIsExcluded(t *testing.T) {
 	}
 	t.Logf("Bertram Lyle Osgood resolves to %s at generation %d", id, anc[id])
 }
-
