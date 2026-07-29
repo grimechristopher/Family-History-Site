@@ -29,19 +29,30 @@ func TestRunAppliesMigrationsAndIsIdempotent(t *testing.T) {
 	ctx := context.Background()
 	pool := testPool(t)
 
+	count := func() int {
+		t.Helper()
+		var n int
+		if err := pool.QueryRow(ctx, "SELECT count(*) FROM family.schema_migrations").Scan(&n); err != nil {
+			t.Fatalf("count migrations: %v", err)
+		}
+		return n
+	}
+
 	if err := Run(ctx, pool); err != nil {
 		t.Fatalf("first Run: %v", err)
 	}
+	applied := count()
+	if applied == 0 {
+		t.Fatal("no migrations were recorded")
+	}
+
 	if err := Run(ctx, pool); err != nil {
 		t.Fatalf("second Run should be a no-op: %v", err)
 	}
-
-	var n int
-	if err := pool.QueryRow(ctx, "SELECT count(*) FROM family.schema_migrations").Scan(&n); err != nil {
-		t.Fatalf("count migrations: %v", err)
-	}
-	if n != 1 {
-		t.Errorf("recorded migrations = %d, want 1 (re-running must not duplicate)", n)
+	// The assertion is that re-running changes nothing, not that any particular
+	// number of migration files exists.
+	if again := count(); again != applied {
+		t.Errorf("recorded migrations went %d -> %d; re-running must not duplicate", applied, again)
 	}
 
 	for _, table := range []string{

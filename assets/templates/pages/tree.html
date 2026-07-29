@@ -25,7 +25,7 @@
 {{define "treenode"}}
 <div class="tnode tnode-gen{{.Generation}}">
   {{with .Person}}
-    {{if .SubjectSlug}}
+    {{if and .SubjectSlug .QuestionCount}}
       <a class="tperson{{if .HasStories}} tperson-told{{end}}" href="/subjects/{{.SubjectSlug}}">
         <span class="tname">{{.FullName}}</span>
         {{if .Lifespan}}<span class="tyears">{{.Lifespan}}</span>{{end}}

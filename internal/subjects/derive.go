@@ -54,10 +54,28 @@ type Person struct {
 	// is not recorded under — chiefly married names. "Grandma Mary Brennan" is
 	// recorded as Nora Angeline Radley.
 	AliasSurnames []string
+
+	// MarriedSurname is set for women who took a husband's name, so they can be
+	// shown the way family records show them.
+	MarriedSurname string
 }
 
+// FullName is the name as recorded: "Nora Angeline Radley".
 func (p Person) FullName() string {
 	return strings.TrimSpace(p.Given + " " + p.Surname)
+}
+
+// DisplayName follows the genealogical convention, putting the maiden name in
+// parentheses between the given names and the married surname:
+// "Nora Angeline (Radley) Brennan". Everyone else is unchanged.
+func (p Person) DisplayName() string {
+	if p.MarriedSurname == "" || p.MarriedSurname == p.Surname {
+		return p.FullName()
+	}
+	if p.Surname == "" {
+		return strings.TrimSpace(p.Given + " " + p.MarriedSurname)
+	}
+	return strings.TrimSpace(p.Given + " (" + p.Surname + ") " + p.MarriedSurname)
 }
 
 // Tree is the derived, bounded slice of the GEDCOM that the site uses.
@@ -148,6 +166,11 @@ func Derive(f *gedcom.File, opts Options) (*Tree, error) {
 			Generation:    gen,
 			AliasSurnames: spouseSurnames(f, ind),
 		}
+		// Only women took a spouse's surname in these generations, so the
+		// convention is applied on that basis rather than guessed at.
+		if p.Sex == "F" {
+			p.MarriedSurname = marriedSurname(f, ind, window)
+		}
 		if fam := f.ParentFamily(id); fam != nil {
 			if _, ok := window[fam.HusbandID]; ok {
 				p.FatherID = fam.HusbandID
@@ -191,6 +214,75 @@ func generationOfSpouse(f *gedcom.File, id string, window map[string]int) int {
 	return 1
 }
 
+// marriedSurname picks which husband's name to show her under: the last one she
+// married.
+//
+// Alma Jean Nash remarried a Whitby in 1969, so she is Alma Jean (Nash)
+// Whitby even though the family grew up calling her Grandma Osgood. Alice
+// Matilda Crowe married George Marsh in 1918 after Pierce Radley, so she is
+// Marsh even though Radley is the husband who connects her to this tree.
+// Whether a marriage ended in divorce or a death turns out not to matter: the
+// latest one is the answer either way.
+//
+// When no marriage carries a date the order is genuinely unknowable from the
+// file, so the marriage into this family wins — that is the only real signal
+// available, and it matches what the family calls her. Vera Lindqvist is the
+// one person this affects.
+func marriedSurname(f *gedcom.File, ind *gedcom.Individual, window map[string]int) string {
+	type marriage struct {
+		surname  string
+		year     int
+		order    int
+		inFamily bool
+	}
+
+	var marriages []marriage
+	for i, famID := range ind.FamS {
+		fam := f.Families[famID]
+		if fam == nil {
+			continue
+		}
+		spouseID := fam.HusbandID
+		if spouseID == ind.ID {
+			spouseID = fam.WifeID
+		}
+		if spouseID == "" || spouseID == ind.ID {
+			continue
+		}
+		spouse := f.Individuals[spouseID]
+		if spouse == nil || spouse.Surname == "" || spouse.Surname == ind.Surname {
+			continue
+		}
+		_, inFamily := window[spouseID]
+		marriages = append(marriages, marriage{
+			surname: spouse.Surname, year: fam.MarriageYear,
+			order: i, inFamily: inFamily,
+		})
+	}
+	if len(marriages) == 0 {
+		return ""
+	}
+
+	// Any dated marriage beats every undated one, and the latest date wins.
+	best := marriage{year: -1, order: -1}
+	for _, m := range marriages {
+		if m.year > best.year || (m.year == best.year && m.order > best.order) {
+			best = m
+		}
+	}
+	if best.year > 0 {
+		return best.surname
+	}
+
+	// Nothing dated: fall back to the marriage that put her in this family.
+	for _, m := range marriages {
+		if m.inFamily {
+			return m.surname
+		}
+	}
+	return best.surname
+}
+
 // spouseSurnames collects the surnames of everyone this individual married, so
 // a woman recorded under her maiden name can still be found by her married one.
 func spouseSurnames(f *gedcom.File, ind *gedcom.Individual) []string {
@@ -231,9 +323,11 @@ func (t *Tree) buildSubjects(f *gedcom.File) []Subject {
 			p := t.People[id]
 			order++
 			out = append(out, Subject{
+				// The slug stays on the recorded name, so it is stable even if
+				// a marriage is added to the tree later.
 				Slug:        slugify(p.FullName()),
 				Kind:        KindIndividual,
-				DisplayName: p.FullName(),
+				DisplayName: p.DisplayName(),
 				SortOrder:   order,
 				Generation:  gen,
 				MemberIDs:   []string{id},
@@ -266,10 +360,12 @@ type couple struct {
 }
 
 func (c couple) subject(order int) Subject {
-	names := []string{c.a.FullName()}
+	names := []string{c.a.DisplayName()}
+	slugParts := []string{c.a.FullName()}
 	members := []string{c.a.GedcomID}
 	if c.b != nil {
-		names = append(names, c.b.FullName())
+		names = append(names, c.b.DisplayName())
+		slugParts = append(slugParts, c.b.FullName())
 		members = append(members, c.b.GedcomID)
 	}
 	kind := KindCouple
@@ -277,7 +373,7 @@ func (c couple) subject(order int) Subject {
 		kind = KindIndividual
 	}
 	return Subject{
-		Slug:        slugify(strings.Join(names, " and ")),
+		Slug:        slugify(strings.Join(slugParts, " and ")),
 		Kind:        kind,
 		DisplayName: strings.Join(names, " & "),
 		SortOrder:   order,

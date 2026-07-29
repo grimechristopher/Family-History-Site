@@ -40,9 +40,14 @@
         hx-target="#stack-region" hx-swap="outerHTML"
         hx-disabled-elt="find button">
     <label for="answer-{{.QuestionID}}">Your answer</label>
-    <textarea id="answer-{{.QuestionID}}" name="body" rows="7"
-              data-draft-url="/cards/{{.QuestionID}}/draft"
-              placeholder="Tap the microphone on the keyboard and just talk, if that&rsquo;s easier.">{{.DraftBody}}</textarea>
+    <p class="dictate" id="dictate-{{.QuestionID}}">
+      <span aria-hidden="true">🎤</span>
+      <span>Tap the microphone on the keyboard and just talk &mdash; it types for you.
+      Nothing is lost if you stop partway.</span>
+    </p>
+    <textarea id="answer-{{.QuestionID}}" name="body" rows="8"
+              aria-describedby="dictate-{{.QuestionID}}"
+              data-draft-url="/cards/{{.QuestionID}}/draft">{{.DraftBody}}</textarea>
     <p class="save-state" data-save-state aria-live="polite"></p>
 
     <div class="btn-row">
@@ -53,6 +58,9 @@
               hx-target="#stack-region" hx-swap="outerHTML">Later</button>
     </div>
   </form>
-  <p class="hint">&ldquo;Later&rdquo; puts this one back in the pile &mdash; nothing is lost, and it&rsquo;ll come round again.</p>
+  <p class="hint">
+    Toss the card sideways with your finger, or press &ldquo;Later&rdquo; &mdash;
+    either way it goes back in the pile and comes round again. Nothing is lost.
+  </p>
 </article>
 {{end}}

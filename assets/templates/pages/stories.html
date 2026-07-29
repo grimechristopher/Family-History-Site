@@ -15,8 +15,11 @@
     </select>
 
     <label for="story-body">The story</label>
-    <textarea id="story-body" name="body" rows="9"
-              placeholder="Tap the microphone on the keyboard and just talk, if that&rsquo;s easier."></textarea>
+    <p class="dictate" id="dictate-story">
+      <span aria-hidden="true">🎤</span>
+      <span>Tap the microphone on the keyboard and just talk &mdash; it types for you.</span>
+    </p>
+    <textarea id="story-body" name="body" rows="9" aria-describedby="dictate-story"></textarea>
     <div class="btn-row"><button class="btn" type="submit">Save story</button></div>
   </form>
 </details>

@@ -37,6 +37,12 @@ type Family struct {
 	HusbandID string
 	WifeID    string
 	ChildIDs  []string
+
+	// MarriageYear orders a person's marriages, which is what decides the
+	// surname they were last known by. 0 means unrecorded.
+	MarriageYear int
+	// Divorced records a dissolved marriage.
+	Divorced bool
 }
 
 type File struct {
@@ -102,24 +108,36 @@ func Parse(r io.Reader) (*File, error) {
 					curFam.WifeID = value
 				case "CHIL":
 					curFam.ChildIDs = append(curFam.ChildIDs, value)
+				case "MARR":
+					curEvent = tag
+				case "DIV":
+					curFam.Divorced = true
+					curEvent = tag
 				}
 			}
 		case 2:
-			if curIndi == nil || tag != "DATE" {
+			if tag != "DATE" {
 				continue
 			}
 			year := extractYear(value)
 			if year == 0 {
 				continue
 			}
-			switch curEvent {
-			case "BIRT":
-				if curIndi.BirthYear == 0 {
-					curIndi.BirthYear = year
+			switch {
+			case curIndi != nil:
+				switch curEvent {
+				case "BIRT":
+					if curIndi.BirthYear == 0 {
+						curIndi.BirthYear = year
+					}
+				case "DEAT":
+					if curIndi.DeathYear == 0 {
+						curIndi.DeathYear = year
+					}
 				}
-			case "DEAT":
-				if curIndi.DeathYear == 0 {
-					curIndi.DeathYear = year
+			case curFam != nil:
+				if curEvent == "MARR" && curFam.MarriageYear == 0 {
+					curFam.MarriageYear = year
 				}
 			}
 		}

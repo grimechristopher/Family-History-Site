@@ -9,15 +9,16 @@ import (
 )
 
 type Person struct {
-	ID        int64
-	GedcomID  string
-	Given     string
-	Surname   string
-	Sex       *string
-	BirthYear *int
-	DeathYear *int
-	FatherID  *int64
-	MotherID  *int64
+	ID             int64
+	GedcomID       string
+	Given          string
+	Surname        string
+	MarriedSurname *string
+	Sex            *string
+	BirthYear      *int
+	DeathYear      *int
+	FatherID       *int64
+	MotherID       *int64
 }
 
 type Subject struct {
@@ -33,16 +34,18 @@ type Subject struct {
 func UpsertPerson(ctx context.Context, db DBTX, p Person) (int64, error) {
 	var id int64
 	err := db.QueryRow(ctx, `
-		INSERT INTO family.people (gedcom_id, given_name, surname, sex, birth_year, death_year)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO family.people
+		  (gedcom_id, given_name, surname, married_surname, sex, birth_year, death_year)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		ON CONFLICT (gedcom_id) DO UPDATE SET
-		  given_name = EXCLUDED.given_name,
-		  surname    = EXCLUDED.surname,
-		  sex        = EXCLUDED.sex,
-		  birth_year = EXCLUDED.birth_year,
-		  death_year = EXCLUDED.death_year
+		  given_name      = EXCLUDED.given_name,
+		  surname         = EXCLUDED.surname,
+		  married_surname = EXCLUDED.married_surname,
+		  sex             = EXCLUDED.sex,
+		  birth_year      = EXCLUDED.birth_year,
+		  death_year      = EXCLUDED.death_year
 		RETURNING id`,
-		p.GedcomID, p.Given, p.Surname, p.Sex, p.BirthYear, p.DeathYear).Scan(&id)
+		p.GedcomID, p.Given, p.Surname, p.MarriedSurname, p.Sex, p.BirthYear, p.DeathYear).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("upsert person %s: %w", p.GedcomID, err)
 	}

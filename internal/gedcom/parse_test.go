@@ -2,6 +2,7 @@ package gedcom
 
 import (
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -148,5 +149,54 @@ func TestSplitName(t *testing.T) {
 		if given != c.given || surname != c.surname {
 			t.Errorf("splitName(%q) = (%q,%q), want (%q,%q)", c.in, given, surname, c.given, c.surname)
 		}
+	}
+}
+
+// Marriage dates and divorces decide which surname a woman was last known by,
+// so the parser has to keep them.
+func TestParseMarriageAndDivorce(t *testing.T) {
+	f, err := Parse(strings.NewReader(`0 @I1@ INDI
+1 NAME Alice Marguerite /Crowe/
+1 SEX F
+1 FAMS @F1@
+1 FAMS @F2@
+0 @I2@ INDI
+1 NAME Pierce Tobias /Radley/
+0 @I3@ INDI
+1 NAME George /Marsh/
+0 @F1@ FAM
+1 HUSB @I2@
+1 WIFE @I1@
+1 MARR
+2 DATE 12 JUN 1888
+1 DIV
+2 DATE 1910
+0 @F2@ FAM
+1 HUSB @I3@
+1 WIFE @I1@
+1 MARR
+2 DATE 1918
+0 TRLR
+`))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	first, second := f.Families["@F1@"], f.Families["@F2@"]
+	if first.MarriageYear != 1888 {
+		t.Errorf("first marriage year = %d, want 1888", first.MarriageYear)
+	}
+	if !first.Divorced {
+		t.Error("first marriage should be recorded as divorced")
+	}
+	if second.MarriageYear != 1918 {
+		t.Errorf("second marriage year = %d, want 1918", second.MarriageYear)
+	}
+	if second.Divorced {
+		t.Error("second marriage was not dissolved")
+	}
+	// A divorce date must not overwrite the marriage date.
+	if first.MarriageYear == 1910 {
+		t.Error("divorce date leaked into the marriage year")
 	}
 }

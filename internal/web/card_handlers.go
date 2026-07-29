@@ -58,11 +58,19 @@ func (s *Server) stackData(r *http.Request, flash string) (pageData, error) {
 	}
 	data.Progress = &p
 
-	// The subject picker is only meaningful in one-person-at-a-time mode.
+	// The subject picker is only meaningful in one-person-at-a-time mode, and it
+	// must only offer people who actually have questions: picking an empty one
+	// landed you on a dead end.
 	if u.QueueMode == store.QueueOneSubject {
-		subjects, err := s.Store.Subjects(r.Context())
+		withProgress, err := s.Store.SubjectsWithProgress(r.Context())
 		if err != nil {
 			return data, err
+		}
+		var subjects []store.Subject
+		for _, sp := range withProgress {
+			if sp.Total > 0 {
+				subjects = append(subjects, sp.Subject)
+			}
 		}
 		data.Subjects = subjects
 

@@ -1,537 +1,1220 @@
-/* Built for two people in their eighties reading an iPad in portrait.
-   The type scale, tap targets, and single column are product requirements, not
-   preferences: if this is hard to read, none of the rest matters. */
+/* =========================================================================
+   Family History — interface styles
+   =========================================================================
+
+   Who this is for, concretely: Chris's parents, 68 and 70, on iPads. His
+   mother is partially sighted and answers by dictating into the keyboard
+   microphone. Dictation is the reason this site exists rather than a notebook,
+   so the writing surface is the most important object on the screen and
+   legibility outranks every other consideration.
+
+   That rules out the usual signals of "premium" — hairline weights, low
+   contrast greys, tight tracking, small captions — and it also rules out the
+   warm-cream-and-serif treatment that family history invites. Character here
+   comes from structure and contrast instead: near-black on near-white, one
+   deep accent, horizontal rules doing the organising, and a lot of air.
+
+   Fixed constraints:
+     · body text 21px minimum, scaling with the reader's own text size
+     · body contrast >= 12:1 in both themes; nothing meaningful below 4.5:1
+     · every target at least 48x48
+     · one column, no horizontal scrolling, reflows to 400% zoom
+     · no blur or transparency behind text
+   ========================================================================= */
+
+
+/* ---------- Faces -----------------------------------------------------
+   Three faces, three jobs, each chosen for this project rather than for
+   flavour. Self-hosted: the CSP allows no outside origins, and a silent
+   fallback would undo the reason for picking them.
+   -------------------------------------------------------------------- */
+
+/* Atkinson Hyperlegible — drawn by the Braille Institute for readers with
+   low vision. Chosen for Ruth, who has macular degeneration: unambiguous
+   letterforms, open apertures, no confusable I/l/1. Everything read as
+   content is set in this. */
+@font-face {
+  font-family: "Atkinson Hyperlegible";
+  src: url("/static/fonts/AtkinsonHyperlegible-400-normal.woff2") format("woff2");
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "Atkinson Hyperlegible";
+  src: url("/static/fonts/AtkinsonHyperlegible-400-italic.woff2") format("woff2");
+  font-weight: 400; font-style: italic; font-display: swap;
+}
+@font-face {
+  font-family: "Atkinson Hyperlegible";
+  src: url("/static/fonts/AtkinsonHyperlegible-700-normal.woff2") format("woff2");
+  font-weight: 700; font-style: normal; font-display: swap;
+}
+
+/* Courier Prime — index cards were typed. Used only for the things that would
+   have been typed onto a card: the subject line, counts, dates. */
+@font-face {
+  font-family: "Courier Prime";
+  src: url("/static/fonts/CourierPrime-400-normal.woff2") format("woff2");
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "Courier Prime";
+  src: url("/static/fonts/CourierPrime-700-normal.woff2") format("woff2");
+  font-weight: 700; font-style: normal; font-display: swap;
+}
+
+/* Newsreader — the book all of this is being collected for. Headings and the
+   wordmark only, never at small sizes. */
+@font-face {
+  font-family: "Newsreader";
+  src: url("/static/fonts/Newsreader-400-normal.woff2") format("woff2");
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "Newsreader";
+  src: url("/static/fonts/Newsreader-600-normal.woff2") format("woff2");
+  font-weight: 600; font-style: normal; font-display: swap;
+}
+
+/* ---------- Tokens ----------------------------------------------------- */
 
 :root {
-  --ink: #1c1a17;
-  --ink-soft: #55504a;
-  --paper: #faf7f2;
-  --card: #ffffff;
-  --line: #ddd6cb;
-  --accent: #234e70;
-  --accent-ink: #ffffff;
-  --warm: #8a6a3d;
-  --danger: #8c2f22;
+  /* Neutrals carry a faint bias toward the accent's hue rather than being
+     mechanically grey. */
+  /* The desk the box of cards sits on: a cool grey-green, so the warm card
+     stock reads as a separate object rather than as the page. */
+  --ground:      #e9ebe6;
+  --ground-sunk: #dee1db;
+  --surface:     #ffffff;
+  --surface-2:   #f6f7f4;
 
-  /* 20px floor on body text. */
-  --body: 1.25rem;
-  --lead: 1.6;
-  --tap: 44px;
-  --column: 46rem;
+  /* Index card stock, and the two rules real cards are printed with. */
+  --card-stock:  #fdfaf1;
+  --card-stock-2:#f7f1e2;
+  --card-rule:   #9fc3d4;  /* the pale cyan horizontal ruling */
+  --card-redrule:#c0524a;  /* the single red rule near the top */
+  --card-edge:   #cfc7b4;
+
+  --ink:      #111412;  /* 16.4:1 on --surface */
+  --ink-mid:  #3d443f;  /*  9.7:1 — safe for body copy */
+  --ink-soft: #5c645e;  /*  6.4:1 — metadata, still AA-large and AAA-normal */
+
+  --rule:        #d5d8d3;
+  --rule-strong: #a8ada7;
+
+  /* One accent. Deep petrol: this is a family of engineers and Navy
+     technicians, and it holds contrast on both grounds. */
+  /* Fountain-pen ink, deliberately not the terracotta this subject invites. */
+  --accent:      #1c3f63;  /* 9.5:1 on white */
+  --accent-hi:   #142d47;
+  --accent-ink:  #ffffff;
+  --accent-wash: #e3eaf3;
+
+  /* Semantic, deliberately not the accent. */
+  --done:       #1e5c3a;
+  --done-wash:  #e6f0ea;
+  --alert:      #8a2318;
+  --alert-wash: #fbecea;
+
+  /* One serif, used once, for the wordmark. Everything else is a
+     high-legibility sans: open counters and unambiguous glyphs matter more
+     here than flavour. */
+  --sans: "Atkinson Hyperlegible", -apple-system, BlinkMacSystemFont,
+          "Segoe UI", Roboto, sans-serif;
+  --typed: "Courier Prime", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --wordmark: "Newsreader", ui-serif, "Iowan Old Style", Georgia, serif;
+
+  --t-micro: 1rem;         /* 16px, uppercase + tracked, labels only */
+  --t-small: 1.125rem;     /* 18px, metadata only */
+  --t-body:  1.3125rem;    /* 21px floor for anything read as prose */
+  --t-lead:  1.4375rem;
+  --t-h3:    1.375rem;
+  --t-h2:    1.625rem;
+  --t-h1:    2.25rem;
+
+  --leading: 1.7;          /* generous: helps line-tracking at magnification */
+  --leading-tight: 1.25;
+
+  --s1: 0.25rem; --s2: 0.5rem; --s3: 0.75rem; --s4: 1rem;
+  --s5: 1.5rem;  --s6: 2rem;   --s7: 3rem;    --s8: 4.5rem;
+
+  --tap: 48px;
+  --measure: 34rem;   /* ~66 characters */
+  --column: 44rem;
+
+  --r: 0.375rem;      /* one small radius, applied sparingly */
+  --r-pill: 999px;
+
+  --edge: 0 1px 0 rgba(17, 20, 18, 0.04);
+  --ease: cubic-bezier(0.2, 0.6, 0.35, 1);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --ink: #f0ece5;
-    --ink-soft: #b4aca0;
-    --paper: #17161a;
-    --card: #201f24;
-    --line: #383540;
-    --accent: #7fb0d8;
-    --accent-ink: #10161c;
-    --warm: #cbab77;
-    --danger: #e08a7c;
+    --ground:      #15181a;
+    --ground-sunk: #0f1113;
+    --surface:     #1e2225;
+    --surface-2:   #252a2e;
+
+    --card-stock:  #22262a;
+    --card-stock-2:#1b1f22;
+    --card-rule:   #2f4854;
+    --card-redrule:#7d3a35;
+    --card-edge:   #3b4348;
+
+    --ink:      #f2f4f2;  /* 14.9:1 on --surface */
+    --ink-mid:  #c4cac6;  /*  9.4:1 */
+    --ink-soft: #9aa19d;  /*  5.6:1 */
+
+    --rule:        #2f3532;
+    --rule-strong: #4b524e;
+
+    --accent:      #93b8dd;  /* 8.7:1 on --surface */
+    --accent-hi:   #b6d2ee;
+    --accent-ink:  #0b1a1e;
+    --accent-wash: #1c2733;
+
+    --done:       #7fc39c;
+    --done-wash:  #16241c;
+    --alert:      #e8a096;
+    --alert-wash: #2a1613;
+
+    --edge: 0 1px 0 rgba(0, 0, 0, 0.3);
+  }
+}
+
+/* Readers who ask the OS for more contrast get it. */
+@media (prefers-contrast: more) {
+  :root {
+    --ink: #000000;
+    --ink-mid: #1a1a1a;
+    --ink-soft: #2e2e2e;
+    --rule: #767676;
+    --rule-strong: #000000;
+    --accent: #00333d;
+    --surface: #ffffff;
+    --ground: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #ffffff;
+      --ink-mid: #f0f0f0;
+      --ink-soft: #dddddd;
+      --rule: #9a9a9a;
+      --rule-strong: #ffffff;
+      --accent: #b3e2ee;
+      --surface: #000000;
+      --ground: #000000;
+    }
   }
 }
 
 *, *::before, *::after { box-sizing: border-box; }
 
-html { -webkit-text-size-adjust: 100%; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 
 body {
   margin: 0;
-  background: var(--paper);
+  background: var(--ground);
   color: var(--ink);
-  font: var(--body)/var(--lead) ui-serif, Georgia, "Times New Roman", serif;
+  font: var(--t-body)/var(--leading) var(--sans);
   -webkit-font-smoothing: antialiased;
 }
 
-/* Header */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
 
+::selection { background: var(--accent-wash); color: var(--ink); }
+
+/* One focus treatment, thick and offset so it is findable at magnification. */
+:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+
+/* ---------- Reader's own choices ---------------------------------------
+   Whether light-on-dark or dark-on-light reads better with macular
+   degeneration is genuinely individual, and the research disagrees with
+   itself. Contrast sensitivity and glare tolerance vary person to person, so
+   this is offered as a setting rather than decided here. These selectors have
+   to beat the prefers-color-scheme query in both directions.
+   --------------------------------------------------------------------- */
+
+:root[data-theme="light"] {
+  --ground: #fcfcfa; --ground-sunk: #f2f3f1;
+  --surface: #ffffff; --surface-2: #f7f8f6;
+  --ink: #111412; --ink-mid: #3d443f; --ink-soft: #5c645e;
+  --rule: #d5d8d3; --rule-strong: #a8ada7;
+  --accent: #12414b; --accent-hi: #0c2f37; --accent-ink: #ffffff; --accent-wash: #e4edef;
+  --done: #1e5c3a; --done-wash: #e6f0ea;
+  --alert: #8a2318; --alert-wash: #fbecea;
+}
+
+:root[data-theme="dark"] {
+  --ground: #141715; --ground-sunk: #0e100f;
+  --surface: #1c201e; --surface-2: #232825;
+  --ink: #f2f4f2; --ink-mid: #c4cac6; --ink-soft: #9aa19d;
+  --rule: #2f3532; --rule-strong: #4b524e;
+  --accent: #7fc0cf; --accent-hi: #a3d6e2; --accent-ink: #0b1a1e; --accent-wash: #1a2a2e;
+  --done: #7fc39c; --done-wash: #16241c;
+  --alert: #e8a096; --alert-wash: #2a1613;
+}
+
+/* Maximum contrast, both polarities. Pure black and white rather than the
+   softened neutrals, because glare is a smaller problem than not being able
+   to make out the letters. */
+:root[data-contrast="more"][data-theme="light"],
+:root[data-contrast="more"]:not([data-theme="dark"]) {
+  --ground: #ffffff; --ground-sunk: #ffffff;
+  --surface: #ffffff; --surface-2: #ffffff;
+  --ink: #000000; --ink-mid: #141414; --ink-soft: #262626;
+  --rule: #6b6b6b; --rule-strong: #000000;
+  --accent: #00323c; --accent-hi: #000000; --accent-ink: #ffffff; --accent-wash: #dcebee;
+}
+
+:root[data-contrast="more"][data-theme="dark"] {
+  --ground: #000000; --ground-sunk: #000000;
+  --surface: #000000; --surface-2: #0a0a0a;
+  --ink: #ffffff; --ink-mid: #f2f2f2; --ink-soft: #dedede;
+  --rule: #8f8f8f; --rule-strong: #ffffff;
+  --accent: #b8e6f2; --accent-hi: #ffffff; --accent-ink: #000000; --accent-wash: #10262c;
+}
+
+/* Amber on black. A long-standing low-vision option: slightly less emitted
+   light than white on black, which some readers find easier on glare. */
+:root[data-theme="amber"] {
+  --ground: #000000; --ground-sunk: #000000;
+  --surface: #050505; --surface-2: #0d0b06;
+  --ink: #ffcf70; --ink-mid: #f0be5e; --ink-soft: #cfa04c;
+  --rule: #4a3a16; --rule-strong: #8a6c2a;
+  --accent: #ffe0a3; --accent-hi: #fff1cf; --accent-ink: #1a1204; --accent-wash: #1c1408;
+  --done: #ffd98a; --done-wash: #140f04;
+  --alert: #ff9e7a; --alert-wash: #1c0d07;
+}
+
+/* Everything is sized in rem, so one root change scales the whole interface
+   proportionally. Far more discoverable for a 70-year-old than pinch-zoom or
+   burying it in Safari's settings. */
+:root[data-size="lg"] { font-size: 118%; }
+:root[data-size="xl"] { font-size: 138%; }
+:root[data-size="xxl"] { font-size: 160%; }
+
+/* ---------- Display settings panel ------------------------------------ */
+
+.display-settings { position: relative; }
+
+.display-settings > summary {
+  padding: var(--s2) var(--s3);
+  border: 2px solid var(--rule-strong);
+  border-radius: var(--r-pill);
+  color: var(--ink-mid);
+  font-size: var(--t-small);
+  white-space: nowrap;
+}
+
+.display-settings > summary:hover { border-color: var(--accent); color: var(--ink); }
+.display-settings > summary::after { content: ""; }
+
+.display-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + var(--s2));
+  z-index: 40;
+  width: min(22rem, calc(100vw - 2rem));
+  padding: var(--s4);
+  border: 2px solid var(--ink);
+  border-radius: var(--r);
+  background: var(--surface);
+}
+
+.display-panel h3 { font-size: var(--t-small); margin: 0 0 var(--s2); }
+.display-panel > * + h3 { margin-top: var(--s4); }
+
+.display-row { display: flex; gap: var(--s2); flex-wrap: wrap; }
+
+.display-row button {
+  flex: 1 1 auto;
+  min-height: var(--tap);
+  padding: var(--s2) var(--s3);
+  border: 2px solid var(--rule-strong);
+  border-radius: var(--r);
+  background: var(--surface);
+  color: var(--ink-mid);
+  font: 600 1.0625rem/1.2 var(--sans);
+  cursor: pointer;
+}
+
+.display-row button[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 700;
+}
+
+/* ---------- Skip link -------------------------------------------------- */
+
+/* First stop for a screen reader, and for anyone tabbing past the nav. */
+.skip {
+  position: absolute;
+  left: var(--s4);
+  top: var(--s4);
+  z-index: 100;
+  padding: var(--s3) var(--s4);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font: 600 var(--t-small)/1.2 var(--sans);
+  border-radius: var(--r);
+  transform: translateY(-200%);
+  transition: transform 120ms var(--ease);
+}
+
+.skip:focus { transform: translateY(0); }
+
+/* ---------- Masthead --------------------------------------------------- */
+
+/* Not sticky: at high zoom a fixed bar eats the viewport a low-vision reader
+   needs for the question itself. */
 .bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  padding: 0.75rem clamp(1rem, 4vw, 2rem);
-  border-bottom: 1px solid var(--line);
-  background: var(--card);
+  gap: var(--s4);
   flex-wrap: wrap;
+  padding: var(--s4) clamp(var(--s4), 4vw, var(--s6));
+  background: var(--surface);
+  border-bottom: 2px solid var(--rule-strong);
 }
 
 .bar-title {
+  font-family: var(--wordmark);
+  font-size: 1.5rem;
   font-weight: 600;
-  font-size: 1.15rem;
+  letter-spacing: -0.01em;
   color: var(--ink);
   text-decoration: none;
+  white-space: nowrap;
 }
 
 .bar-nav {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: var(--s2);
+  flex-wrap: wrap;
 }
 
-.progress { color: var(--ink-soft); font-size: 1rem; }
+.bar-nav form { margin: 0; }
+
+.bar-nav .link {
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r);
+  font-weight: 600;
+  color: var(--ink-mid);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+}
+
+.bar-nav .link:hover {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+}
+
+.progress {
+  font-family: var(--typed);
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  color: var(--ink-mid);
+  font-size: var(--t-small);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ---------- Page ------------------------------------------------------- */
 
 .page {
   max-width: var(--column);
   margin: 0 auto;
-  padding: clamp(1rem, 4vw, 2.5rem) clamp(1rem, 4vw, 2rem) 5rem;
+  padding: clamp(var(--s5), 5vw, var(--s7)) clamp(var(--s4), 4vw, var(--s6)) var(--s8);
 }
 
-/* Typography */
+/* ---------- Typography ------------------------------------------------- */
 
-h1 { font-size: 1.9rem; line-height: 1.25; margin: 0 0 0.75rem; }
-h2 { font-size: 1.4rem; line-height: 1.3; margin: 2rem 0 0.5rem; }
-p { margin: 0 0 1rem; }
+h1, h2, h3 {
+  margin: 0;
+  font-family: var(--wordmark);
+  line-height: var(--leading-tight);
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+  color: var(--ink);
+}
 
-.lede { color: var(--ink-soft); }
+h1 { font-size: var(--t-h1); font-weight: 600; margin-bottom: var(--s3); }
+h3 { font-size: var(--t-h3); font-weight: 700; margin-bottom: var(--s2); }
+
+/* Rules, not cards, are the organising device on these pages. */
+h2 {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s3);
+  font-size: var(--t-h2);
+  font-weight: 600;
+  margin: var(--s7) 0 var(--s4);
+  padding-bottom: var(--s2);
+  border-bottom: 2px solid var(--ink);
+}
+
+p { margin: 0 0 var(--s4); max-width: var(--measure); }
+
+.lede { font-size: var(--t-lead); color: var(--ink-mid); text-wrap: pretty; }
 
 .eyebrow {
-  font: 600 0.95rem/1.4 ui-sans-serif, system-ui, sans-serif;
-  letter-spacing: 0.06em;
+  font-family: var(--typed);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--warm);
-  margin: 0 0 0.5rem;
+  color: var(--accent);
+  margin: 0 0 var(--s3);
 }
 
-/* Controls — never smaller than 44px in either direction. */
+.count {
+  font-family: var(--typed);
+  font-size: 1rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+  letter-spacing: 0;
+}
+
+.hint {
+  margin-top: var(--s3);
+  max-width: var(--measure);
+  font-size: var(--t-small);
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+
+/* ---------- Buttons ---------------------------------------------------- */
 
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
+  gap: var(--s2);
   min-height: var(--tap);
   min-width: var(--tap);
-  padding: 0.7rem 1.4rem;
+  padding: 0.8rem 1.6rem;
   border: 2px solid var(--accent);
-  border-radius: 0.6rem;
+  border-radius: var(--r);
   background: var(--accent);
   color: var(--accent-ink);
-  font: 600 1.1rem/1.2 ui-sans-serif, system-ui, sans-serif;
+  font: 700 1.1875rem/1.2 var(--sans);
   cursor: pointer;
   text-decoration: none;
   touch-action: manipulation;
+  transition: background 120ms var(--ease), border-color 120ms var(--ease);
 }
 
-.btn:hover { filter: brightness(1.08); }
-.btn:focus-visible { outline: 3px solid var(--warm); outline-offset: 2px; }
+.btn:hover { background: var(--accent-hi); border-color: var(--accent-hi); }
+.btn:active { transform: translateY(1px); }
 
 .btn-quiet {
-  background: transparent;
+  background: var(--surface);
   color: var(--accent);
 }
+
+.btn-quiet:hover { background: var(--accent-wash); color: var(--accent-hi); }
+
+.btn[disabled] { opacity: 0.5; cursor: default; }
 
 .btn-row {
   display: flex;
-  gap: 0.75rem;
+  gap: var(--s3);
   flex-wrap: wrap;
-  margin-top: 1.25rem;
+  align-items: center;
+  margin-top: var(--s5);
 }
 
 .link {
-  border: 0;
-  background: none;
-  padding: 0.5rem 0;
-  min-height: var(--tap);
-  color: var(--accent);
-  font: 1rem/1.4 ui-sans-serif, system-ui, sans-serif;
-  cursor: pointer;
-  text-decoration: underline;
-}
-
-/* Forms */
-
-label { display: block; margin-bottom: 0.4rem; font-size: 1.05rem; color: var(--ink-soft); }
-
-input[type="email"], textarea {
-  width: 100%;
-  padding: 0.85rem 1rem;
-  border: 2px solid var(--line);
-  border-radius: 0.6rem;
-  background: var(--card);
-  color: var(--ink);
-  font: var(--body)/var(--lead) inherit;
-  min-height: var(--tap);
-}
-
-input[type="email"]:focus, textarea:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-
-textarea {
-  min-height: 11rem;
-  resize: vertical;
-}
-
-/* The card stack */
-
-.stack {
-  position: relative;
-  margin-top: 1rem;
-}
-
-/* Cards behind the top one peek out, so the stack reads as finite —
-   something you can get to the bottom of. */
-.stack-peek {
-  position: absolute;
-  left: 0;
-  right: 0;
-  border: 1px solid var(--line);
-  border-radius: 1rem;
-  background: var(--card);
-  height: 6rem;
-}
-
-.stack-peek-1 { top: 0.55rem; transform: scale(0.985); opacity: 0.7; }
-.stack-peek-2 { top: 1.1rem;  transform: scale(0.97);  opacity: 0.45; }
-
-.card {
-  position: relative;
-  border: 1px solid var(--line);
-  border-radius: 1rem;
-  background: var(--card);
-  padding: clamp(1.25rem, 5vw, 2rem);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05), 0 12px 28px rgba(0,0,0,0.07);
-  touch-action: pan-y;
-}
-
-/* Only while a real drag is in progress, so a slow tap never animates. */
-.card.dragging { transition: none; user-select: none; }
-.card.settling { transition: transform 200ms ease-out, opacity 200ms ease-out; }
-
-.card-subject {
-  font: 600 0.95rem/1.4 ui-sans-serif, system-ui, sans-serif;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--warm);
-  margin: 0 0 0.75rem;
-}
-
-.card-question {
-  font-size: 1.6rem;
-  line-height: 1.3;
-  margin: 0 0 1.25rem;
-}
-
-.card-badge {
-  display: inline-block;
-  margin-left: 0.5rem;
-  padding: 0.1rem 0.5rem;
-  border-radius: 0.4rem;
-  background: var(--paper);
-  border: 1px solid var(--line);
-  color: var(--ink-soft);
-  font: 500 0.8rem/1.6 ui-sans-serif, system-ui, sans-serif;
-  text-transform: none;
-  letter-spacing: 0;
-}
-
-.save-state {
-  min-height: 1.5rem;
-  margin-top: 0.5rem;
-  font: 1rem/1.5 ui-sans-serif, system-ui, sans-serif;
-  color: var(--ink-soft);
-}
-
-.save-state[data-state="error"] { color: var(--danger); font-weight: 600; }
-
-/* Errors sit above the textarea, never replacing it: a failed save must never
-   take someone's writing with it. */
-.banner {
-  padding: 0.85rem 1rem;
-  border: 2px solid var(--danger);
-  border-radius: 0.6rem;
-  margin-bottom: 1rem;
-  color: var(--danger);
-  font-size: 1.05rem;
-}
-
-.banner-quiet {
-  border-color: var(--line);
-  color: var(--ink-soft);
-}
-
-.empty {
-  text-align: center;
-  padding: 3rem 1rem;
-}
-
-.empty h1 { margin-bottom: 0.5rem; }
-
-.hint {
-  margin-top: 1rem;
-  color: var(--ink-soft);
-  font: 1rem/1.5 ui-sans-serif, system-ui, sans-serif;
-}
-
-.mode-picker {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-  margin-bottom: 1.25rem;
-}
-
-.mode-picker button {
-  min-height: var(--tap);
-  padding: 0.5rem 1rem;
-  border: 2px solid var(--line);
-  border-radius: 2rem;
-  background: var(--card);
-  color: var(--ink-soft);
-  font: 500 1rem/1.2 ui-sans-serif, system-ui, sans-serif;
-  cursor: pointer;
-}
-
-.mode-picker button[aria-pressed="true"] {
-  border-color: var(--accent);
-  color: var(--accent);
-  font-weight: 600;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .card.settling { transition: none; }
-}
-
-/* Question list, answers, replies, stories */
-
-.pill {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
   min-height: var(--tap);
-  padding: 0.5rem 1rem;
-  border: 2px solid var(--line);
-  border-radius: 2rem;
-  background: var(--card);
-  color: var(--ink-soft);
-  font: 500 1rem/1.2 ui-sans-serif, system-ui, sans-serif;
-  text-decoration: none;
-}
-
-.pill[aria-pressed="true"] {
-  border-color: var(--accent);
+  padding: 0;
+  border: 0;
+  background: none;
   color: var(--accent);
-  font-weight: 600;
-}
-
-.count {
-  font-variant-numeric: tabular-nums;
-  font-size: 0.9rem;
-  color: var(--ink-soft);
-}
-
-.filter { margin-bottom: 1.5rem; }
-
-summary {
-  min-height: var(--tap);
-  display: flex;
-  align-items: center;
+  font: 600 var(--t-small)/1.4 var(--sans);
   cursor: pointer;
-  color: var(--accent);
-  font: 500 1.05rem/1.4 ui-sans-serif, system-ui, sans-serif;
+  text-decoration: underline;
+  text-underline-offset: 0.22em;
+  text-decoration-thickness: 2px;
 }
 
-.qlist { list-style: none; margin: 0 0 2rem; padding: 0; }
+.link:hover { color: var(--accent-hi); text-decoration-thickness: 3px; }
 
-.qrow {
-  border-bottom: 1px solid var(--line);
-  padding: 1rem 0;
-}
+/* ---------- Forms ------------------------------------------------------ */
 
-.qrow-body {
+label {
   display: block;
-  min-height: var(--tap);
-  color: var(--ink);
-  font-size: 1.2rem;
-  line-height: 1.4;
-  text-decoration: none;
-}
-
-.qrow-body:hover { color: var(--accent); text-decoration: underline; }
-
-/* Answered rows stay legible — done is not the same as unimportant. */
-.qrow-done .qrow-body { color: var(--ink-soft); }
-
-.qrow-meta {
-  margin: 0.35rem 0 0;
-  font: 0.95rem/1.5 ui-sans-serif, system-ui, sans-serif;
-  color: var(--ink-soft);
-}
-
-.qrow-subject { color: var(--warm); font-weight: 600; }
-
-.answer {
-  border: 1px solid var(--line);
-  border-radius: 0.8rem;
-  background: var(--card);
-  padding: 1.25rem;
-  margin-bottom: 1.25rem;
-}
-
-/* The intended person's answer is the one the book is built from. */
-.answer-primary { border-left: 5px solid var(--accent); }
-
-.answer-by {
-  margin: 0 0 0.6rem;
-  font: 600 1.05rem/1.4 ui-sans-serif, system-ui, sans-serif;
+  margin-bottom: var(--s2);
+  font-size: var(--t-body);
+  font-weight: 700;
   color: var(--ink);
 }
 
-.answer-when {
-  margin-left: 0.5rem;
-  font-weight: 400;
-  color: var(--ink-soft);
-  font-size: 0.9rem;
-}
-
-.answer-body { white-space: pre-wrap; }
-
-.replies {
-  list-style: none;
-  margin: 1rem 0 0;
-  padding: 0 0 0 1rem;
-  border-left: 2px solid var(--line);
-}
-
-.replies li { margin-bottom: 0.75rem; white-space: pre-wrap; }
-
-.reply-by { font-weight: 600; font-family: ui-sans-serif, system-ui, sans-serif; font-size: 1rem; }
-
-.reply-form, .new-story { margin-top: 1rem; }
-
-select {
-  width: 100%;
-  min-height: var(--tap);
-  padding: 0.75rem 1rem;
-  border: 2px solid var(--line);
-  border-radius: 0.6rem;
-  background: var(--card);
-  color: var(--ink);
-  font: var(--body)/var(--lead) inherit;
-  margin-bottom: 1rem;
-}
-
-input[type="text"] {
+input[type="email"], input[type="text"], textarea, select {
   width: 100%;
   min-height: var(--tap);
   padding: 0.85rem 1rem;
-  border: 2px solid var(--line);
-  border-radius: 0.6rem;
-  background: var(--card);
+  border: 2px solid var(--rule-strong);
+  border-radius: var(--r);
+  background: var(--surface);
   color: var(--ink);
-  font: var(--body)/var(--lead) inherit;
-  margin-bottom: 1rem;
+  font: var(--t-body)/1.65 var(--sans);
 }
 
-/* Photographs */
+input[type="email"], input[type="text"], select { margin-bottom: var(--s4); }
 
-.photos { list-style: none; margin: 1rem 0 0; padding: 0; display: grid; gap: 1rem; }
+input::placeholder, textarea::placeholder { color: var(--ink-soft); opacity: 1; }
 
-.photos img {
-  display: block;
-  width: 100%;
-  max-width: 100%;
-  height: auto;
-  border-radius: 0.6rem;
-  border: 1px solid var(--line);
-  background: var(--paper);
+input:focus, textarea:focus, select:focus {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
 }
 
-.photo-caption {
-  margin: 0.4rem 0 0;
-  font: 1rem/1.5 ui-sans-serif, system-ui, sans-serif;
-  color: var(--ink-soft);
+/* The writing surface. Everything else on the card exists to get someone
+   here, so it is deliberately the largest element. */
+textarea {
+  min-height: 13rem;
+  resize: vertical;
 }
-
-.photo-form { margin-top: 1rem; }
 
 input[type="file"] {
   width: 100%;
   min-height: var(--tap);
-  padding: 0.6rem;
-  border: 2px dashed var(--line);
-  border-radius: 0.6rem;
-  background: var(--card);
-  color: var(--ink);
-  font: 1.05rem/1.4 ui-sans-serif, system-ui, sans-serif;
-  margin-bottom: 1rem;
+  padding: var(--s3);
+  border: 2px dashed var(--rule-strong);
+  border-radius: var(--r);
+  background: var(--surface-2);
+  color: var(--ink-mid);
+  font-size: var(--t-small);
+  margin-bottom: var(--s4);
 }
 
-/* Pedigree */
+/* Spoken rather than typed, so say so where it will actually be read —
+   a placeholder disappears the moment they start, and screen readers
+   often skip it. */
+.dictate {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s2);
+  margin-bottom: var(--s3);
+  padding: var(--s3);
+  border-left: 3px solid var(--accent);
+  background: var(--accent-wash);
+  color: var(--ink-mid);
+  font-size: var(--t-small);
+  line-height: 1.55;
+}
 
-.pedigree { margin: 0 0 2.5rem; }
+/* ---------- The card stack -------------------------------------------- */
 
-.tnode { margin: 0; }
+.stack { position: relative; margin-top: var(--s5); }
 
-/* Each generation indents, so lineage is readable in a single portrait column
-   rather than needing a wide chart. */
+/* The two behind peek out, so the pile reads as finite — something you can
+   get to the bottom of, rather than an endless list. */
+/* The rest of the box behind the top card. Fanned by a fraction of a degree —
+   enough to read as separate pieces of card, not enough to look decorative. */
+.stack-peek {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 7rem;
+  border: 1px solid var(--card-edge);
+  border-radius: 2px;
+  background: var(--card-stock-2);
+  box-shadow: 0 1px 1px rgba(31, 28, 20, 0.08), 0 8px 14px -10px rgba(31, 28, 20, 0.2);
+  transform-origin: 50% 100%;
+}
+
+.stack-peek-1 { top: 0.45rem; transform: rotate(-0.45deg) scale(0.995); }
+.stack-peek-2 { top: 0.95rem; transform: rotate(0.6deg) scale(0.988); }
+
+/* An archivist's index card, because that is the object this whole thing
+   imitates: manila stock, faint cyan ruling, and the single red rule real
+   cards carry near the top. Squared-off corners — index cards are guillotined,
+   not die-cut. */
+.card {
+  position: relative;
+  padding: clamp(var(--s5), 5vw, var(--s6));
+  padding-top: calc(clamp(var(--s5), 5vw, var(--s6)) + var(--s3));
+  border: 1px solid var(--card-edge);
+  border-radius: 2px;
+  color: var(--ink);
+  background-color: var(--card-stock);
+  /* The ruling. Very low contrast: it has to read as stock, never as lines
+     competing with the words on top of it. */
+  background-image:
+    linear-gradient(180deg, var(--card-stock) 0%, var(--card-stock-2) 100%),
+    repeating-linear-gradient(
+      180deg,
+      transparent 0,
+      transparent 2.05rem,
+      color-mix(in srgb, var(--card-rule) 26%, transparent) 2.05rem,
+      color-mix(in srgb, var(--card-rule) 26%, transparent) calc(2.05rem + 1px)
+    );
+  background-position: 0 0, 0 3.4rem;
+  /* Lifted off the desk: a tight contact shadow plus a soft ambient one, and a
+     hairline highlight along the top edge where light catches the stock. */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 1px 1px rgba(31, 28, 20, 0.10),
+    0 10px 18px -8px rgba(31, 28, 20, 0.22),
+    0 26px 44px -24px rgba(31, 28, 20, 0.28);
+  touch-action: pan-y;
+}
+
+/* The red rule. One hairline, full bleed, exactly where a printed card has it. */
+.card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 2.6rem;
+  height: 1px;
+  background: var(--card-redrule);
+  opacity: 0.55;
+}
+
+@media (prefers-color-scheme: dark) {
+  .card {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.05),
+      0 2px 6px rgba(0, 0, 0, 0.5),
+      0 22px 40px -18px rgba(0, 0, 0, 0.65);
+  }
+}
+
+/* Ruling and stock texture come off entirely at maximum contrast: anything
+   behind the words costs the reader who needs the contrast most. */
+:root[data-contrast="more"] .card {
+  background-image: none;
+  background-color: var(--surface);
+  border: 2px solid var(--ink);
+  box-shadow: none;
+}
+
+:root[data-contrast="more"] .card::before { display: none; }
+
+/* Typed onto the card, in the space above the red rule. */
+.card-subject {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  flex-wrap: wrap;
+  margin: 0 0 var(--s5);
+  font-family: var(--typed);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+/* The question, written across the ruled area in the reader's face. */
+.card-question {
+  font-family: var(--sans);
+  font-size: clamp(1.625rem, 4.6vw, 2rem);
+  font-weight: 700;
+  line-height: 2.05rem;   /* sits on the ruling rather than floating over it */
+  letter-spacing: -0.01em;
+  text-wrap: pretty;
+  margin: 0 0 var(--s5);
+  max-width: none;
+  color: var(--ink);
+}
+
+.card-badge {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border: 1px solid var(--card-edge);
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--card-redrule) 8%, transparent);
+  color: var(--ink-mid);
+  font-family: var(--typed);
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.save-state {
+  min-height: 1.7rem;
+  margin: var(--s2) 0 0;
+  max-width: none;
+  font-family: var(--typed);
+  font-size: 1rem;
+  color: var(--ink-soft);
+}
+
+.save-state[data-state="error"] { color: var(--alert); font-weight: 700; }
+
+/* ---------- Banners --------------------------------------------------- */
+
+/* Errors sit above the writing surface, never in place of it: a failed save
+   must never take somebody's words with it. */
+.banner {
+  padding: var(--s3) var(--s4);
+  margin-bottom: var(--s4);
+  border: 2px solid var(--alert);
+  border-radius: var(--r);
+  background: var(--alert-wash);
+  color: var(--alert);
+  font-weight: 600;
+  max-width: var(--measure);
+}
+
+.banner-quiet {
+  border-color: var(--done);
+  background: var(--done-wash);
+  color: var(--done);
+}
+
+/* ---------- Pills and filters ----------------------------------------- */
+
+.mode-picker {
+  display: flex;
+  gap: var(--s2);
+  flex-wrap: wrap;
+  margin-bottom: var(--s5);
+}
+
+.mode-picker button, .pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: var(--tap);
+  padding: var(--s2) var(--s4);
+  border: 2px solid var(--rule-strong);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--ink-mid);
+  font: 600 1.0625rem/1.2 var(--sans);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.mode-picker button:hover, .pill:hover {
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
+/* Selected state carries weight and fill, not colour alone. */
+.mode-picker button[aria-pressed="true"], .pill[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 700;
+}
+
+.mode-picker button[aria-pressed="true"] .count,
+.pill[aria-pressed="true"] .count { color: var(--accent-ink); }
+
+.filter { margin-bottom: var(--s5); }
+
+summary {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: var(--tap);
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 700;
+  font-size: var(--t-small);
+  list-style: none;
+}
+
+summary::-webkit-details-marker { display: none; }
+
+summary::after {
+  content: "+";
+  font-weight: 700;
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+details[open] > summary::after { content: "–"; }
+
+/* ---------- Question list --------------------------------------------- */
+
+.qlist { list-style: none; margin: 0 0 var(--s6); padding: 0; }
+
+.qrow {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s3);
+  flex-wrap: wrap;
+  padding: var(--s4) 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.qrow:first-child { border-top: 1px solid var(--rule); }
+
+.qrow-body {
+  flex: 1 1 100%;
+  font-size: var(--t-body);
+  line-height: 1.5;
+  font-weight: 500;
+  color: var(--ink);
+  text-decoration: none;
+  text-wrap: pretty;
+}
+
+.qrow-body:hover {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+/* Answered rows stay fully legible. Done is not the same as unimportant —
+   these are the ones worth going back to read. */
+.qrow-done .qrow-body { color: var(--ink-mid); }
+
+.qrow-meta {
+  flex: 1 1 100%;
+  margin: 0;
+  max-width: none;
+  font-size: var(--t-small);
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+
+.qrow-subject { color: var(--accent); font-weight: 700; }
+
+/* State is spelled out in the metadata text, so it never depends on colour
+   or on a glyph a screen reader might skip. */
+.qrow-done .qrow-meta { color: var(--done); font-weight: 600; }
+
+/* ---------- Answers and replies --------------------------------------- */
+
+.answer {
+  padding: var(--s5) 0;
+  border-top: 1px solid var(--rule);
+}
+
+/* The one the book gets written from: heavier rule, not a coloured rail. */
+.answer-primary { border-top: 3px solid var(--ink); }
+
+.answer-by {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  flex-wrap: wrap;
+  margin: 0 0 var(--s3);
+  max-width: none;
+  font-size: var(--t-body);
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.answer-when {
+  font-family: var(--typed);
+  font-weight: 400;
+  font-size: 1rem;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Dictated prose, set for reading. */
+.answer-body {
+  white-space: pre-wrap;
+  max-width: var(--measure);
+  font-size: var(--t-body);
+  line-height: 1.75;
+  color: var(--ink);
+}
+
+.replies {
+  list-style: none;
+  margin: var(--s5) 0 0;
+  padding: 0 0 0 var(--s4);
+  border-left: 3px solid var(--rule);
+}
+
+.replies li {
+  margin-bottom: var(--s4);
+  white-space: pre-wrap;
+  line-height: 1.65;
+  color: var(--ink-mid);
+}
+
+.reply-by {
+  font-weight: 700;
+  color: var(--ink);
+  margin-right: var(--s2);
+}
+
+.reply-form, .photo-form, .new-story { margin-top: var(--s5); }
+
+/* ---------- Photographs ----------------------------------------------- */
+
+.photos {
+  list-style: none;
+  margin: var(--s5) 0 0;
+  padding: 0;
+  display: grid;
+  gap: var(--s5);
+}
+
+@media (min-width: 40rem) {
+  /* Never so small that a face is lost. */
+  .photos { grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); }
+}
+
+.photos img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r);
+  background: var(--ground-sunk);
+}
+
+.photo-caption {
+  margin: var(--s2) 0 0;
+  max-width: none;
+  font-size: var(--t-small);
+  color: var(--ink-mid);
+}
+
+/* ---------- Pedigree -------------------------------------------------- */
+
+.pedigree { margin: 0 0 var(--s7); }
+
+/* Indentation rather than a wide chart: four generations have to fit a
+   portrait iPad, and must still reflow at 400% zoom. */
 .tparents {
-  margin-left: 1rem;
-  padding-left: 1rem;
-  border-left: 2px solid var(--line);
+  margin-left: var(--s2);
+  padding-left: var(--s4);
+  border-left: 2px solid var(--rule);
 }
 
 .tperson {
   display: block;
   min-height: var(--tap);
-  padding: 0.6rem 0.8rem;
-  margin: 0.4rem 0;
-  border: 1px solid var(--line);
-  border-radius: 0.6rem;
-  background: var(--card);
+  padding: var(--s3);
+  margin: var(--s2) 0;
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  background: var(--surface);
   color: var(--ink);
   text-decoration: none;
 }
 
-a.tperson:hover { border-color: var(--accent); }
+a.tperson:hover { border-color: var(--accent); background: var(--accent-wash); }
 
-/* People with answers stand out, so the tree shows where the stories are. */
-.tperson-told { border-left: 5px solid var(--accent); }
+/* Weight, not colour, marks who has already been talked about. */
+.tperson-told { border-color: var(--rule-strong); border-left: 4px solid var(--accent); }
 
 .tperson-plain { background: transparent; border-style: dashed; color: var(--ink-soft); }
 
-.tname { display: block; font-size: 1.1rem; line-height: 1.3; }
+.tname { display: block; font-size: var(--t-body); font-weight: 600; line-height: 1.35; }
 
 .tyears {
-  font: 0.9rem/1.4 ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--typed);
+  font-size: 1rem;
   color: var(--ink-soft);
   font-variant-numeric: tabular-nums;
 }
 
 .tcount {
   display: block;
-  font: 0.85rem/1.4 ui-sans-serif, system-ui, sans-serif;
-  color: var(--warm);
+  margin-top: 0.15rem;
+  font-family: var(--typed);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--accent);
   font-variant-numeric: tabular-nums;
 }
 
-.tnode-gen0 > .tperson { font-weight: 600; }
+.tnode-gen0 > .tperson { border: 2px solid var(--ink); }
+.tnode-gen0 > .tperson .tname { font-size: var(--t-h3); font-weight: 700; }
 
-/* Subject list */
+/* ---------- Subject list ---------------------------------------------- */
 
 .slist { list-style: none; margin: 0; padding: 0; }
 
-.srow { border-bottom: 1px solid var(--line); padding: 0.9rem 0; }
+.srow { padding: var(--s4) 0; border-bottom: 1px solid var(--rule); }
+.srow:first-child { border-top: 1px solid var(--rule); }
 
 .srow-name {
   display: block;
-  min-height: var(--tap);
+  font-size: var(--t-body);
+  font-weight: 600;
   color: var(--ink);
-  font-size: 1.2rem;
   text-decoration: none;
 }
 
-.srow-name:hover { color: var(--accent); text-decoration: underline; }
+.srow-name:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 0.2em; }
 
 .srow-meta {
-  margin: 0.25rem 0 0;
-  font: 0.95rem/1.5 ui-sans-serif, system-ui, sans-serif;
+  margin: var(--s1) 0 0;
+  max-width: none;
+  font-size: var(--t-small);
   color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
 }
 
-.members { list-style: none; margin: 0 0 1.5rem; padding: 0; }
-.members li { padding: 0.3rem 0; }
+.members {
+  list-style: none;
+  margin: 0 0 var(--s5);
+  padding: var(--s4);
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  background: var(--surface-2);
+}
+
+.members li { padding: var(--s1) 0; }
+
+/* ---------- Empty states ---------------------------------------------- */
+
+/* Getting to the bottom of the pile is an achievement; say so rather than
+   showing a blank screen. */
+.empty {
+  padding: var(--s7) var(--s5);
+  border: 2px solid var(--ink);
+  border-radius: var(--r);
+  background: var(--surface);
+}
+
+.empty h1 { margin-bottom: var(--s3); }
+
+/* ---------- Print ----------------------------------------------------- */
+
+/* The point of all this is a book, so pages ought to print cleanly. */
+@media print {
+  .bar, .skip, .mode-picker, .filter, .btn, .btn-row, .reply-form,
+  .photo-form, .new-story, .stack-peek, .dictate { display: none !important; }
+  body { background: #fff; color: #000; font-size: 11pt; }
+  .page { max-width: none; padding: 0; }
+  .card, .answer, .empty { border: 1px solid #999; break-inside: avoid; }
+  a { color: #000; text-decoration: none; }
+}
+
+/* ---------- Touch, and throwing cards ----------------------------------
+   The device is an iPad, held, in portrait. Cards are thrown with a finger,
+   so the gesture gets the same care the typography does.
+   --------------------------------------------------------------------- */
+
+body {
+  /* No grey flash when a finger lands on something. */
+  -webkit-tap-highlight-color: transparent;
+  /* Stops the whole page rubber-banding while a card is being dragged. */
+  overscroll-behavior-y: contain;
+}
+
+/* Respect the iPad's rounded corners and home indicator. */
+.bar { padding-top: max(var(--s4), env(safe-area-inset-top)); }
+
+.page {
+  padding-bottom: max(var(--s8), calc(env(safe-area-inset-bottom) + var(--s6)));
+  padding-left: max(clamp(var(--s4), 4vw, var(--s6)), env(safe-area-inset-left));
+  padding-right: max(clamp(var(--s4), 4vw, var(--s6)), env(safe-area-inset-right));
+}
+
+/* Nothing on a card should be selectable-by-accident mid-throw, except the
+   words being dictated. */
+.card { user-select: none; -webkit-user-select: none; }
+.card textarea, .card .answer-body { user-select: text; -webkit-user-select: text; }
+
+/* Big finger targets everywhere on the card. */
+.card .btn { min-height: 52px; padding-inline: 1.75rem; }
+
+/* The card follows the finger, so it must not fight for the gesture. */
+.card {
+  touch-action: pan-y;
+  will-change: transform;
+  cursor: grab;
+}
+
+.card.dragging {
+  cursor: grabbing;
+  transition: none;
+  /* Lifted clear of the box while it is being held. */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 2px 3px rgba(31, 28, 20, 0.12),
+    0 22px 34px -12px rgba(31, 28, 20, 0.3),
+    0 48px 70px -40px rgba(31, 28, 20, 0.35);
+}
+
+/* Springs back with a little overshoot when the throw was too gentle, so a
+   half-hearted nudge feels like the card resisted rather than the app ignoring
+   you. */
+.card.settling {
+  transition: transform 240ms cubic-bezier(0.34, 1.4, 0.5, 1), opacity 200ms linear;
+}
+
+.card.tossed { pointer-events: none; }
+
+/* Armed: past the point where letting go throws it. The whole card takes on
+   the accent edge, so the signal is impossible to miss even off-centre in
+   someone's vision. */
+.card[data-toss] { border-color: var(--accent); }
+.card[data-toss] .card-question { color: var(--ink); }
+
+.card[data-toss]::after {
+  content: "Let go — back in the box";
+  position: absolute;
+  top: var(--s4);
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font: 700 1rem/1.2 var(--typed);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.card[data-toss="right"]::after { right: var(--s4); }
+.card[data-toss="left"]::after  { left: var(--s4); }
+
+/* The pile leans in as the top card is about to leave, so the stack feels
+   like it is waiting its turn. */
+.stack[data-armed] .stack-peek-1 { transform: scale(0.995) translateY(-2px); }
+.stack[data-armed] .stack-peek-2 { transform: scale(0.98) translateY(-2px); }
+
+.stack-peek {
+  transition: transform 200ms cubic-bezier(0.2, 0.6, 0.35, 1);
+}
+
+/* A new card is dealt onto the pile rather than blinking into place. One
+   short, deliberate movement — not a flourish on every element. */
+@keyframes deal-in {
+  from { transform: translate3d(0, 14px, 0) scale(0.985); opacity: 0; }
+  to   { transform: translate3d(0, 0, 0) scale(1); opacity: 1; }
+}
+
+.card { animation: deal-in 220ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+
+/* Someone dragging must never see the animation restart underneath them. */
+.card.dragging, .card.tossed, .card.settling { animation: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .card { animation: none; }
+  .card.settling, .stack-peek { transition: none; }
+}
+
+/* When there is dictated text on the card the gesture is deliberately
+   disabled, so stop advertising it as draggable. */
+.card:has(textarea:not(:placeholder-shown)) { cursor: default; }

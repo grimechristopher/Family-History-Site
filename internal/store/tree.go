@@ -12,15 +12,16 @@ import (
 // TreePerson is one person in the pedigree, with whatever has been said about
 // them attached so the tree can show where the stories are.
 type TreePerson struct {
-	ID        int64
-	GedcomID  string
-	Given     string
-	Surname   string
-	Sex       *string
-	BirthYear *int
-	DeathYear *int
-	FatherID  *int64
-	MotherID  *int64
+	ID             int64
+	GedcomID       string
+	Given          string
+	Surname        string
+	MarriedSurname *string
+	Sex            *string
+	BirthYear      *int
+	DeathYear      *int
+	FatherID       *int64
+	MotherID       *int64
 
 	// A person may belong to a couple subject, so these describe whichever
 	// subject carries their questions.
@@ -34,8 +35,17 @@ type TreePerson struct {
 	Mother *TreePerson
 }
 
+// FullName follows the genealogical convention, putting the maiden name in
+// parentheses between the given names and the married surname:
+// "Nora Angeline (Radley) Brennan".
 func (p TreePerson) FullName() string {
-	return strings.TrimSpace(p.Given + " " + p.Surname)
+	if p.MarriedSurname == nil || *p.MarriedSurname == "" || *p.MarriedSurname == p.Surname {
+		return strings.TrimSpace(p.Given + " " + p.Surname)
+	}
+	if p.Surname == "" {
+		return strings.TrimSpace(p.Given + " " + *p.MarriedSurname)
+	}
+	return strings.TrimSpace(p.Given + " (" + p.Surname + ") " + *p.MarriedSurname)
 }
 
 // Lifespan renders "1894–1972", "b. 1958", or empty when nothing is known.
@@ -57,7 +67,7 @@ func (p TreePerson) HasStories() bool { return p.AnsweredCount > 0 }
 // TreePeople returns every imported person with their subject and progress.
 func (s *Store) TreePeople(ctx context.Context) ([]*TreePerson, error) {
 	rows, err := s.Pool.Query(ctx, `
-		SELECT p.id, p.gedcom_id, p.given_name, p.surname, p.sex,
+		SELECT p.id, p.gedcom_id, p.given_name, p.surname, p.married_surname, p.sex,
 		       p.birth_year, p.death_year, p.father_id, p.mother_id,
 		       sub.slug, sub.display_name,
 		       coalesce(counts.total, 0), coalesce(counts.answered, 0)
@@ -85,7 +95,7 @@ func (s *Store) TreePeople(ctx context.Context) ([]*TreePerson, error) {
 	var out []*TreePerson
 	for rows.Next() {
 		var p TreePerson
-		if err := rows.Scan(&p.ID, &p.GedcomID, &p.Given, &p.Surname, &p.Sex,
+		if err := rows.Scan(&p.ID, &p.GedcomID, &p.Given, &p.Surname, &p.MarriedSurname, &p.Sex,
 			&p.BirthYear, &p.DeathYear, &p.FatherID, &p.MotherID,
 			&p.SubjectSlug, &p.SubjectName, &p.QuestionCount, &p.AnsweredCount); err != nil {
 			return nil, err
@@ -122,7 +132,7 @@ func (s *Store) RootPeople(ctx context.Context) ([]int64, error) {
 // name both of them.
 func (s *Store) SubjectMembers(ctx context.Context, subjectID int64) ([]TreePerson, error) {
 	rows, err := s.Pool.Query(ctx, `
-		SELECT p.id, p.gedcom_id, p.given_name, p.surname, p.sex,
+		SELECT p.id, p.gedcom_id, p.given_name, p.surname, p.married_surname, p.sex,
 		       p.birth_year, p.death_year, p.father_id, p.mother_id
 		FROM family.subject_members sm
 		JOIN family.people p ON p.id = sm.person_id
@@ -136,7 +146,7 @@ func (s *Store) SubjectMembers(ctx context.Context, subjectID int64) ([]TreePers
 	var out []TreePerson
 	for rows.Next() {
 		var p TreePerson
-		if err := rows.Scan(&p.ID, &p.GedcomID, &p.Given, &p.Surname, &p.Sex,
+		if err := rows.Scan(&p.ID, &p.GedcomID, &p.Given, &p.Surname, &p.MarriedSurname, &p.Sex,
 			&p.BirthYear, &p.DeathYear, &p.FatherID, &p.MotherID); err != nil {
 			return nil, err
 		}

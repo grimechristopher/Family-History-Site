@@ -5,23 +5,52 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>{{.Title}} &middot; Family History</title>
 <link rel="stylesheet" href="/static/css/app.css?v={{.AssetVersion}}">
+<!-- Not deferred: the reader's saved colour and size choices are applied
+     before first paint, so nobody watches the page change underneath them. -->
+<script src="/static/js/display.js?v={{.AssetVersion}}"></script>
 </head>
 <body>
+<a class="skip" href="#main">Skip to the questions</a>
 {{if .User}}
 <header class="bar">
   <a class="bar-title" href="/">Family History</a>
-  <nav class="bar-nav">
+  <nav class="bar-nav" aria-label="Sections">
     <a class="link" href="/cards">Cards</a>
     <a class="link" href="/questions">All questions</a>
     <a class="link" href="/tree">Tree</a>
     <a class="link" href="/stories">Stories</a>
     {{if .Progress}}<span class="progress">You&rsquo;ve answered {{.Progress.Answered}}</span>{{end}}
+    <details class="display-settings">
+      <summary>Text &amp; colours</summary>
+      <div class="display-panel">
+        <h3 id="ds-size">Text size</h3>
+        <div class="display-row" role="group" aria-labelledby="ds-size">
+          <button type="button" data-setting="size" data-value="auto">Normal</button>
+          <button type="button" data-setting="size" data-value="lg">Larger</button>
+          <button type="button" data-setting="size" data-value="xl">Largest</button>
+        </div>
+
+        <h3 id="ds-theme">Colours</h3>
+        <div class="display-row" role="group" aria-labelledby="ds-theme">
+          <button type="button" data-setting="theme" data-value="auto">Automatic</button>
+          <button type="button" data-setting="theme" data-value="light">Dark on light</button>
+          <button type="button" data-setting="theme" data-value="dark">Light on dark</button>
+          <button type="button" data-setting="theme" data-value="amber">Amber on black</button>
+        </div>
+
+        <h3 id="ds-contrast">Contrast</h3>
+        <div class="display-row" role="group" aria-labelledby="ds-contrast">
+          <button type="button" data-setting="contrast" data-value="auto">Normal</button>
+          <button type="button" data-setting="contrast" data-value="more">Maximum</button>
+        </div>
+      </div>
+    </details>
     <form method="post" action="/logout"><button class="link" type="submit">Sign out</button></form>
   </nav>
 </header>
 {{end}}
 
-<main class="page">
+<main class="page" id="main" tabindex="-1">
   {{block "content" .}}{{end}}
 </main>
 

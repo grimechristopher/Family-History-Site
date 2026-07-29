@@ -69,12 +69,13 @@ func Run(ctx context.Context, db store.DBTX, ged *gedcom.File, qs []prompts.Ques
 	for _, gid := range gedcomIDs {
 		p := tree.People[gid]
 		id, err := store.UpsertPerson(ctx, db, store.Person{
-			GedcomID:  p.GedcomID,
-			Given:     p.Given,
-			Surname:   p.Surname,
-			Sex:       optionalString(p.Sex),
-			BirthYear: optionalInt(p.BirthYear),
-			DeathYear: optionalInt(p.DeathYear),
+			GedcomID:       p.GedcomID,
+			Given:          p.Given,
+			Surname:        p.Surname,
+			MarriedSurname: optionalString(p.MarriedSurname),
+			Sex:            optionalString(p.Sex),
+			BirthYear:      optionalInt(p.BirthYear),
+			DeathYear:      optionalInt(p.DeathYear),
 		})
 		if err != nil {
 			return nil, err
