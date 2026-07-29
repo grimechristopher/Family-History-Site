@@ -39,11 +39,19 @@ func (h Heading) String() string {
 	return fmt.Sprintf("%s / %s / %s", h.Person, h.Section, h.Subsection)
 }
 
-// ImportKey is the stable identity of a question across re-imports. Keying on
-// position rather than content means rewording a question in Obsidian updates
-// the existing row instead of creating a duplicate.
-func (q Question) ImportKey() string {
-	return fmt.Sprintf("%s|%s|%s|%d", q.Person, q.Section, q.Subsection, q.Ordinal)
+// ImportKey builds the stable identity of a question across re-imports.
+//
+// It deliberately excludes the heading text. An earlier version keyed on
+// (person, section, subsection, ordinal), which meant renaming
+// "### Alice May Osgood" to "### Alice May Osgood (Brennan)" gave all
+// seventeen of her questions new identities — the old rows archived, and any
+// answers written against them archived with them. Keying on the subject the
+// question resolves to means headings can be rewritten freely.
+//
+// subject and topic come from matching, so the importer supplies them; ordinal
+// counts position within that subject and topic, in file order.
+func ImportKey(person, subject, topic string, ordinal int) string {
+	return fmt.Sprintf("%s|%s|%s|%d", person, subject, topic, ordinal)
 }
 
 func Parse(r io.Reader) ([]Question, error) {

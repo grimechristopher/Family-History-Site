@@ -177,6 +177,10 @@ func Run(ctx context.Context, db store.DBTX, ged *gedcom.File, qs []prompts.Ques
 	}
 
 	keys := make([]string, 0, len(qs))
+	// Ordinals count within a subject and topic rather than within a heading, so
+	// that renaming a heading leaves every question's identity untouched.
+	ordinals := map[string]int{}
+
 	for i, q := range qs {
 		m, ok := matchByHeading[q.Heading()]
 		if !ok {
@@ -194,7 +198,9 @@ func Run(ctx context.Context, db store.DBTX, ged *gedcom.File, qs []prompts.Ques
 			continue
 		}
 
-		key := q.ImportKey()
+		group := q.Person + "|" + m.Subject + "|" + m.Topic
+		ordinals[group]++
+		key := prompts.ImportKey(q.Person, m.Subject, m.Topic, ordinals[group])
 		if _, err := store.UpsertImportedQuestion(ctx, db, store.ImportedQuestion{
 			SubjectID:     subjectID,
 			AskedOfUserID: userID,

@@ -2,6 +2,7 @@ package prompts
 
 import (
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -49,19 +50,31 @@ func TestParseOrdinalResetsPerHeading(t *testing.T) {
 	}
 }
 
-func TestImportKeyIsStableAndDistinct(t *testing.T) {
-	qs := load(t)
-
-	seen := map[string]bool{}
-	for _, q := range qs {
-		k := q.ImportKey()
-		if seen[k] {
-			t.Errorf("duplicate import key %q", k)
-		}
-		seen[k] = true
+// The key must not contain the heading text: renaming a heading has to leave a
+// question's identity, and therefore its answers, alone.
+func TestImportKeyIgnoresHeadingText(t *testing.T) {
+	before := ImportKey("Dad", "alice-may-fletcher", "", 1)
+	after := ImportKey("Dad", "alice-may-fletcher", "", 1)
+	if before != after {
+		t.Fatalf("same inputs gave %q then %q", before, after)
 	}
-	if got := qs[0].ImportKey(); got != "Dad|Parents|James R Hale|1" {
-		t.Errorf("ImportKey = %q", got)
+	if strings.Contains(before, "Parents") || strings.Contains(before, "Alice May") {
+		t.Errorf("key %q still carries heading text", before)
+	}
+
+	// Different subjects, topics, people and positions stay distinct.
+	keys := map[string]bool{}
+	for _, k := range []string{
+		ImportKey("Dad", "a", "", 1),
+		ImportKey("Dad", "a", "", 2),
+		ImportKey("Dad", "a", "Childhood", 1),
+		ImportKey("Dad", "b", "", 1),
+		ImportKey("Mom", "a", "", 1),
+	} {
+		if keys[k] {
+			t.Errorf("duplicate key %q", k)
+		}
+		keys[k] = true
 	}
 }
 
