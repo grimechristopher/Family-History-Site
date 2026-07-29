@@ -874,15 +874,7 @@ a.tperson:hover { border-color: var(--teal); background: var(--teal-wash); }
     padding-bottom: var(--s7);       /* the last row is not flush to the edge */
   }
 
-  /* Section headings stick while their own column scrolls. */
-  .with-side-main > h2 {
-    position: sticky;
-    top: 0;
-    z-index: 5;
-    margin-top: 0;
-    padding-top: var(--s3);
-    background: var(--oat);
-  }
+  .with-side-main > h2 { margin-top: 0; }
   .with-side-main > h2 ~ h2 { margin-top: var(--s6); }
 
   .side-group > summary {
@@ -909,7 +901,7 @@ a.tperson:hover { border-color: var(--teal); background: var(--teal-wash); }
    work, being a parent, looking back. The list keeps that shape.
    ------------------------------------------------------------------ */
 
-.qgroup { margin-bottom: var(--s6); }
+.qgroup { margin-bottom: var(--s5); }
 
 .qgroup-head {
   display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3);
@@ -926,9 +918,17 @@ a.tperson:hover { border-color: var(--teal); background: var(--teal-wash); }
 
 .qgroup-head .count { color: var(--ink-soft); letter-spacing: 0; }
 
-@media (min-width: 62rem) {
-  /* Sits under the sticky "Still waiting" heading rather than over it. */
-  .qgroup-head { position: sticky; top: 3.25rem; z-index: 4; background: var(--oat); }
+/* Only one thing pins: which run of questions you are in. Two stacked bars left
+   cards sliding under both and arriving with their first line cut off. */
+.qgroup-head {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  /* Opaque, and padded wide enough that a card passing underneath disappears
+     cleanly instead of peeking out above the text. */
+  background: var(--oat);
+  padding: var(--s3) 0 var(--s2);
+  margin: 0 0 var(--s3);
 }
 
 /* ---------- Narrow-screen filter menu --------------------------------
@@ -989,3 +989,44 @@ a.tperson:hover { border-color: var(--teal); background: var(--teal-wash); }
 }
 
 .backlink { margin-bottom: var(--s4); }
+
+/* ---------- Sticky context -------------------------------------------
+   Scrolling a long list should never leave you wondering whose questions these
+   are or which run you are in. Exactly one bar pins per screen, so nothing
+   ever slides under two of them.
+   ------------------------------------------------------------------ */
+
+/* Narrow: the whole page scrolls, so everything pins to the viewport. */
+@media (max-width: 61.99rem) {
+  .side-toggle {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    margin-bottom: var(--s4);
+    padding: var(--s3) 0;
+    background: var(--oat);
+  }
+
+  .qgroup-head { top: 4.75rem; }   /* clears the sticky Filters button */
+}
+
+/* A person's page: their name stays put while their questions scroll past. */
+.subject-head {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  margin-bottom: var(--s5);
+  padding: var(--s4) 0 var(--s3);
+  background: var(--oat);
+  border-bottom: 1px solid var(--rule);
+}
+
+.subject-head h1 { margin-bottom: var(--s1); }
+.subject-head .eyebrow { margin-bottom: var(--s1); }
+.subject-head .lifespan { margin: 0; font-size: var(--t-body); }
+
+/* On a person's page only their name pins. The section headings there are
+   passed once, and a second bar would clip the cards under it. */
+
+/* The name block would otherwise sit over the masthead as it scrolls past. */
+.bar, .tabs { position: relative; z-index: 40; }

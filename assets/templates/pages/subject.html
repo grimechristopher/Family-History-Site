@@ -1,18 +1,21 @@
 {{define "content"}}
-<p class="eyebrow">{{if eq .Subject.Kind "couple"}}A couple{{else if eq .Subject.Kind "group"}}Further back{{else}}In the family{{end}}</p>
-<h1>{{.Subject.DisplayName}}</h1>
+{{/* Sticks while the page scrolls, so it is always clear whose questions these
+     are. The years ride along with the name. */}}
+<header class="subject-head">
+  <p class="eyebrow">{{if eq .Subject.Kind "couple"}}A couple{{else if eq .Subject.Kind "group"}}Further back{{else}}In the family{{end}}</p>
+  <h1>{{.Subject.DisplayName}}</h1>
+  {{if eq .Subject.Kind "individual"}}
+    {{range .Members}}{{if .Lifespan}}<p class="lifespan">{{.Lifespan}}</p>{{end}}{{end}}
+  {{end}}
+</header>
 
-{{/* For one person the name is already the heading, so only the years are
-     worth repeating. Couples and groups genuinely need their members listed. */}}
-{{if eq .Subject.Kind "individual"}}
-  {{range .Members}}{{if .Lifespan}}<p class="lifespan">{{.Lifespan}}</p>{{end}}{{end}}
-{{else if .Members}}
+{{if ne .Subject.Kind "individual"}}{{if .Members}}
   <ul class="members">
     {{range .Members}}
       <li><strong>{{.FullName}}</strong>{{if .Lifespan}} <span class="tyears">{{.Lifespan}}</span>{{end}}</li>
     {{end}}
   </ul>
-{{end}}
+{{end}}{{end}}
 
 {{if .Unanswered}}
   <h2>Questions waiting <span class="count">{{len .Unanswered}}</span></h2>
