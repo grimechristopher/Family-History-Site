@@ -1,6 +1,7 @@
 package web
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -197,4 +198,65 @@ func (s *Server) handleFocusSubject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, "/cards", http.StatusSeeOther)
+}
+
+// pedigreeNode is the shape the browser gets. Deliberately small: names, years,
+// where to click through to, and how much has been said.
+type pedigreeNode struct {
+	Name     string          `json:"name"`
+	Years    string          `json:"years,omitempty"`
+	Slug     string          `json:"slug,omitempty"`
+	Total    int             `json:"total,omitempty"`
+	Answered int             `json:"answered,omitempty"`
+	Gen      int             `json:"gen"`
+	Parents  []*pedigreeNode `json:"parents,omitempty"`
+}
+
+// handleTreeJSON serves the pedigree for the drawn view.
+//
+// The same walk backs both views, so the diagram and the list can never disagree
+// about who is in the family.
+func (s *Server) handleTreeJSON(w http.ResponseWriter, r *http.Request) {
+	people, err := s.Store.TreePeople(r.Context())
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	rootIDs, err := s.Store.RootPeople(r.Context())
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+
+	var convert func(n *treeNode) *pedigreeNode
+	convert = func(n *treeNode) *pedigreeNode {
+		p := n.Person
+		out := &pedigreeNode{
+			Name:     p.FullName(),
+			Years:    p.Lifespan(),
+			Total:    p.QuestionCount,
+			Answered: p.AnsweredCount,
+			Gen:      n.Generation,
+		}
+		// Only linked when there is something to read, matching the list view.
+		if p.SubjectSlug != nil && p.QuestionCount > 0 {
+			out.Slug = *p.SubjectSlug
+		}
+		for _, parent := range n.Parents {
+			out.Parents = append(out.Parents, convert(parent))
+		}
+		return out
+	}
+
+	roots := buildTree(people, rootIDs, 4)
+	out := make([]*pedigreeNode, 0, len(roots))
+	for _, r := range roots {
+		out = append(out, convert(r))
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	if err := json.NewEncoder(w).Encode(out); err != nil {
+		s.Log.Error("encode pedigree", "err", err)
+	}
 }

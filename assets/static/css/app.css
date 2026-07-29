@@ -1030,3 +1030,75 @@ a.tperson:hover { border-color: var(--teal); background: var(--teal-wash); }
 
 /* The name block would otherwise sit over the masthead as it scrolls past. */
 .bar, .tabs { position: relative; z-index: 40; }
+
+/* ---------- Drawn pedigree -------------------------------------------
+   Styled entirely from the same tokens as the rest of the site, so the chart
+   inherits the theme rather than carrying its own palette.
+   ------------------------------------------------------------------ */
+
+#pedigree-views[data-view="list"] .pedigree-chart,
+#pedigree-views[data-view="chart"] .pedigree-list { display: none; }
+
+.pedigree-switch { margin: 0 0 var(--s5); }
+
+.pedigree-figure { margin: 0 0 var(--s6); }
+
+.pedigree-caption {
+  font: 700 var(--t-micro)/1.4 var(--sans);
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--apricot);
+  margin-bottom: var(--s3);
+}
+
+/* A pedigree is wider than any column, so it scrolls inside its own frame and
+   the page never scrolls sideways. */
+.pedigree-scroll {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  padding-bottom: var(--s3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  background: var(--sheet-warm);
+}
+
+.pedigree-scroll svg { display: block; }
+
+.pnode-box {
+  fill: var(--sheet);
+  stroke: var(--rule-firm);
+  stroke-width: 1;
+}
+
+.pnode-name {
+  font: 700 15px/1 var(--sans);
+  fill: var(--ink);
+}
+
+.pnode-meta {
+  font: 400 13px/1 var(--typed);
+  fill: var(--ink-soft);
+}
+
+/* Marks who has already been talked about — the same signal as the list. */
+.pnode-told { fill: var(--teal); }
+
+.pnode-root .pnode-box { fill: var(--apricot-wash); stroke: var(--ink); stroke-width: 2; }
+
+a.pnode-hit { cursor: pointer; }
+a.pnode-hit:hover .pnode-box { stroke: var(--teal); stroke-width: 2; }
+a.pnode-hit:hover .pnode-name { fill: var(--teal); }
+a.pnode-hit:focus-visible { outline: none; }
+a.pnode-hit:focus-visible .pnode-box { stroke: var(--teal); stroke-width: 3; }
+
+/* Nobody has anything recorded for these, so they are not links. */
+.pnode-flat .pnode-box { fill: none; stroke-dasharray: 4 4; }
+.pnode-flat .pnode-name { fill: var(--ink-soft); font-weight: 400; }
+
+/* A pedigree is wider than any reading column, so the page it sits on gets the
+   window. The list view inside it keeps its own comfortable measure. */
+@media (min-width: 62rem) {
+  .page:has(.pedigree-chart) { max-width: 78rem; }
+}
+
+.pedigree-list { max-width: var(--column); }

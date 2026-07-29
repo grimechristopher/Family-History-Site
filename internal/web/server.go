@@ -225,6 +225,7 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("POST /photos/{id}/delete", require(http.HandlerFunc(s.handleDeletePhoto)))
 
 	mux.Handle("GET /tree", require(http.HandlerFunc(s.handleTree)))
+	mux.Handle("GET /tree.json", require(http.HandlerFunc(s.handleTreeJSON)))
 	mux.Handle("GET /subjects", require(http.HandlerFunc(s.handleSubjects)))
 	mux.Handle("GET /subjects/{slug}", require(http.HandlerFunc(s.handleSubject)))
 	mux.Handle("POST /subjects/{slug}/focus", require(http.HandlerFunc(s.handleFocusSubject)))

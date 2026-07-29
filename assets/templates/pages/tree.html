@@ -2,11 +2,26 @@
 <h1>The family</h1>
 <p class="lede">Another way round the questions. Tap anyone to see what&rsquo;s been said about them.</p>
 
-{{range .Tree}}
-  <section class="pedigree">
-    {{template "treenode" .}}
-  </section>
-{{end}}
+{{/* Two views of the same walk, so they can never disagree about who is family.
+     The list is not a fallback: it is the one that works with a screen reader
+     and under magnification. Starts as the list, and the switch only appears
+     once the chart has actually drawn. */}}
+<div id="pedigree-views" data-view="list">
+  <p class="pedigree-switch">
+    <button type="button" class="btn btn-quiet" data-pedigree-toggle hidden
+            aria-pressed="false">Show as a chart</button>
+  </p>
+
+  <div id="pedigree" class="pedigree-chart" aria-hidden="true"></div>
+
+  <div class="pedigree-list">
+    {{range .Tree}}
+      <section class="pedigree">
+        {{template "treenode" .}}
+      </section>
+    {{end}}
+  </div>
+</div>
 
 {{if .SubjectProgress}}
   <h2>Also in the family</h2>
@@ -47,4 +62,10 @@
     </div>
   {{end}}
 </div>
+{{end}}
+
+{{define "scripts"}}
+<script src="/static/js/vendor/d3-hierarchy.js?v={{.AssetVersion}}" defer></script>
+<script src="/static/js/pedigree.js?v={{.AssetVersion}}" defer></script>
+<script src="/static/js/pedigree-toggle.js?v={{.AssetVersion}}" defer></script>
 {{end}}
