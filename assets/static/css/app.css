@@ -930,3 +930,62 @@ a.tperson:hover { border-color: var(--teal); background: var(--teal-wash); }
   /* Sits under the sticky "Still waiting" heading rather than over it. */
   .qgroup-head { position: sticky; top: 3.25rem; z-index: 4; background: var(--oat); }
 }
+
+/* ---------- Narrow-screen filter menu --------------------------------
+   A rail of a dozen names above the questions wastes the whole first screen on
+   a phone or a portrait iPad, so below 62rem it folds behind a hamburger.
+   ------------------------------------------------------------------ */
+
+.side-toggle { margin-bottom: var(--s5); }
+
+.side-toggle-btn {
+  display: inline-flex; align-items: center; gap: var(--s3);
+  min-height: var(--tap); padding: var(--s2) var(--s4);
+  border: 2px solid var(--rule-firm); border-radius: var(--r-pill);
+  background: var(--sheet);
+  color: var(--ink);
+  font: 700 var(--t-small)/1.2 var(--sans);
+  cursor: pointer;
+}
+.side-toggle-btn:hover { border-color: var(--teal); background: var(--teal-wash); }
+.side-toggle-btn::after { content: ""; }
+
+/* Three bars, drawn rather than fetched. */
+.burger {
+  position: relative;
+  width: 1.25rem; height: 2px;
+  background: currentColor; border-radius: 2px;
+}
+.burger::before, .burger::after {
+  content: ""; position: absolute; left: 0;
+  width: 100%; height: 2px; background: currentColor; border-radius: 2px;
+  transition: transform 160ms var(--ease);
+}
+.burger::before { top: -6px; }
+.burger::after  { top: 6px; }
+
+/* Open: the bars become a cross, so the control says what it will do next. */
+.side-toggle[open] .burger { background: transparent; }
+.side-toggle[open] .burger::before { transform: translateY(6px) rotate(45deg); }
+.side-toggle[open] .burger::after  { transform: translateY(-6px) rotate(-45deg); }
+
+.side-toggle[open] .side {
+  margin-top: var(--s4);
+  padding: var(--s4);
+  border: 1px solid var(--rule); border-radius: var(--r);
+  background: var(--sheet);
+}
+
+@media (min-width: 62rem) {
+  /* No menu at this width: the rail is a column of the layout. */
+  .side-toggle { margin-bottom: 0; min-width: 0; }
+  .side-toggle-btn { display: none; }
+  .side-toggle[open] .side {
+    margin-top: 0; padding: 0; border: 0; background: none;
+  }
+  /* The details element is the grid child, so it carries the column's height. */
+  .with-side { grid-template-columns: 15rem minmax(0, 1fr); }
+  .side-toggle { height: 100%; overflow: hidden; }
+}
+
+.backlink { margin-bottom: var(--s4); }

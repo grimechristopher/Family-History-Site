@@ -56,9 +56,30 @@
     });
   }
 
+  // The filter rail is a hamburger below 62rem and a column above it. The
+  // markup ships open so it is reachable without JavaScript; this closes it on
+  // narrow screens and follows the breakpoint if the window is resized or the
+  // iPad is turned.
+  function followBreakpoint() {
+    var panel = document.querySelector('.side-toggle');
+    if (!panel) return;
+    var wide = window.matchMedia('(min-width: 62rem)');
+
+    function sync(isWide) { panel.open = isWide; }
+    sync(wide.matches);
+
+    if (wide.addEventListener) {
+      wide.addEventListener('change', function (e) { sync(e.matches); });
+    } else if (wide.addListener) {
+      wide.addListener(function (e) { sync(e.matches); });
+    }
+  }
+
+  function start() { wire(); followBreakpoint(); }
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', wire);
+    document.addEventListener('DOMContentLoaded', start);
   } else {
-    wire();
+    start();
   }
 })();
