@@ -103,6 +103,9 @@ func newHarness(t *testing.T) *harness {
 		if err != nil {
 			return err
 		}
+		if _, err := store.UpsertUser(ctx, db, "chris@example.com", "Chris", store.RoleAdmin); err != nil {
+			return err
+		}
 		h.dadID, h.momID = dad, mom
 
 		subject, err := store.UpsertSubject(ctx, db, store.Subject{
@@ -611,21 +614,50 @@ func TestQuestionListSeparatesUnansweredFromAnswered(t *testing.T) {
 	h := newHarness(t)
 	cookie := h.signIn("dad@example.com")
 
+	// The page opens on your own questions, not everybody's: Dad has two of the
+	// three seeded questions, and Mom's is not his to answer.
 	body := h.get("/questions", cookie).Body.String()
-	if !strings.Contains(body, "3 still waiting") {
-		t.Errorf("expected all three waiting, got: %s", firstLede(body))
+	if !strings.Contains(body, "2 still waiting") {
+		t.Errorf("expected Dad's own two waiting, got: %s", firstLede(body))
+	}
+	if strings.Contains(body, "How did they meet?") {
+		t.Error("Mom's question should not appear on Dad's default list")
 	}
 
 	h.post("/questions/"+strconv.FormatInt(h.dadQuestion, 10)+"/answer",
 		url.Values{"body": {"A Studebaker."}}, cookie)
 
 	body = h.get("/questions", cookie).Body.String()
-	if !strings.Contains(body, "2 still waiting") || !strings.Contains(body, "1 answered") {
+	if !strings.Contains(body, "1 still waiting") || !strings.Contains(body, "1 answered") {
 		t.Errorf("counts did not move, got: %s", firstLede(body))
 	}
 	// The answered one stays visible rather than disappearing.
 	if !strings.Contains(body, "qrow-done") {
 		t.Error("answered questions should still be listed, marked done")
+	}
+}
+
+// Opening the page shows your own questions; the other contributors are offered
+// as a way to go and read theirs.
+func TestQuestionListDefaultsToTheViewerAndOffersOthers(t *testing.T) {
+	h := newHarness(t)
+	dad := h.signIn("dad@example.com")
+
+	body := h.get("/questions", dad).Body.String()
+	if !strings.Contains(body, `href="/questions?asked_of=Dad"`) {
+		t.Error("expected Dad in the people list")
+	}
+	if !strings.Contains(body, `href="/questions?asked_of=Mom"`) {
+		t.Error("expected Mom offered as somewhere else to look")
+	}
+	// Contributors are not offered "everyone"; only an admin is.
+	if strings.Contains(body, "asked_of=everyone") {
+		t.Error("a contributor should not be offered everyone's questions")
+	}
+
+	chris := h.signIn("chris@example.com")
+	if !strings.Contains(h.get("/questions", chris).Body.String(), "asked_of=everyone") {
+		t.Error("an admin should be able to see everyone's questions")
 	}
 }
 
@@ -641,11 +673,11 @@ func TestQuestionListFiltersByPersonAndSubject(t *testing.T) {
 		t.Error("Dad's question leaked into Mom's filter")
 	}
 
-	bySubject := h.get("/questions?subject=peter-samuel-hale", cookie).Body.String()
+	bySubject := h.get("/questions?subject=peter-samuel-hale&asked_of=Dad", cookie).Body.String()
 	if !strings.Contains(bySubject, "What kind of cars did he have?") {
 		t.Error("subject filter dropped a matching question")
 	}
-	if strings.Contains(h.get("/questions?subject=no-such-subject", cookie).Body.String(), "qrow-body") {
+	if strings.Contains(h.get("/questions?subject=no-such-subject&asked_of=Dad", cookie).Body.String(), "qrow-body") {
 		t.Error("an unknown subject should match nothing")
 	}
 }
@@ -662,11 +694,11 @@ func TestPrimaryAnswerOthersSectionAndReplies(t *testing.T) {
 	h.post("/questions/"+id+"/answer", url.Values{"body": {"He loved that car."}}, mom)
 
 	body := h.get("/questions/"+id, dad).Body.String()
-	if !strings.Contains(body, "answer-primary") {
+	if !strings.Contains(body, "panel-primary") {
 		t.Error("the intended person's answer should be marked primary")
 	}
-	if !strings.Contains(body, "<h2>Others</h2>") {
-		t.Error("expected an Others section")
+	if !strings.Contains(body, "Also remembered by") {
+		t.Error("expected a divider separating other people's answers")
 	}
 	if strings.Index(body, "A Studebaker.") > strings.Index(body, "He loved that car.") {
 		t.Error("the primary answer must render before Others")
@@ -1284,7 +1316,7 @@ func TestNavIsThreeTabsAndMarksTheCurrentOne(t *testing.T) {
 	cookie := h.signIn("dad@example.com")
 
 	body := h.get("/cards", cookie).Body.String()
-	for _, want := range []string{"Questions to answer", "Everything", "The family"} {
+	for _, want := range []string{">Cards<", ">Questions<", ">Tree<"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("nav missing %q", want)
 		}

@@ -1,13 +1,19 @@
 {{define "content"}}
-<p class="eyebrow">{{.Question.SubjectName}}{{if .Question.Topic}} &middot; {{.Question.Topic}}{{end}}</p>
-<h1>{{.Question.Body}}</h1>
-<p class="lede">Asked of {{.Question.AskedOfName}}</p>
+<article class="panel panel-question">
+  <p class="card-subject">{{.Question.SubjectName}}{{if .Question.Topic}} &middot; {{.Question.Topic}}{{end}}</p>
+  <h1 class="panel-title">{{.Question.Body}}</h1>
+  <p class="chips">
+    <span class="chip chip-asked">Asked of {{.Question.AskedOfName}}</span>
+    {{if .PrimaryAnswers}}<span class="chip chip-done">Answered</span>{{end}}
+    {{if .OtherAnswers}}<span class="chip">{{len .OtherAnswers}} from others</span>{{end}}
+  </p>
+</article>
 
 <div id="answers">
   {{template "answers" .}}
 </div>
 
-<p><a class="link" href="/questions">Back to all questions</a></p>
+<p><a class="link" href="/questions">&larr; Back to all questions</a></p>
 {{end}}
 
 {{define "answers"}}
@@ -15,34 +21,49 @@
   {{if .PrimaryAnswers}}
     {{range .PrimaryAnswers}}{{template "answer" .}}{{end}}
   {{else}}
-    <p class="lede">{{.Question.AskedOfName}} hasn&rsquo;t answered this one yet.</p>
+    <div class="panel panel-empty">
+      <p class="lede">{{.Question.AskedOfName}} hasn&rsquo;t answered this one yet.</p>
+    </div>
   {{end}}
 
   {{if .OtherAnswers}}
-    <h2>Others</h2>
+    <p class="feed-divider"><span>Also remembered by</span></p>
     {{range .OtherAnswers}}{{template "answer" .}}{{end}}
   {{end}}
 
-  <h2>{{if .MyAnswerBody}}Your answer{{else}}Add your answer{{end}}</h2>
-  <p class="lede">
-    {{if .ViewerIsAskedOf}}This one was asked of you.{{else}}Anyone can add what they remember.{{end}}
-  </p>
-  <form hx-post="/questions/{{.Question.ID}}/answer" hx-target="#answers" hx-swap="outerHTML"
+  <form class="panel panel-compose"
+        hx-post="/questions/{{.Question.ID}}/answer" hx-target="#answers" hx-swap="outerHTML"
         method="post" action="/questions/{{.Question.ID}}/answer">
-    <label for="my-answer">In your own words</label>
-    <textarea id="my-answer" name="body" rows="6">{{.MyAnswerBody}}</textarea>
+    <div class="byline">
+      <span class="avatar avatar-you" aria-hidden="true">{{printf "%.1s" .User.DisplayName}}</span>
+      <div class="byline-text">
+        <span class="byline-name">{{if .MyAnswerBody}}Your answer{{else}}Add your answer{{end}}</span>
+        <span class="byline-meta">{{if .ViewerIsAskedOf}}This one was asked of you{{else}}Anyone can add what they remember{{end}}</span>
+      </div>
+    </div>
+
+    <label class="visually-hidden" for="my-answer">In your own words</label>
+    <p class="dictate" id="dictate-answer">
+      <span class="dictate-icon" aria-hidden="true">&#127908;</span>
+      <span>Tap the microphone on your keyboard and just talk &mdash; it types for you.</span>
+    </p>
+    <textarea id="my-answer" name="body" rows="5" aria-describedby="dictate-answer"
+              placeholder="What do you remember?">{{.MyAnswerBody}}</textarea>
     <div class="btn-row"><button class="btn" type="submit">Save</button></div>
   </form>
 </div>
 {{end}}
 
 {{define "answer"}}
-<article class="answer{{if .IsPrimary}} answer-primary{{end}}">
-  <p class="answer-by">
-    {{.AuthorName}}
-    {{if .IsPrimary}}<span class="card-badge">their own words</span>{{end}}
-    <span class="answer-when">{{.CreatedAt.Format "2 January 2006"}}</span>
-  </p>
+<article class="panel{{if .IsPrimary}} panel-primary{{end}}">
+  <div class="byline">
+    <span class="avatar{{if .IsPrimary}} avatar-primary{{end}}" aria-hidden="true">{{printf "%.1s" .AuthorName}}</span>
+    <div class="byline-text">
+      <span class="byline-name">{{.AuthorName}}{{if .IsPrimary}} <span class="chip chip-done">their own words</span>{{end}}</span>
+      <span class="byline-meta">{{.CreatedAt.Format "2 January 2006"}}</span>
+    </div>
+  </div>
+
   <div class="answer-body">{{.Body}}</div>
 
   {{template "photos" .}}
@@ -51,7 +72,10 @@
   {{if .Replies}}
     <ul class="replies">
       {{range .Replies}}
-        <li><span class="reply-by">{{.AuthorName}}</span> {{.Body}}</li>
+        <li>
+          <span class="avatar avatar-sm" aria-hidden="true">{{printf "%.1s" .AuthorName}}</span>
+          <div><span class="reply-by">{{.AuthorName}}</span>{{.Body}}</div>
+        </li>
       {{end}}
     </ul>
   {{end}}
@@ -60,8 +84,8 @@
     <summary>Reply</summary>
     <form method="post" action="/entries/{{.ID}}/replies">
       <input type="hidden" name="return_to" value="/questions/{{.QuestionID}}">
-      <label for="reply-{{.ID}}">Add to this</label>
-      <textarea id="reply-{{.ID}}" name="body" rows="3"></textarea>
+      <label class="visually-hidden" for="reply-{{.ID}}">Add to this</label>
+      <textarea id="reply-{{.ID}}" name="body" rows="3" placeholder="Add to this&hellip;"></textarea>
       <div class="btn-row"><button class="btn btn-quiet" type="submit">Post reply</button></div>
     </form>
   </details>

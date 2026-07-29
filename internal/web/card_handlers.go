@@ -63,7 +63,7 @@ func (s *Server) stackData(r *http.Request, flash string) (pageData, error) {
 	// must only offer people who actually have questions: picking an empty one
 	// landed you on a dead end.
 	if u.QueueMode == store.QueueOneSubject {
-		withProgress, err := s.Store.SubjectsWithProgress(r.Context())
+		withProgress, err := s.Store.SubjectsWithProgress(r.Context(), u.DisplayName)
 		if err != nil {
 			return data, err
 		}

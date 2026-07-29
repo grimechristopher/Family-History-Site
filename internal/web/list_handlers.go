@@ -14,9 +14,20 @@ import (
 func (s *Server) handleQuestions(w http.ResponseWriter, r *http.Request) {
 	u := auth.User(r.Context())
 
+	askedOf := r.URL.Query().Get("asked_of")
+	// Default to your own questions. A contributor opening this page almost
+	// always wants their own list, and "everyone" is only meaningful to an admin,
+	// who is asked nothing themselves.
+	if askedOf == "" && u.Role == store.RoleContributor {
+		askedOf = u.DisplayName
+	}
+	if askedOf == "everyone" {
+		askedOf = ""
+	}
+
 	filter := store.QuestionFilter{
 		SubjectSlug: r.URL.Query().Get("subject"),
-		AskedOfName: r.URL.Query().Get("asked_of"),
+		AskedOfName: askedOf,
 	}
 
 	counts, err := s.Store.ListCounts(r.Context(), filter)
@@ -41,7 +52,8 @@ func (s *Server) handleQuestions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	subjects, err := s.Store.SubjectsWithProgress(r.Context())
+	// Scoped to the active person filter, so empty people drop out.
+	subjects, err := s.Store.SubjectsWithProgress(r.Context(), filter.AskedOfName)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
@@ -61,6 +73,7 @@ func (s *Server) handleQuestions(w http.ResponseWriter, r *http.Request) {
 	data.Contributors = contributors
 	data.FilterSubject = filter.SubjectSlug
 	data.FilterAskedOf = filter.AskedOfName
+	data.ViewerIsAdmin = u.Role == store.RoleAdmin
 
 	s.render(w, r, "questions", data)
 }
@@ -105,6 +118,7 @@ type answerView struct {
 func (s *Server) questionData(r *http.Request, id int64) (pageData, error) {
 	u := auth.User(r.Context())
 	data := s.newPageData(r, "Question")
+	data.Nav = "questions"
 
 	q, err := s.Store.Question(r.Context(), id)
 	if err != nil {

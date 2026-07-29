@@ -93,7 +93,7 @@ func (s *Server) handleTree(w http.ResponseWriter, r *http.Request) {
 	}
 	collect(data.Tree)
 
-	subjects, err := s.Store.SubjectsWithProgress(r.Context())
+	subjects, err := s.Store.SubjectsWithProgress(r.Context(), "")
 	if err != nil {
 		s.serverError(w, r, err)
 		return
@@ -108,7 +108,7 @@ func (s *Server) handleTree(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSubjects(w http.ResponseWriter, r *http.Request) {
-	subjects, err := s.Store.SubjectsWithProgress(r.Context())
+	subjects, err := s.Store.SubjectsWithProgress(r.Context(), "")
 	if err != nil {
 		s.serverError(w, r, err)
 		return
@@ -162,6 +162,7 @@ func (s *Server) handleSubject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := s.newPageData(r, subject.DisplayName)
+	data.Nav = "tree"
 	data.Subject = subject
 	data.Members = members
 	data.Unanswered = unanswered

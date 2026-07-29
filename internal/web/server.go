@@ -107,6 +107,7 @@ type pageData struct {
 	Contributors    []*store.User
 	FilterSubject   string
 	FilterAskedOf   string
+	ViewerIsAdmin   bool
 
 	// question detail
 	Question        *store.QuestionDetail

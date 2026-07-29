@@ -175,20 +175,29 @@ type SubjectProgress struct {
 	Answered int
 }
 
-func (s *Store) SubjectsWithProgress(ctx context.Context) ([]SubjectProgress, error) {
+// SubjectsWithProgress lists subjects and how much has been said about them.
+//
+// askedOf narrows the counts to one contributor, so filtering to Dad shows only
+// the people Dad has questions about — offering a person with nothing to answer
+// is a dead end.
+func (s *Store) SubjectsWithProgress(ctx context.Context, askedOf string) ([]SubjectProgress, error) {
 	rows, err := s.Pool.Query(ctx, `
 		SELECT s.id, s.slug, s.kind, s.display_name, s.sort_order,
 		       count(q.id),
 		       count(owner_answer.id)
 		FROM family.subjects s
+		LEFT JOIN family.users asked
+		       ON $1 <> '' AND asked.display_name = $1
 		LEFT JOIN family.questions q
-		       ON q.subject_id = s.id AND q.archived_at IS NULL
+		       ON q.subject_id = s.id
+		      AND q.archived_at IS NULL
+		      AND ($1 = '' OR q.asked_of_user_id = asked.id)
 		LEFT JOIN family.entries owner_answer
 		       ON owner_answer.question_id = q.id
 		      AND owner_answer.author_user_id = q.asked_of_user_id
 		      AND owner_answer.is_draft = false
 		GROUP BY s.id, s.slug, s.kind, s.display_name, s.sort_order
-		ORDER BY s.sort_order, s.slug`)
+		ORDER BY s.sort_order, s.slug`, askedOf)
 	if err != nil {
 		return nil, fmt.Errorf("subjects with progress: %w", err)
 	}

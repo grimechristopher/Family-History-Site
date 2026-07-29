@@ -16,18 +16,13 @@
   <a class="bar-title" href="/">Family History</a>
   <div class="bar-tools">
     <details class="display-settings">
-      <summary>Text &amp; colours</summary>
+      <summary>Text size</summary>
       <div class="display-panel">
         <h3 id="ds-size">Text size</h3>
         <div class="display-row" role="group" aria-labelledby="ds-size">
           <button type="button" data-setting="size" data-value="auto">Normal</button>
           <button type="button" data-setting="size" data-value="lg">Larger</button>
           <button type="button" data-setting="size" data-value="xl">Largest</button>
-        </div>
-        <h3 id="ds-contrast">Contrast</h3>
-        <div class="display-row" role="group" aria-labelledby="ds-contrast">
-          <button type="button" data-setting="contrast" data-value="auto">Normal</button>
-          <button type="button" data-setting="contrast" data-value="more">Stronger</button>
         </div>
       </div>
     </details>
@@ -36,9 +31,9 @@
 </header>
 
 <nav class="tabs" aria-label="Sections">
-  <a class="tab" href="/cards" {{if eq .Nav "cards"}}aria-current="page"{{end}}>Questions to answer</a>
-  <a class="tab" href="/questions" {{if eq .Nav "questions"}}aria-current="page"{{end}}>Everything</a>
-  <a class="tab" href="/tree" {{if eq .Nav "tree"}}aria-current="page"{{end}}>The family</a>
+  <a class="tab" href="/cards" {{if eq .Nav "cards"}}aria-current="page"{{end}}>Cards</a>
+  <a class="tab" href="/questions" {{if eq .Nav "questions"}}aria-current="page"{{end}}>Questions</a>
+  <a class="tab" href="/tree" {{if eq .Nav "tree"}}aria-current="page"{{end}}>Tree</a>
 </nav>
 {{end}}
 

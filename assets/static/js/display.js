@@ -1,17 +1,15 @@
-// Reader display preferences: colour polarity, contrast, and text size.
+// The reader's text size.
 //
-// Whether light-on-dark or dark-on-light is easier to read with macular
-// degeneration is individual and the research is inconsistent, so this is a
-// choice rather than a decision made for the reader. "Auto" follows whatever
-// the iPad is already set to.
+// Everything is sized in rem, so setting the root size scales the whole
+// interface proportionally — far easier to find than Safari's own settings.
 //
 // Loaded without `defer` so the saved choice is applied before first paint and
-// nobody watches the page change colour underneath them.
+// nobody watches the page resize underneath them.
 
 (function () {
   'use strict';
 
-  var KEYS = { theme: 'fhs-theme', contrast: 'fhs-contrast', size: 'fhs-size' };
+  var KEYS = { size: 'fhs-size' };
   var root = document.documentElement;
 
   function read(key) {
@@ -25,14 +23,6 @@
   }
 
   function apply() {
-    var theme = read(KEYS.theme);
-    if (theme) { root.setAttribute('data-theme', theme); }
-    else { root.removeAttribute('data-theme'); }
-
-    var contrast = read(KEYS.contrast);
-    if (contrast) { root.setAttribute('data-contrast', contrast); }
-    else { root.removeAttribute('data-contrast'); }
-
     var size = read(KEYS.size);
     if (size) { root.setAttribute('data-size', size); }
     else { root.removeAttribute('data-size'); }
@@ -48,7 +38,7 @@
   }
 
   function wire() {
-    ['theme', 'contrast', 'size'].forEach(function (kind) {
+    ['size'].forEach(function (kind) {
       var group = Array.prototype.slice.call(
         document.querySelectorAll('[data-setting="' + kind + '"]'));
       if (!group.length) return;

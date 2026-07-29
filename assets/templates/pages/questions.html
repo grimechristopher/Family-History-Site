@@ -1,46 +1,63 @@
 {{define "content"}}
-<h1>All the questions</h1>
+<h1>Questions</h1>
 {{if .Counts}}
   <p class="lede">{{.Counts.Unanswered}} still waiting &middot; {{.Counts.Answered}} answered</p>
 {{end}}
 
-<div class="mode-picker" role="group" aria-label="Filter by person">
-  <a class="pill" aria-pressed="{{eq .FilterAskedOf ""}}" href="/questions{{if .FilterSubject}}?subject={{.FilterSubject}}{{end}}">Everyone</a>
-  {{range .Contributors}}
-    <a class="pill" aria-pressed="{{eq $.FilterAskedOf .DisplayName}}"
-       href="/questions?asked_of={{.DisplayName}}{{if $.FilterSubject}}&subject={{$.FilterSubject}}{{end}}">{{.DisplayName}}</a>
-  {{end}}
-</div>
+<div class="with-side">
+  {{/* On a wide screen this is a sidebar; on an iPad it folds up above the
+       list, because a 16rem rail leaves nothing for the questions. */}}
+  <aside class="side" aria-label="Filters">
+    <details class="side-group" open>
+      <summary>Whose questions</summary>
+      <ul class="side-list">
+        {{range .Contributors}}
+          <li><a class="side-link" {{if eq $.FilterAskedOf .DisplayName}}aria-current="true"{{end}}
+                 href="/questions?asked_of={{.DisplayName}}{{if $.FilterSubject}}&subject={{$.FilterSubject}}{{end}}">
+            {{.DisplayName}}{{if eq $.User.DisplayName .DisplayName}} <span class="side-count">you</span>{{end}}
+          </a></li>
+        {{end}}
+        {{if .ViewerIsAdmin}}
+          <li><a class="side-link" {{if eq .FilterAskedOf ""}}aria-current="true"{{end}}
+                 href="/questions?asked_of=everyone{{if .FilterSubject}}&subject={{.FilterSubject}}{{end}}">Everyone</a></li>
+        {{end}}
+      </ul>
+    </details>
 
-<details class="filter">
-  <summary>Filter by who the question is about</summary>
-  <div class="mode-picker">
-    <a class="pill" aria-pressed="{{eq .FilterSubject ""}}" href="/questions{{if .FilterAskedOf}}?asked_of={{.FilterAskedOf}}{{end}}">Anyone</a>
-    {{range .SubjectProgress}}
-      {{if .Total}}
-        <a class="pill" aria-pressed="{{eq $.FilterSubject .Slug}}"
-           href="/questions?subject={{.Slug}}{{if $.FilterAskedOf}}&asked_of={{$.FilterAskedOf}}{{end}}">{{.DisplayName}}
-          <span class="count">{{.Answered}}/{{.Total}}</span></a>
-      {{end}}
+    <details class="side-group" open>
+      <summary>Who it&rsquo;s about</summary>
+      <ul class="side-list">
+        <li><a class="side-link" {{if eq .FilterSubject ""}}aria-current="true"{{end}}
+               href="/questions{{if .FilterAskedOf}}?asked_of={{.FilterAskedOf}}{{end}}">Anyone</a></li>
+        {{range .SubjectProgress}}
+          {{if .Total}}
+            <li>
+              <a class="side-link" {{if eq $.FilterSubject .Slug}}aria-current="true"{{end}}
+                 href="/questions?subject={{.Slug}}{{if $.FilterAskedOf}}&asked_of={{$.FilterAskedOf}}{{end}}">
+                <span class="side-name">{{.DisplayName}}</span>
+                <span class="side-count">{{.Answered}}/{{.Total}}</span>
+              </a>
+            </li>
+          {{end}}
+        {{end}}
+      </ul>
+    </details>
+  </aside>
+
+  <div class="with-side-main">
+    <h2>Still waiting{{if .Counts}} <span class="count">{{.Counts.Unanswered}}</span>{{end}}</h2>
+    {{if .Unanswered}}
+      <ul class="qlist">{{range .Unanswered}}{{template "qrow" .}}{{end}}</ul>
+    {{else}}
+      <p class="lede">Nothing left here. That&rsquo;s a real achievement.</p>
+    {{end}}
+
+    <h2>Answered{{if .Counts}} <span class="count">{{.Counts.Answered}}</span>{{end}}</h2>
+    {{if .Answered}}
+      <ul class="qlist">{{range .Answered}}{{template "qrow" .}}{{end}}</ul>
+    {{else}}
+      <p class="lede">Nothing answered here yet.</p>
     {{end}}
   </div>
-</details>
-
-<h2>Still waiting{{if .Counts}} <span class="count">{{.Counts.Unanswered}}</span>{{end}}</h2>
-{{if .Unanswered}}
-  <ul class="qlist">
-    {{range .Unanswered}}{{template "qrow" .}}{{end}}
-  </ul>
-{{else}}
-  <p class="lede">Nothing left here. That&rsquo;s a real achievement.</p>
-{{end}}
-
-<h2>Answered{{if .Counts}} <span class="count">{{.Counts.Answered}}</span>{{end}}</h2>
-{{if .Answered}}
-  <ul class="qlist">
-    {{range .Answered}}{{template "qrow" .}}{{end}}
-  </ul>
-{{else}}
-  <p class="lede">Nothing answered here yet.</p>
-{{end}}
+</div>
 {{end}}

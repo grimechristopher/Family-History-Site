@@ -128,21 +128,6 @@
 :root[data-size="xl"]  { font-size: 138%; }
 :root[data-size="xxl"] { font-size: 160%; }
 
-/* Maximum contrast, for the days when the warm palette is not enough. */
-:root[data-contrast="more"] {
-  --oat: #ffffff; --oat-deep: #ffffff; --sheet: #ffffff; --sheet-warm: #ffffff;
-  --ink: #000000; --ink-mid: #141414; --ink-soft: #262626;
-  --rule: #767676; --rule-firm: #000000;
-  --teal: #00403f; --teal-deep: #000000; --teal-wash: #dcecec;
-  --apricot: #7a2f08; --apricot-wash: #ffeede;
-}
-
-@media (prefers-contrast: more) {
-  :root {
-    --ink: #000000; --ink-mid: #1f1f1f; --rule-firm: #000000;
-  }
-}
-
 *, *::before, *::after { box-sizing: border-box; }
 
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
@@ -669,4 +654,171 @@ a.tperson:hover { border-color: var(--teal); background: var(--teal-wash); }
   font-size: var(--t-lead);
   color: var(--ink-soft);
   font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Sidebar filters -----------------------------------------
+   A rail of names beats a wall of pills: twelve pills wrapped across ten rows
+   and pushed the questions off the screen. Below 62rem there is no room for a
+   rail, so the groups fold up above the list instead.
+   ------------------------------------------------------------------ */
+
+.with-side { display: block; }
+.with-side-main { min-width: 0; }
+
+@media (min-width: 62rem) {
+  .with-side {
+    display: grid;
+    grid-template-columns: 15rem minmax(0, 1fr);
+    gap: var(--s6);
+    align-items: start;
+  }
+  /* The first heading in the main column should line up with the sidebar. */
+  .with-side-main > h2:first-child { margin-top: 0; }
+  .side-group > summary { pointer-events: none; }        /* always open, no toggle */
+  .side-group > summary::after { content: ""; }
+}
+
+.side { min-width: 0; }
+.side-group { margin-bottom: var(--s4); }
+.side-group > summary {
+  font-family: var(--sans);
+  font-size: var(--t-small);
+  color: var(--ink);
+  border-bottom: 2px solid var(--rule);
+  padding-bottom: var(--s2);
+  margin-bottom: var(--s2);
+}
+
+.side-list { list-style: none; margin: 0; padding: 0; }
+
+.side-link {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s3);
+  min-height: var(--tap);
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-sm);
+  color: var(--ink-mid);
+  font: 600 var(--t-small)/1.35 var(--sans);
+  text-decoration: none;
+}
+.side-link:hover { background: var(--oat-deep); color: var(--ink); }
+
+.side-link[aria-current="true"] {
+  background: var(--teal); color: var(--on-teal); font-weight: 700;
+}
+
+.side-name { min-width: 0; }
+
+.side-count {
+  flex: none;
+  font-family: var(--typed); font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+}
+.side-link[aria-current="true"] .side-count { color: var(--on-teal); }
+.side-link:hover .side-count { color: var(--ink-mid); }
+
+/* ---------- Panels, bylines, chips -----------------------------------
+   A question and its answers are a conversation, so they are separate cards
+   with a face and a name on each — not one long column of text with rules
+   between it, which read as a message board from 2004.
+   ------------------------------------------------------------------ */
+
+.panel {
+  padding: var(--s5);
+  margin-bottom: var(--s4);
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  background: var(--sheet);
+  box-shadow: var(--lift-1);
+}
+
+.panel-question {
+  background: var(--sheet);
+  border-color: var(--rule-firm);
+  box-shadow: var(--lift-2);
+}
+
+.panel-title {
+  font-family: var(--sans);
+  font-size: clamp(1.5rem, 4vw, 1.8125rem);
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -.015em;
+  margin: 0 0 var(--s4);
+  max-width: none;
+}
+
+/* The answer the book gets written from. */
+.panel-primary { border-left: 5px solid var(--teal); background: var(--sheet-warm); box-shadow: var(--lift-2); }
+
+.panel-empty { background: var(--oat-deep); box-shadow: none; border-style: dashed; }
+.panel-empty p { margin: 0; }
+
+.panel-compose { background: var(--sheet-warm); border-color: var(--rule-firm); }
+.panel-compose .btn-row { margin-top: var(--s4); }
+
+/* Who said it. An initial in a circle is instantly parseable — no reading
+   required to see that two different people answered. */
+.byline { display: flex; align-items: center; gap: var(--s3); margin-bottom: var(--s4); }
+
+.avatar {
+  flex: none;
+  display: grid; place-items: center;
+  width: 3rem; height: 3rem;
+  border-radius: 50%;
+  background: var(--apricot); color: #fff;
+  font: 700 1.375rem/1 var(--sans);
+  text-transform: uppercase;
+}
+.avatar-primary { background: var(--teal); }
+.avatar-you     { background: var(--ink-mid); }
+.avatar-sm      { width: 2.25rem; height: 2.25rem; font-size: 1rem; }
+
+.byline-text { display: flex; flex-direction: column; gap: .1rem; min-width: 0; }
+.byline-name { font: 700 var(--t-body)/1.3 var(--sans); color: var(--ink); }
+.byline-meta { font-family: var(--typed); font-size: var(--t-small); color: var(--ink-soft); }
+
+.chips { display: flex; gap: var(--s2); flex-wrap: wrap; margin: 0; max-width: none; }
+
+.chip {
+  display: inline-flex; align-items: center;
+  padding: .2rem .7rem;
+  border-radius: var(--r-pill);
+  background: var(--oat-deep); color: var(--ink-mid);
+  font: 700 1rem/1.5 var(--sans);
+}
+.chip-asked { background: var(--apricot-wash); color: var(--apricot); }
+.chip-done  { background: var(--sage-wash);    color: var(--sage); }
+
+/* Separates the intended person's answer from everyone else's. */
+.feed-divider {
+  display: flex; align-items: center; gap: var(--s3);
+  margin: var(--s6) 0 var(--s4); max-width: none;
+  font: 700 var(--t-micro)/1.4 var(--sans);
+  letter-spacing: .09em; text-transform: uppercase; color: var(--ink-soft);
+}
+.feed-divider::before, .feed-divider::after {
+  content: ""; flex: 1; height: 1px; background: var(--rule);
+}
+
+/* Replies read as a thread hanging off the answer. */
+.replies { list-style: none; margin: var(--s5) 0 0; padding: var(--s4) 0 0;
+           border-top: 1px solid var(--rule); border-left: 0; }
+.replies li { display: flex; align-items: flex-start; gap: var(--s3);
+              margin-bottom: var(--s4); white-space: normal; }
+.replies li > div { white-space: pre-wrap; line-height: 1.6; color: var(--ink-mid); min-width: 0; }
+.reply-by { display: block; font-weight: 700; color: var(--ink); margin: 0 0 .1rem; }
+
+.panel .answer-body { max-width: none; }
+
+/* A sidebar needs room. The reading column stays narrow everywhere else, but a
+   page carrying a rail is allowed to use the width it needs. */
+@media (min-width: 62rem) {
+  .page:has(.with-side) { max-width: 70rem; }
+}
+
+/* Wrapping a name onto two lines in a 15rem rail is ugly; let long ones sit on
+   one line and shrink slightly instead. */
+@media (min-width: 62rem) {
+  .side-name { font-size: 1.0625rem; }
 }
