@@ -1,0 +1,66 @@
+{{define "content"}}
+<p class="eyebrow">{{.Question.SubjectName}}{{if .Question.Topic}} &middot; {{.Question.Topic}}{{end}}</p>
+<h1>{{.Question.Body}}</h1>
+<p class="lede">Asked of {{.Question.AskedOfName}}</p>
+
+<div id="answers">
+  {{template "answers" .}}
+</div>
+
+<p><a class="link" href="/questions">Back to all questions</a></p>
+{{end}}
+
+{{define "answers"}}
+<div id="answers">
+  {{if .PrimaryAnswers}}
+    {{range .PrimaryAnswers}}{{template "answer" .}}{{end}}
+  {{else}}
+    <p class="lede">{{.Question.AskedOfName}} hasn&rsquo;t answered this one yet.</p>
+  {{end}}
+
+  {{if .OtherAnswers}}
+    <h2>Others</h2>
+    {{range .OtherAnswers}}{{template "answer" .}}{{end}}
+  {{end}}
+
+  <h2>{{if .MyAnswerBody}}Your answer{{else}}Add your answer{{end}}</h2>
+  <p class="lede">
+    {{if .ViewerIsAskedOf}}This one was asked of you.{{else}}Anyone can add what they remember.{{end}}
+  </p>
+  <form hx-post="/questions/{{.Question.ID}}/answer" hx-target="#answers" hx-swap="outerHTML"
+        method="post" action="/questions/{{.Question.ID}}/answer">
+    <label for="my-answer">In your own words</label>
+    <textarea id="my-answer" name="body" rows="6">{{.MyAnswerBody}}</textarea>
+    <div class="btn-row"><button class="btn" type="submit">Save</button></div>
+  </form>
+</div>
+{{end}}
+
+{{define "answer"}}
+<article class="answer{{if .IsPrimary}} answer-primary{{end}}">
+  <p class="answer-by">
+    {{.AuthorName}}
+    {{if .IsPrimary}}<span class="card-badge">their own words</span>{{end}}
+    <span class="answer-when">{{.CreatedAt.Format "2 January 2006"}}</span>
+  </p>
+  <div class="answer-body">{{.Body}}</div>
+
+  {{if .Replies}}
+    <ul class="replies">
+      {{range .Replies}}
+        <li><span class="reply-by">{{.AuthorName}}</span> {{.Body}}</li>
+      {{end}}
+    </ul>
+  {{end}}
+
+  <details class="reply-form">
+    <summary>Reply</summary>
+    <form method="post" action="/entries/{{.ID}}/replies">
+      <input type="hidden" name="return_to" value="/questions/{{.QuestionID}}">
+      <label for="reply-{{.ID}}">Add to this</label>
+      <textarea id="reply-{{.ID}}" name="body" rows="3"></textarea>
+      <div class="btn-row"><button class="btn btn-quiet" type="submit">Post reply</button></div>
+    </form>
+  </details>
+</article>
+{{end}}

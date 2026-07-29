@@ -102,7 +102,19 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if user.SupabaseUserID == nil || *user.SupabaseUserID != claims.Subject {
-		if err := s.Store.BackfillSupabaseUserID(r.Context(), user.ID, claims.Subject); err != nil {
+		err := s.Store.BackfillSupabaseUserID(r.Context(), user.ID, claims.Subject)
+		if errors.Is(err, store.ErrIdentityClaimed) {
+			// Two allowlist rows pointing at one Supabase account. Nothing the
+			// person signing in can do about it, so say so rather than showing
+			// them a generic failure.
+			s.Log.Error("supabase identity already claimed",
+				"email", claims.Email, "supabase_user_id", claims.Subject)
+			http.Error(w,
+				"This sign-in is already linked to a different family member. Ask Chris to sort it out.",
+				http.StatusConflict)
+			return
+		}
+		if err != nil {
 			s.serverError(w, r, err)
 			return
 		}

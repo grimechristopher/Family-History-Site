@@ -5,6 +5,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -142,12 +143,21 @@ func mintToken(t *testing.T, secret, email, role string, exp time.Time) string {
 	}
 	head := enc(map[string]string{"alg": "HS256", "typ": "JWT"})
 	body := enc(map[string]any{
-		"sub":   "3f1c9a44-6b2e-4f7a-9c11-0d8e5b7a2c33",
+		"sub":   subjectFor(email),
 		"email": email, "role": role, "iss": "supabase", "exp": exp.Unix(),
 	})
 	mac := hmac.New(sha256.New, []byte(secret))
 	mac.Write([]byte(head + "." + body))
 	return head + "." + body + "." + base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+}
+
+// subjectFor derives a stable, distinct UUID per email, mirroring the fact that
+// real Supabase gives each account its own identity. supabase_user_id is UNIQUE,
+// so sharing one subject across users would collide.
+func subjectFor(email string) string {
+	sum := sha256.Sum256([]byte(email))
+	hexed := hex.EncodeToString(sum[:16])
+	return hexed[0:8] + "-" + hexed[8:12] + "-" + hexed[12:16] + "-" + hexed[16:20] + "-" + hexed[20:32]
 }
 
 func (h *harness) do(req *http.Request) *httptest.ResponseRecorder {
@@ -589,4 +599,192 @@ func TestEveryTemplateParses(t *testing.T) {
 			t.Errorf("template %q was not parsed", page)
 		}
 	}
+}
+
+// --- phase 2: list, others, replies, stories ----------------------------
+
+func TestQuestionListSeparatesUnansweredFromAnswered(t *testing.T) {
+	h := newHarness(t)
+	cookie := h.signIn("dad@example.com")
+
+	body := h.get("/questions", cookie).Body.String()
+	if !strings.Contains(body, "3 still waiting") {
+		t.Errorf("expected all three waiting, got: %s", firstLede(body))
+	}
+
+	h.post("/questions/"+strconv.FormatInt(h.dadQuestion, 10)+"/answer",
+		url.Values{"body": {"A Studebaker."}}, cookie)
+
+	body = h.get("/questions", cookie).Body.String()
+	if !strings.Contains(body, "2 still waiting") || !strings.Contains(body, "1 answered") {
+		t.Errorf("counts did not move, got: %s", firstLede(body))
+	}
+	// The answered one stays visible rather than disappearing.
+	if !strings.Contains(body, "qrow-done") {
+		t.Error("answered questions should still be listed, marked done")
+	}
+}
+
+func TestQuestionListFiltersByPersonAndSubject(t *testing.T) {
+	h := newHarness(t)
+	cookie := h.signIn("dad@example.com")
+
+	mom := h.get("/questions?asked_of=Mom", cookie).Body.String()
+	if !strings.Contains(mom, "How did they meet?") {
+		t.Error("Mom's question missing from her filter")
+	}
+	if strings.Contains(mom, "What kind of cars did he have?") {
+		t.Error("Dad's question leaked into Mom's filter")
+	}
+
+	bySubject := h.get("/questions?subject=peter-samuel-hale", cookie).Body.String()
+	if !strings.Contains(bySubject, "What kind of cars did he have?") {
+		t.Error("subject filter dropped a matching question")
+	}
+	if strings.Contains(h.get("/questions?subject=no-such-subject", cookie).Body.String(), "qrow-body") {
+		t.Error("an unknown subject should match nothing")
+	}
+}
+
+// The three-tier answer model: the intended person's answer is primary, everyone
+// else lands under Others, and any answer can carry a reply thread.
+func TestPrimaryAnswerOthersSectionAndReplies(t *testing.T) {
+	h := newHarness(t)
+	dad := h.signIn("dad@example.com")
+	mom := h.signIn("mom@example.com")
+	id := strconv.FormatInt(h.dadQuestion, 10)
+
+	h.post("/questions/"+id+"/answer", url.Values{"body": {"A Studebaker."}}, dad)
+	h.post("/questions/"+id+"/answer", url.Values{"body": {"He loved that car."}}, mom)
+
+	body := h.get("/questions/"+id, dad).Body.String()
+	if !strings.Contains(body, "answer-primary") {
+		t.Error("the intended person's answer should be marked primary")
+	}
+	if !strings.Contains(body, "<h2>Others</h2>") {
+		t.Error("expected an Others section")
+	}
+	if strings.Index(body, "A Studebaker.") > strings.Index(body, "He loved that car.") {
+		t.Error("the primary answer must render before Others")
+	}
+
+	entry, err := h.store.AnswerFor(context.Background(), h.dadQuestion, h.dadID)
+	if err != nil {
+		t.Fatalf("AnswerFor: %v", err)
+	}
+	rec := h.post("/entries/"+strconv.FormatInt(entry.ID, 10)+"/replies",
+		url.Values{"body": {"Was that 1954?"}, "return_to": {"/questions/" + id}}, mom)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("reply status = %d", rec.Code)
+	}
+
+	body = h.get("/questions/"+id, dad).Body.String()
+	if !strings.Contains(body, "Was that 1954?") {
+		t.Error("reply did not render")
+	}
+	if !strings.Contains(body, `reply-by">Mom`) {
+		t.Error("reply should be attributed to its author")
+	}
+}
+
+// Anyone may answer any question — that is the whole point of the Others section.
+func TestAnyoneMayAnswerAnyQuestionFromTheDetailPage(t *testing.T) {
+	h := newHarness(t)
+	dad := h.signIn("dad@example.com")
+
+	// Dad answering one of Mom's questions is allowed here, unlike on the card
+	// stack, where it would be jumping into her queue.
+	rec := h.post("/questions/"+strconv.FormatInt(h.momQuestion, 10)+"/answer",
+		url.Values{"body": {"I remember how they met."}}, dad)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303", rec.Code)
+	}
+
+	// It must not count as Mom having answered.
+	p, _ := h.store.Progress(context.Background(), h.momID)
+	if p.Answered != 0 {
+		t.Errorf("Mom's answered count = %d, want 0", p.Answered)
+	}
+	body := h.get("/questions/"+strconv.FormatInt(h.momQuestion, 10), dad).Body.String()
+	if !strings.Contains(body, "hasn&rsquo;t answered this one yet") {
+		t.Error("the question should still read as unanswered by Mom")
+	}
+}
+
+func TestStoriesRoundTrip(t *testing.T) {
+	h := newHarness(t)
+	dad := h.signIn("dad@example.com")
+	mom := h.signIn("mom@example.com")
+
+	rec := h.post("/stories", url.Values{
+		"title":   {"The drive back from Chicago"},
+		"body":    {"Nobody asked, but I keep thinking about it."},
+		"subject": {"peter-samuel-hale"},
+	}, dad)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("create story status = %d", rec.Code)
+	}
+
+	body := h.get("/stories", dad).Body.String()
+	for _, want := range []string{"The drive back from Chicago", "Peter Samuel Hale", "/delete"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("stories page missing %q", want)
+		}
+	}
+
+	stories, err := h.store.ListStories(context.Background(), h.dadID)
+	if err != nil || len(stories) != 1 {
+		t.Fatalf("ListStories = %v, %v", stories, err)
+	}
+	story := stories[0]
+
+	// Mom can reply but must not see a delete control for someone else's story.
+	if got := h.get("/stories", mom).Body.String(); strings.Contains(got, "/delete") {
+		t.Error("delete offered on another person's story")
+	}
+	h.post("/entries/"+strconv.FormatInt(story.ID, 10)+"/replies",
+		url.Values{"body": {"Tell me more."}, "return_to": {"/stories"}}, mom)
+	if !strings.Contains(h.get("/stories", mom).Body.String(), "Tell me more.") {
+		t.Error("reply to a story did not render")
+	}
+
+	// Only the author may delete.
+	sid := strconv.FormatInt(story.ID, 10)
+	if rec := h.post("/stories/"+sid+"/delete", url.Values{}, mom); rec.Code != http.StatusForbidden {
+		t.Errorf("other person deleting: status = %d, want 403", rec.Code)
+	}
+	if rec := h.post("/stories/"+sid+"/delete", url.Values{}, dad); rec.Code != http.StatusSeeOther {
+		t.Errorf("author deleting: status = %d, want 303", rec.Code)
+	}
+	if left, _ := h.store.ListStories(context.Background(), h.dadID); len(left) != 0 {
+		t.Errorf("story survived deletion: %v", left)
+	}
+}
+
+func TestStoryAndReplyRejectEmptyBodies(t *testing.T) {
+	h := newHarness(t)
+	dad := h.signIn("dad@example.com")
+
+	if rec := h.post("/stories", url.Values{"title": {"x"}, "body": {"   "}}, dad); rec.Code != http.StatusBadRequest {
+		t.Errorf("empty story: status = %d, want 400", rec.Code)
+	}
+	if rec := h.post("/stories",
+		url.Values{"body": {"x"}, "subject": {"nope"}}, dad); rec.Code != http.StatusBadRequest {
+		t.Errorf("unknown subject: status = %d, want 400", rec.Code)
+	}
+	if rec := h.post("/entries/999999/replies", url.Values{"body": {"hi"}}, dad); rec.Code != http.StatusNotFound {
+		t.Errorf("reply to missing entry: status = %d, want 404", rec.Code)
+	}
+}
+
+func firstLede(body string) string {
+	i := strings.Index(body, `class="lede">`)
+	if i < 0 {
+		return "(no lede)"
+	}
+	rest := body[i+13:]
+	if j := strings.Index(rest, "<"); j >= 0 {
+		return rest[:j]
+	}
+	return rest
 }

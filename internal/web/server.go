@@ -48,7 +48,8 @@ func New(cfg config.Config, s *store.Store, log *slog.Logger, assetVersion strin
 // parseTemplates builds one template set per page. Parsing per page rather than
 // all at once means every page can define "content" without colliding.
 func (s *Server) parseTemplates() error {
-	pages := []string{"home", "login", "denied", "callback", "cards"}
+	pages := []string{"home", "login", "denied", "callback", "cards",
+		"questions", "question", "stories"}
 	s.templates = make(map[string]*template.Template, len(pages))
 
 	for _, name := range pages {
@@ -93,6 +94,26 @@ type pageData struct {
 	FocusSlug string
 	FocusName string
 	Focused   bool
+
+	// questions list
+	Unanswered      []store.QuestionListItem
+	Answered        []store.QuestionListItem
+	Counts          *store.ListCounts
+	SubjectProgress []store.SubjectProgress
+	Contributors    []*store.User
+	FilterSubject   string
+	FilterAskedOf   string
+
+	// question detail
+	Question        *store.QuestionDetail
+	PrimaryAnswers  []answerView
+	OtherAnswers    []answerView
+	MyAnswerBody    string
+	MyAnswerIsDraft bool
+	ViewerIsAskedOf bool
+
+	// stories
+	Stories []storyView
 }
 
 func (s *Server) newPageData(r *http.Request, title string) pageData {
@@ -171,6 +192,15 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("POST /cards/{id}/defer", require(http.HandlerFunc(s.handleDefer)))
 	mux.Handle("POST /cards/{id}/answer", require(http.HandlerFunc(s.handleAnswer)))
 	mux.Handle("POST /cards/{id}/draft", require(http.HandlerFunc(s.handleDraft)))
+
+	mux.Handle("GET /questions", require(http.HandlerFunc(s.handleQuestions)))
+	mux.Handle("GET /questions/{id}", require(http.HandlerFunc(s.handleQuestion)))
+	mux.Handle("POST /questions/{id}/answer", require(http.HandlerFunc(s.handleQuestionAnswer)))
+	mux.Handle("POST /entries/{id}/replies", require(http.HandlerFunc(s.handleReply)))
+
+	mux.Handle("GET /stories", require(http.HandlerFunc(s.handleStories)))
+	mux.Handle("POST /stories", require(http.HandlerFunc(s.handleCreateStory)))
+	mux.Handle("POST /stories/{id}/delete", require(http.HandlerFunc(s.handleDeleteStory)))
 
 	return securityHeaders(mux)
 }

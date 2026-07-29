@@ -295,3 +295,134 @@ textarea {
 @media (prefers-reduced-motion: reduce) {
   .card.settling { transition: none; }
 }
+
+/* Question list, answers, replies, stories */
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: var(--tap);
+  padding: 0.5rem 1rem;
+  border: 2px solid var(--line);
+  border-radius: 2rem;
+  background: var(--card);
+  color: var(--ink-soft);
+  font: 500 1rem/1.2 ui-sans-serif, system-ui, sans-serif;
+  text-decoration: none;
+}
+
+.pill[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.count {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+}
+
+.filter { margin-bottom: 1.5rem; }
+
+summary {
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  color: var(--accent);
+  font: 500 1.05rem/1.4 ui-sans-serif, system-ui, sans-serif;
+}
+
+.qlist { list-style: none; margin: 0 0 2rem; padding: 0; }
+
+.qrow {
+  border-bottom: 1px solid var(--line);
+  padding: 1rem 0;
+}
+
+.qrow-body {
+  display: block;
+  min-height: var(--tap);
+  color: var(--ink);
+  font-size: 1.2rem;
+  line-height: 1.4;
+  text-decoration: none;
+}
+
+.qrow-body:hover { color: var(--accent); text-decoration: underline; }
+
+/* Answered rows stay legible — done is not the same as unimportant. */
+.qrow-done .qrow-body { color: var(--ink-soft); }
+
+.qrow-meta {
+  margin: 0.35rem 0 0;
+  font: 0.95rem/1.5 ui-sans-serif, system-ui, sans-serif;
+  color: var(--ink-soft);
+}
+
+.qrow-subject { color: var(--warm); font-weight: 600; }
+
+.answer {
+  border: 1px solid var(--line);
+  border-radius: 0.8rem;
+  background: var(--card);
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+/* The intended person's answer is the one the book is built from. */
+.answer-primary { border-left: 5px solid var(--accent); }
+
+.answer-by {
+  margin: 0 0 0.6rem;
+  font: 600 1.05rem/1.4 ui-sans-serif, system-ui, sans-serif;
+  color: var(--ink);
+}
+
+.answer-when {
+  margin-left: 0.5rem;
+  font-weight: 400;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.answer-body { white-space: pre-wrap; }
+
+.replies {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0 0 0 1rem;
+  border-left: 2px solid var(--line);
+}
+
+.replies li { margin-bottom: 0.75rem; white-space: pre-wrap; }
+
+.reply-by { font-weight: 600; font-family: ui-sans-serif, system-ui, sans-serif; font-size: 1rem; }
+
+.reply-form, .new-story { margin-top: 1rem; }
+
+select {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--line);
+  border-radius: 0.6rem;
+  background: var(--card);
+  color: var(--ink);
+  font: var(--body)/var(--lead) inherit;
+  margin-bottom: 1rem;
+}
+
+input[type="text"] {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0.85rem 1rem;
+  border: 2px solid var(--line);
+  border-radius: 0.6rem;
+  background: var(--card);
+  color: var(--ink);
+  font: var(--body)/var(--lead) inherit;
+  margin-bottom: 1rem;
+}

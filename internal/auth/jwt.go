@@ -86,6 +86,12 @@ func VerifySupabaseJWT(token, secret, expectedIssuer string, now time.Time) (Cla
 	if payload.Sub == "" {
 		return Claims{}, errors.New("token has no subject")
 	}
+	// The subject is stored in a uuid column. Validating it here turns a
+	// malformed token into a clean rejection instead of a database error
+	// surfacing as a 500 halfway through signing in.
+	if !isUUID(payload.Sub) {
+		return Claims{}, fmt.Errorf("token subject %q is not a UUID", payload.Sub)
+	}
 	if payload.Email == "" {
 		return Claims{}, errors.New("token has no email")
 	}
@@ -102,4 +108,26 @@ func decodeSegment(seg string, v any) error {
 		return err
 	}
 	return json.Unmarshal(raw, v)
+}
+
+// isUUID checks the canonical 8-4-4-4-12 hex form without pulling in a
+// dependency for it.
+func isUUID(s string) bool {
+	if len(s) != 36 {
+		return false
+	}
+	for i, r := range s {
+		switch i {
+		case 8, 13, 18, 23:
+			if r != '-' {
+				return false
+			}
+		default:
+			isHex := (r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')
+			if !isHex {
+				return false
+			}
+		}
+	}
+	return true
 }

@@ -188,3 +188,32 @@ func TestVerifyDetectsTamperedPayload(t *testing.T) {
 		t.Fatal("a swapped payload must fail signature verification")
 	}
 }
+
+// The subject lands in a uuid column, so a malformed one must be rejected here
+// rather than becoming a database error mid-login.
+func TestVerifyRejectsNonUUIDSubject(t *testing.T) {
+	now := time.Now()
+	for _, sub := range []string{
+		"u-dad@example.com",
+		"not-a-uuid",
+		"3f1c9a44-6b2e-4f7a-9c11-0d8e5b7a2c3",   // too short
+		"3f1c9a44-6b2e-4f7a-9c11-0d8e5b7a2c333", // too long
+		"3f1c9a44_6b2e_4f7a_9c11_0d8e5b7a2c33",  // wrong separators
+		"3f1c9a44-6b2e-4f7a-9c11-0d8e5b7a2cZZ",  // non-hex
+	} {
+		c := validClaims(now.Add(time.Hour))
+		c["sub"] = sub
+		if _, err := VerifySupabaseJWT(mint(t, testSecret, c, "HS256"), testSecret, "", now); err == nil {
+			t.Errorf("subject %q must be rejected", sub)
+		}
+	}
+}
+
+func TestVerifyAcceptsUppercaseUUID(t *testing.T) {
+	now := time.Now()
+	c := validClaims(now.Add(time.Hour))
+	c["sub"] = "3F1C9A44-6B2E-4F7A-9C11-0D8E5B7A2C33"
+	if _, err := VerifySupabaseJWT(mint(t, testSecret, c, "HS256"), testSecret, "", now); err != nil {
+		t.Errorf("uppercase UUID should be accepted: %v", err)
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type User struct {
@@ -105,11 +106,21 @@ func LinkUserToPerson(ctx context.Context, db DBTX, userID, personID int64) erro
 	return err
 }
 
+// ErrIdentityClaimed means another allowlist row already holds this Supabase
+// identity. That is a misconfiguration rather than a user error, so it is
+// reported distinctly instead of surfacing as a database failure mid-login.
+var ErrIdentityClaimed = errors.New("supabase identity already claimed by another user")
+
 // BackfillSupabaseUserID records the Supabase identity on first login, since rows
 // are seeded by email before anyone has ever logged in.
 func (s *Store) BackfillSupabaseUserID(ctx context.Context, userID int64, supabaseID string) error {
 	_, err := s.Pool.Exec(ctx,
 		`UPDATE family.users SET supabase_user_id = $2 WHERE id = $1`, userID, supabaseID)
+
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		return ErrIdentityClaimed
+	}
 	return err
 }
 

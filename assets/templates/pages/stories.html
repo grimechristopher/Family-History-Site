@@ -1,0 +1,61 @@
+{{define "content"}}
+<h1>Stories</h1>
+<p class="lede">For a memory that no question happens to ask about.</p>
+
+<details class="new-story" {{if not .Stories}}open{{end}}>
+  <summary>Write a story</summary>
+  <form method="post" action="/stories">
+    <label for="title">What would you call it?</label>
+    <input id="title" name="title" type="text" placeholder="The drive back from Chicago">
+
+    <label for="story-subject">Is it about someone in particular? (optional)</label>
+    <select id="story-subject" name="subject">
+      <option value="">Nobody in particular</option>
+      {{range .Subjects}}<option value="{{.Slug}}">{{.DisplayName}}</option>{{end}}
+    </select>
+
+    <label for="story-body">The story</label>
+    <textarea id="story-body" name="body" rows="9"
+              placeholder="Tap the microphone on the keyboard and just talk, if that&rsquo;s easier."></textarea>
+    <div class="btn-row"><button class="btn" type="submit">Save story</button></div>
+  </form>
+</details>
+
+{{range .Stories}}
+  <article class="answer">
+    <h2>{{.Title}}</h2>
+    <p class="answer-by">
+      {{.AuthorName}}
+      <span class="answer-when">{{.CreatedAt.Format "2 January 2006"}}</span>
+      {{if .SubjectName}}<span class="card-badge">{{.SubjectName}}</span>{{end}}
+      {{if .IsDraft}}<span class="card-badge">unfinished</span>{{end}}
+    </p>
+    <div class="answer-body">{{.Body}}</div>
+
+    {{if .Replies}}
+      <ul class="replies">
+        {{range .Replies}}<li><span class="reply-by">{{.AuthorName}}</span> {{.Body}}</li>{{end}}
+      </ul>
+    {{end}}
+
+    <details class="reply-form">
+      <summary>Reply</summary>
+      <form method="post" action="/entries/{{.ID}}/replies">
+        <input type="hidden" name="return_to" value="/stories">
+        <label for="sreply-{{.ID}}">Add to this</label>
+        <textarea id="sreply-{{.ID}}" name="body" rows="3"></textarea>
+        <div class="btn-row"><button class="btn btn-quiet" type="submit">Post reply</button></div>
+      </form>
+    </details>
+
+    {{if .IsMine}}
+      <form method="post" action="/stories/{{.ID}}/delete"
+            onsubmit="return confirm('Delete this story? It cannot be undone.')">
+        <button class="link" type="submit">Delete</button>
+      </form>
+    {{end}}
+  </article>
+{{else}}
+  <p class="lede">No stories yet.</p>
+{{end}}
+{{end}}
