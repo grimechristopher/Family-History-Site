@@ -48,7 +48,7 @@ func TestLoadNamesEveryMissingVariable(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an error")
 	}
-	for _, want := range []string{"SUPABASE_URL", "SUPABASE_ANON_KEY", "SUPABASE_JWT_SECRET", "BASE_URL"} {
+	for _, want := range []string{"SUPABASE_URL", "SUPABASE_ANON_KEY", "BASE_URL"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error should name %s, got: %v", want, err)
 		}

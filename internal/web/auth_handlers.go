@@ -74,8 +74,7 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	claims, err := auth.VerifySupabaseJWT(token, s.Config.SupabaseJWTSecret,
-		s.Config.SupabaseJWTIssuer, time.Now())
+	claims, err := s.verifyToken(r, token)
 	if err != nil {
 		s.Log.Warn("rejected supabase token", "err", err)
 		http.Error(w, "That sign-in link could not be verified. Please request a new one.",
@@ -131,4 +130,18 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	s.Sessions.Revoke(w, r)
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
+}
+
+// verifyToken checks a Supabase access token by whichever means is configured.
+//
+// With SUPABASE_JWT_SECRET set, the signature is checked locally: no network
+// call, and login keeps working even if the Supabase API is briefly unreachable.
+// Without it, Supabase is asked to verify its own token, so the signing secret
+// never has to leave the Supabase instance at all.
+func (s *Server) verifyToken(r *http.Request, token string) (auth.Claims, error) {
+	if s.Config.SupabaseJWTSecret != "" {
+		return auth.VerifySupabaseJWT(token, s.Config.SupabaseJWTSecret,
+			s.Config.SupabaseJWTIssuer, time.Now())
+	}
+	return s.Supabase.UserFromToken(r.Context(), token)
 }

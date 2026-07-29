@@ -1052,3 +1052,51 @@ func TestCSPAllowsSupabaseImagesButNotScripts(t *testing.T) {
 		t.Errorf("script-src must stay self-only, got: %s", csp)
 	}
 }
+
+// Without SUPABASE_JWT_SECRET, tokens are verified by asking Supabase. This is
+// the path that lets the site deploy without copying the signing secret out of
+// the Supabase instance.
+func TestSignInViaSupabaseIntrospection(t *testing.T) {
+	h := newHarness(t)
+
+	// Drop the secret so the handler must fall back to introspection.
+	h.server.Config.SupabaseJWTSecret = ""
+
+	introspect := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/auth/v1/user" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		if r.Header.Get("Authorization") != "Bearer good-token" {
+			w.WriteHeader(http.StatusUnauthorized)
+			io.WriteString(w, `{"msg":"invalid token"}`)
+			return
+		}
+		io.WriteString(w, `{"id":"`+subjectFor("dad@example.com")+`",
+		                    "email":"dad@example.com","role":"authenticated"}`)
+	}))
+	defer introspect.Close()
+	h.server.Supabase = auth.NewSupabase(introspect.URL, "anon")
+
+	rec := h.post("/auth/session", url.Values{"access_token": {"good-token"}}, nil)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	var cookie *http.Cookie
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == auth.SessionCookie {
+			cookie = c
+		}
+	}
+	if cookie == nil {
+		t.Fatal("no session issued via introspection")
+	}
+	if rec := h.get("/cards", cookie); rec.Code != http.StatusOK {
+		t.Errorf("session from introspection does not work: %d", rec.Code)
+	}
+
+	// A token Supabase refuses must not produce a session.
+	if rec := h.post("/auth/session", url.Values{"access_token": {"bad-token"}}, nil); rec.Code != http.StatusUnauthorized {
+		t.Errorf("bad token status = %d, want 401", rec.Code)
+	}
+}

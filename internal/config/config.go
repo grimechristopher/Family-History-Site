@@ -47,15 +47,15 @@ func Load(get func(string) string) (Config, error) {
 		c.Addr = ":8080"
 	}
 
-	// SUPABASE_SERVICE_ROLE_KEY is needed only for photo uploads (phase 3) and
-	// SUPABASE_JWT_ISSUER only once the deployment's real issuer is known, so
-	// neither is required here.
+	// Only these are genuinely required. SUPABASE_JWT_SECRET is optional: without
+	// it, tokens are verified by asking Supabase instead of checking the
+	// signature locally. SUPABASE_SERVICE_ROLE_KEY is needed only for photos, and
+	// SUPABASE_JWT_ISSUER only once the deployment's real issuer is known.
 	required := map[string]string{
-		"DATABASE_URL":        c.DatabaseURL,
-		"SUPABASE_URL":        c.SupabaseURL,
-		"SUPABASE_ANON_KEY":   c.SupabaseAnonKey,
-		"SUPABASE_JWT_SECRET": c.SupabaseJWTSecret,
-		"BASE_URL":            c.BaseURL,
+		"DATABASE_URL":      c.DatabaseURL,
+		"SUPABASE_URL":      c.SupabaseURL,
+		"SUPABASE_ANON_KEY": c.SupabaseAnonKey,
+		"BASE_URL":          c.BaseURL,
 	}
 	var missing []string
 	for name, value := range required {
