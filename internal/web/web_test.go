@@ -1372,3 +1372,65 @@ func TestLifespanFormatting(t *testing.T) {
 		}
 	}
 }
+
+// Switching the person must not carry a subject filter across. Dad is asked
+// nothing about Mom's side of the family, so keeping the filter emptied the page.
+func TestSwitchingPersonDropsTheSubjectFilter(t *testing.T) {
+	h := newHarness(t)
+	dad := h.signIn("dad@example.com")
+
+	body := h.get("/questions?subject=peter-samuel-hale", dad).Body.String()
+	if strings.Contains(body, `href="/questions?asked_of=Mom&subject=`) {
+		t.Error("a person link must not carry the current subject filter")
+	}
+	if !strings.Contains(body, `href="/questions?asked_of=Mom"`) {
+		t.Error("expected a plain link to Mom's questions")
+	}
+}
+
+// An empty filter combination is not an achievement, and must not be reported as
+// one. It also needs a way back out.
+func TestEmptyFilterExplainsItselfRatherThanCongratulating(t *testing.T) {
+	h := newHarness(t)
+	dad := h.signIn("dad@example.com")
+	ctx := context.Background()
+
+	// A subject Dad has no questions about.
+	err := h.store.InTx(ctx, func(db store.DBTX) error {
+		sub, err := store.UpsertSubject(ctx, db, store.Subject{
+			Slug: "someone-else", Kind: "individual", DisplayName: "Someone Else", SortOrder: 50,
+		})
+		if err != nil {
+			return err
+		}
+		_, err = store.UpsertImportedQuestion(ctx, db, store.ImportedQuestion{
+			SubjectID: sub, AskedOfUserID: h.momID,
+			Body: "Only Mom is asked this.", SortOrder: 60, ImportKey: "mom-only",
+		})
+		return err
+	})
+	if err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	body := h.get("/questions?asked_of=Dad&subject=someone-else", dad).Body.String()
+	if strings.Contains(body, "real achievement") {
+		t.Error("an empty filter must not be reported as having answered everything")
+	}
+	if !strings.Contains(body, "No questions match") {
+		t.Error("expected an explanation of why the list is empty")
+	}
+	if !strings.Contains(body, `href="/questions?asked_of=Dad"`) {
+		t.Error("expected a way back to all of Dad's questions")
+	}
+
+	// Answering everything genuinely should still read as an achievement.
+	for _, id := range []int64{h.dadQuestion} {
+		h.post("/questions/"+strconv.FormatInt(id, 10)+"/answer",
+			url.Values{"body": {"done"}}, dad)
+	}
+	body = h.get("/questions?asked_of=Dad&subject=peter-samuel-hale", dad).Body.String()
+	if !strings.Contains(body, "still waiting") {
+		t.Error("expected the normal list while questions remain")
+	}
+}

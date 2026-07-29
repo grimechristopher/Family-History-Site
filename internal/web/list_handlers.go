@@ -68,12 +68,15 @@ func (s *Server) handleQuestions(w http.ResponseWriter, r *http.Request) {
 	data.Nav = "questions"
 	data.Unanswered = unansweredItems
 	data.Answered = answeredItems
+	data.UnansweredGroups = store.GroupQuestions(unansweredItems)
+	data.AnsweredGroups = store.GroupQuestions(answeredItems)
 	data.Counts = &counts
 	data.SubjectProgress = subjects
 	data.Contributors = contributors
 	data.FilterSubject = filter.SubjectSlug
 	data.FilterAskedOf = filter.AskedOfName
 	data.ViewerIsAdmin = u.Role == store.RoleAdmin
+	data.NothingMatches = counts.Unanswered == 0 && counts.Answered == 0
 
 	s.render(w, r, "questions", data)
 }

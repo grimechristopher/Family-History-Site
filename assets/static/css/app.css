@@ -822,3 +822,111 @@ a.tperson:hover { border-color: var(--teal); background: var(--teal-wash); }
 @media (min-width: 62rem) {
   .side-name { font-size: 1.0625rem; }
 }
+
+/* ---------- Independent column scrolling -----------------------------
+   On a wide screen the rail and the list each scroll on their own, so a long
+   list of questions never carries the list of people away with it.
+
+   Only above 62rem: on an iPad the two are stacked, and locking the body would
+   trap the page. Scoped with :has() so pages without a sidebar keep ordinary
+   whole-page scrolling.
+   ------------------------------------------------------------------ */
+
+@media (min-width: 62rem) {
+  html:has(.with-side) { height: 100%; }
+
+  body:has(.with-side) {
+    height: 100dvh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* The masthead and tabs stay put. */
+  body:has(.with-side) > .bar,
+  body:has(.with-side) > .tabs { flex: none; }
+
+  .page:has(.with-side) {
+    flex: 1;
+    min-height: 0;              /* lets the flex child actually shrink */
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding-bottom: 0;
+  }
+
+  /* The page heading and counts stay visible above both columns. */
+  .page:has(.with-side) > h1,
+  .page:has(.with-side) > .lede { flex: none; }
+
+  .with-side {
+    flex: 1;
+    min-height: 0;
+    padding-bottom: 0;
+  }
+
+  .side,
+  .with-side-main {
+    height: 100%;
+    overflow-y: auto;
+    overscroll-behavior: contain;    /* scrolling one does not pull the page */
+    scrollbar-gutter: stable;
+    padding-bottom: var(--s7);       /* the last row is not flush to the edge */
+  }
+
+  /* Section headings stick while their own column scrolls. */
+  .with-side-main > h2 {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    margin-top: 0;
+    padding-top: var(--s3);
+    background: var(--oat);
+  }
+  .with-side-main > h2 ~ h2 { margin-top: var(--s6); }
+
+  .side-group > summary {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: var(--oat);
+  }
+
+  /* Restrained scrollbars, still wide enough to grab. */
+  .side, .with-side-main { scrollbar-width: thin; scrollbar-color: var(--rule-firm) transparent; }
+  .side::-webkit-scrollbar, .with-side-main::-webkit-scrollbar { width: 12px; }
+  .side::-webkit-scrollbar-track, .with-side-main::-webkit-scrollbar-track { background: transparent; }
+  .side::-webkit-scrollbar-thumb, .with-side-main::-webkit-scrollbar-thumb {
+    background: var(--rule-firm);
+    border: 3px solid var(--oat);
+    border-radius: var(--r-pill);
+  }
+}
+
+/* ---------- Grouped question runs ------------------------------------
+   The prompts file reads as runs — everything about one relative, then one
+   period of a life — and it runs roughly in order: childhood, school, college,
+   work, being a parent, looking back. The list keeps that shape.
+   ------------------------------------------------------------------ */
+
+.qgroup { margin-bottom: var(--s6); }
+
+.qgroup-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3);
+  font-family: var(--sans);
+  font-size: var(--t-small);
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--apricot);
+  margin: 0 0 var(--s3);
+  padding-bottom: var(--s2);
+  border-bottom: 1px solid var(--rule);
+}
+
+.qgroup-head .count { color: var(--ink-soft); letter-spacing: 0; }
+
+@media (min-width: 62rem) {
+  /* Sits under the sticky "Still waiting" heading rather than over it. */
+  .qgroup-head { position: sticky; top: 3.25rem; z-index: 4; background: var(--oat); }
+}

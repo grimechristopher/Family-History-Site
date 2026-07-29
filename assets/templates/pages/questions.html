@@ -12,14 +12,16 @@
       <summary>Whose questions</summary>
       <ul class="side-list">
         {{range .Contributors}}
+          {{/* No subject carried over: a person the other one has no questions
+               about would leave the page empty. */}}
           <li><a class="side-link" {{if eq $.FilterAskedOf .DisplayName}}aria-current="true"{{end}}
-                 href="/questions?asked_of={{.DisplayName}}{{if $.FilterSubject}}&subject={{$.FilterSubject}}{{end}}">
+                 href="/questions?asked_of={{.DisplayName}}">
             {{.DisplayName}}{{if eq $.User.DisplayName .DisplayName}} <span class="side-count">you</span>{{end}}
           </a></li>
         {{end}}
         {{if .ViewerIsAdmin}}
           <li><a class="side-link" {{if eq .FilterAskedOf ""}}aria-current="true"{{end}}
-                 href="/questions?asked_of=everyone{{if .FilterSubject}}&subject={{.FilterSubject}}{{end}}">Everyone</a></li>
+                 href="/questions?asked_of=everyone">Everyone</a></li>
         {{end}}
       </ul>
     </details>
@@ -46,17 +48,37 @@
 
   <div class="with-side-main">
     <h2>Still waiting{{if .Counts}} <span class="count">{{.Counts.Unanswered}}</span>{{end}}</h2>
-    {{if .Unanswered}}
-      <ul class="qlist">{{range .Unanswered}}{{template "qrow" .}}{{end}}</ul>
+    {{if .UnansweredGroups}}
+      {{range .UnansweredGroups}}
+        <section class="qgroup">
+          <h3 class="qgroup-head">{{.Label}} <span class="count">{{len .Items}}</span></h3>
+          <ul class="qlist">{{range .Items}}{{template "qrow" .}}{{end}}</ul>
+        </section>
+      {{end}}
+    {{else if .NothingMatches}}
+      <div class="panel panel-empty">
+        <p class="lede">No questions match this. {{if .FilterSubject}}{{.FilterAskedOf}} isn&rsquo;t asked anything about that person.{{end}}</p>
+        <div class="btn-row">
+          <a class="btn btn-quiet" href="/questions{{if .FilterAskedOf}}?asked_of={{.FilterAskedOf}}{{end}}">Show all
+            {{if .FilterAskedOf}}of {{.FilterAskedOf}}&rsquo;s{{end}} questions</a>
+        </div>
+      </div>
     {{else}}
-      <p class="lede">Nothing left here. That&rsquo;s a real achievement.</p>
+      <div class="panel panel-empty">
+        <p class="lede">Every one of these has an answer. That&rsquo;s a real achievement.</p>
+      </div>
     {{end}}
 
     <h2>Answered{{if .Counts}} <span class="count">{{.Counts.Answered}}</span>{{end}}</h2>
-    {{if .Answered}}
-      <ul class="qlist">{{range .Answered}}{{template "qrow" .}}{{end}}</ul>
-    {{else}}
-      <p class="lede">Nothing answered here yet.</p>
+    {{if .AnsweredGroups}}
+      {{range .AnsweredGroups}}
+        <section class="qgroup">
+          <h3 class="qgroup-head">{{.Label}} <span class="count">{{len .Items}}</span></h3>
+          <ul class="qlist">{{range .Items}}{{template "qrow" .}}{{end}}</ul>
+        </section>
+      {{end}}
+    {{else if not .NothingMatches}}
+      <div class="panel panel-empty"><p class="lede">Nothing answered here yet.</p></div>
     {{end}}
   </div>
 </div>

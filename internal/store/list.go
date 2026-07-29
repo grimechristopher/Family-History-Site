@@ -130,6 +130,36 @@ func (s *Store) ListQuestions(ctx context.Context, viewerID int64, f QuestionFil
 	return out, rows.Err()
 }
 
+// QuestionGroup is a run of questions under one heading — a period of somebody's
+// life ("Childhood", "Work & Career") or one relative.
+type QuestionGroup struct {
+	Label string
+	Items []QuestionListItem
+}
+
+// GroupQuestions gathers a list into headed groups, keeping the order it arrived
+// in. That order comes from the markdown, which runs roughly chronologically —
+// childhood, school, college, work, being a parent, looking back — so grouping
+// this way needs no separate notion of time.
+func GroupQuestions(items []QuestionListItem) []QuestionGroup {
+	var groups []QuestionGroup
+	index := map[string]int{}
+
+	for _, q := range items {
+		label := q.SubjectName
+		if q.Topic != nil && *q.Topic != "" {
+			label = *q.Topic
+		}
+		if at, seen := index[label]; seen {
+			groups[at].Items = append(groups[at].Items, q)
+			continue
+		}
+		index[label] = len(groups)
+		groups = append(groups, QuestionGroup{Label: label, Items: []QuestionListItem{q}})
+	}
+	return groups
+}
+
 // ListCounts drives the section headings on the list page.
 type ListCounts struct {
 	Unanswered int
