@@ -20,7 +20,10 @@
 <div id="answers">
   {{if .PrimaryAnswers}}
     {{range .PrimaryAnswers}}{{template "answer" .}}{{end}}
-  {{else}}
+  {{else if not .ViewerIsAskedOf}}
+    {{/* Only worth saying to somebody else. Told to the person who was asked, it
+         refers to them in the third person, and the form below already says the
+         question is theirs. */}}
     <div class="panel panel-empty">
       <p class="lede">{{.Question.AskedOfName}} hasn&rsquo;t answered this one yet.</p>
     </div>

@@ -1434,3 +1434,35 @@ func TestEmptyFilterExplainsItselfRatherThanCongratulating(t *testing.T) {
 		t.Error("expected the normal list while questions remain")
 	}
 }
+
+// "Mom hasn't answered this one yet" is worth telling somebody else, not Mom.
+// To her it refers to her in the third person, and the form below already says
+// the question is hers.
+func TestUnansweredNoticeIsHiddenFromThePersonAsked(t *testing.T) {
+	h := newHarness(t)
+	dadQ := strconv.FormatInt(h.dadQuestion, 10)
+
+	// Dad looking at his own unanswered question.
+	dad := h.signIn("dad@example.com")
+	own := h.get("/questions/"+dadQ, dad).Body.String()
+	if strings.Contains(own, "hasn&rsquo;t answered this one yet") {
+		t.Error("the person asked should not be told they have not answered")
+	}
+	if !strings.Contains(own, "This one was asked of you") {
+		t.Error("expected the form to say the question is theirs")
+	}
+
+	// Mom looking at the same question, which is not hers.
+	mom := h.signIn("mom@example.com")
+	other := h.get("/questions/"+dadQ, mom).Body.String()
+	if !strings.Contains(other, "Dad hasn&rsquo;t answered this one yet") {
+		t.Error("somebody else should still see that Dad has not answered")
+	}
+
+	// Once answered, nobody sees the notice.
+	h.post("/questions/"+dadQ+"/answer", url.Values{"body": {"A Studebaker."}}, dad)
+	after := h.get("/questions/"+dadQ, mom).Body.String()
+	if strings.Contains(after, "hasn&rsquo;t answered this one yet") {
+		t.Error("the notice should go once there is an answer")
+	}
+}
