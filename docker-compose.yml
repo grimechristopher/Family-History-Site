@@ -1,0 +1,30 @@
+services:
+  family:
+    container_name: family-prod
+    build: .
+    image: family-prod
+    restart: unless-stopped
+    ports:
+      - "8090:8080"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET}
+      - SUPABASE_JWT_ISSUER=${SUPABASE_JWT_ISSUER}
+      - BASE_URL=${BASE_URL}
+      - ADDR=:8080
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - default
+      - supabase_default
+
+networks:
+  supabase_default:
+    external: true
