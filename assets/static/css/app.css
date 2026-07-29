@@ -426,3 +426,37 @@ input[type="text"] {
   font: var(--body)/var(--lead) inherit;
   margin-bottom: 1rem;
 }
+
+/* Photographs */
+
+.photos { list-style: none; margin: 1rem 0 0; padding: 0; display: grid; gap: 1rem; }
+
+.photos img {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.6rem;
+  border: 1px solid var(--line);
+  background: var(--paper);
+}
+
+.photo-caption {
+  margin: 0.4rem 0 0;
+  font: 1rem/1.5 ui-sans-serif, system-ui, sans-serif;
+  color: var(--ink-soft);
+}
+
+.photo-form { margin-top: 1rem; }
+
+input[type="file"] {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0.6rem;
+  border: 2px dashed var(--line);
+  border-radius: 0.6rem;
+  background: var(--card);
+  color: var(--ink);
+  font: 1.05rem/1.4 ui-sans-serif, system-ui, sans-serif;
+  margin-bottom: 1rem;
+}

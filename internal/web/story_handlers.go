@@ -28,6 +28,12 @@ func (s *Server) handleStories(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
+	photos, err := s.Store.AttachmentsForEntries(r.Context(), ids)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	s.signAttachments(r, photos)
 
 	subjects, err := s.Store.Subjects(r.Context())
 	if err != nil {
@@ -39,9 +45,12 @@ func (s *Server) handleStories(w http.ResponseWriter, r *http.Request) {
 	data.Subjects = subjects
 	for _, st := range stories {
 		data.Stories = append(data.Stories, storyView{
-			Story:   st,
-			Replies: replies[st.ID],
-			IsMine:  st.AuthorUserID == u.ID,
+			Story:         st,
+			Replies:       replies[st.ID],
+			Photos:        photos[st.ID],
+			IsMine:        st.AuthorUserID == u.ID,
+			PhotosEnabled: s.Storage.Configured(),
+			ReturnTo:      "/stories",
 		})
 	}
 	s.render(w, r, "stories", data)
@@ -49,8 +58,11 @@ func (s *Server) handleStories(w http.ResponseWriter, r *http.Request) {
 
 type storyView struct {
 	store.Story
-	Replies []store.Reply
-	IsMine  bool
+	Replies       []store.Reply
+	Photos        []store.Attachment
+	IsMine        bool
+	PhotosEnabled bool
+	ReturnTo      string
 }
 
 func (s *Server) handleCreateStory(w http.ResponseWriter, r *http.Request) {

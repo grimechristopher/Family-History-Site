@@ -16,6 +16,10 @@ type Config struct {
 	SupabaseJWTIssuer  string
 	BaseURL            string
 	Addr               string
+
+	// Storage buckets, created by hand in Supabase.
+	PhotoBucket string
+	AudioBucket string
 }
 
 // Load reads configuration using the supplied lookup function, which is
@@ -30,6 +34,14 @@ func Load(get func(string) string) (Config, error) {
 		SupabaseJWTIssuer:  get("SUPABASE_JWT_ISSUER"),
 		BaseURL:            strings.TrimSuffix(get("BASE_URL"), "/"),
 		Addr:               get("ADDR"),
+		PhotoBucket:        get("SUPABASE_PHOTO_BUCKET"),
+		AudioBucket:        get("SUPABASE_AUDIO_BUCKET"),
+	}
+	if c.PhotoBucket == "" {
+		c.PhotoBucket = "family-questions-photos"
+	}
+	if c.AudioBucket == "" {
+		c.AudioBucket = "family-questions-audio"
 	}
 	if c.Addr == "" {
 		c.Addr = ":8080"

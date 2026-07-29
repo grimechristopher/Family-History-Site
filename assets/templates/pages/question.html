@@ -45,6 +45,9 @@
   </p>
   <div class="answer-body">{{.Body}}</div>
 
+  {{template "photos" .}}
+  {{template "photo-form" .}}
+
   {{if .Replies}}
     <ul class="replies">
       {{range .Replies}}

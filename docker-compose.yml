@@ -14,6 +14,8 @@ services:
       - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET}
       - SUPABASE_JWT_ISSUER=${SUPABASE_JWT_ISSUER}
       - BASE_URL=${BASE_URL}
+      - SUPABASE_PHOTO_BUCKET=${SUPABASE_PHOTO_BUCKET}
+      - SUPABASE_AUDIO_BUCKET=${SUPABASE_AUDIO_BUCKET}
       - ADDR=:8080
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]

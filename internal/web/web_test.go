@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
@@ -9,8 +10,10 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/textproto"
 	"net/url"
 	"os"
 	"strconv"
@@ -23,6 +26,7 @@ import (
 	"github.com/grimechristopher/family-history-site/internal/auth"
 	"github.com/grimechristopher/family-history-site/internal/config"
 	"github.com/grimechristopher/family-history-site/internal/migrate"
+	"github.com/grimechristopher/family-history-site/internal/storage"
 	"github.com/grimechristopher/family-history-site/internal/store"
 )
 
@@ -787,4 +791,264 @@ func firstLede(body string) string {
 		return rest[:j]
 	}
 	return rest
+}
+
+// --- phase 3: photos ----------------------------------------------------
+
+// fakeStorage stands in for Supabase Storage so uploads are exercised without a
+// service key or a network.
+type fakeStorage struct {
+	objects  map[string][]byte
+	upserts  []string
+	deleted  []string
+	failNext bool
+}
+
+func newFakeStorage(t *testing.T, h *harness) *fakeStorage {
+	t.Helper()
+	fs := &fakeStorage{objects: map[string][]byte{}}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if fs.failNext {
+			fs.failNext = false
+			w.WriteHeader(http.StatusInternalServerError)
+			io.WriteString(w, `{"error":"boom"}`)
+			return
+		}
+		switch {
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/object/sign/"):
+			io.WriteString(w, `{"signedURL":"/object/sign/x?token=fake"}`)
+		case r.Method == http.MethodPost:
+			body, _ := io.ReadAll(r.Body)
+			fs.objects[r.URL.Path] = body
+			fs.upserts = append(fs.upserts, r.Header.Get("x-upsert"))
+			w.WriteHeader(http.StatusOK)
+		case r.Method == http.MethodDelete:
+			fs.deleted = append(fs.deleted, r.URL.Path)
+			w.WriteHeader(http.StatusOK)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	h.server.Storage = storage.New(srv.URL, "fake-service-key")
+	return fs
+}
+
+// A 1x1 PNG, so http.DetectContentType sees a real image.
+var tinyPNG = []byte{
+	0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a,
+	0, 0, 0, 0x0d, 'I', 'H', 'D', 'R',
+	0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0,
+	0x1f, 0x15, 0xc4, 0x89,
+	0, 0, 0, 0x0a, 'I', 'D', 'A', 'T',
+	0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01,
+	0x0d, 0x0a, 0x2d, 0xb4,
+	0, 0, 0, 0, 'I', 'E', 'N', 'D', 0xae, 0x42, 0x60, 0x82,
+}
+
+func (h *harness) uploadPhoto(entryID int64, filename, declaredType string, content []byte, caption string, cookie *http.Cookie) *httptest.ResponseRecorder {
+	h.t.Helper()
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+
+	head := make(textproto.MIMEHeader)
+	head.Set("Content-Disposition", `form-data; name="photo"; filename="`+filename+`"`)
+	head.Set("Content-Type", declaredType)
+	part, err := mw.CreatePart(head)
+	if err != nil {
+		h.t.Fatalf("CreatePart: %v", err)
+	}
+	part.Write(content)
+
+	if caption != "" {
+		mw.WriteField("caption", caption)
+	}
+	mw.WriteField("return_to", "/stories")
+	mw.Close()
+
+	req := httptest.NewRequest(http.MethodPost,
+		"/entries/"+strconv.FormatInt(entryID, 10)+"/photos", &buf)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req.AddCookie(cookie)
+	return h.do(req)
+}
+
+func (h *harness) makeStory(cookie *http.Cookie, title string) store.Story {
+	h.t.Helper()
+	h.post("/stories", url.Values{"title": {title}, "body": {"A memory."}}, cookie)
+	stories, err := h.store.ListStories(context.Background(), h.dadID)
+	if err != nil || len(stories) == 0 {
+		h.t.Fatalf("ListStories = %v, %v", stories, err)
+	}
+	return stories[0]
+}
+
+func TestPhotoUploadAttachesAndRenders(t *testing.T) {
+	h := newHarness(t)
+	dad := h.signIn("dad@example.com")
+	fs := newFakeStorage(t, h)
+	story := h.makeStory(dad, "The house on Elm Street")
+
+	rec := h.uploadPhoto(story.ID, "house.png", "image/png", tinyPNG, "The house on Elm Street", dad)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("upload status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	if len(fs.objects) != 1 {
+		t.Fatalf("stored %d objects, want 1", len(fs.objects))
+	}
+	// Silently replacing an existing photograph would lose the original.
+	if len(fs.upserts) != 1 || fs.upserts[0] != "false" {
+		t.Errorf("x-upsert = %v, want [false]", fs.upserts)
+	}
+
+	attachments, err := h.store.AttachmentsForEntries(context.Background(), []int64{story.ID})
+	if err != nil {
+		t.Fatalf("AttachmentsForEntries: %v", err)
+	}
+	list := attachments[story.ID]
+	if len(list) != 1 {
+		t.Fatalf("got %d attachments, want 1", len(list))
+	}
+	if list[0].Kind != store.KindPhoto || list[0].Caption == nil || *list[0].Caption != "The house on Elm Street" {
+		t.Errorf("attachment = %+v", list[0])
+	}
+	// The stored path must not be guessable from the entry id alone.
+	if !strings.HasPrefix(list[0].StoragePath, "entries/"+strconv.FormatInt(story.ID, 10)+"/") {
+		t.Errorf("StoragePath = %q", list[0].StoragePath)
+	}
+	if strings.HasSuffix(list[0].StoragePath, "/.png") {
+		t.Error("path needs a random token, not just an extension")
+	}
+
+	body := h.get("/stories", dad).Body.String()
+	if !strings.Contains(body, "token=fake") {
+		t.Error("expected a signed URL in the rendered page")
+	}
+	if !strings.Contains(body, `alt="The house on Elm Street"`) {
+		t.Error("caption should become the alt text")
+	}
+}
+
+func TestPhotoUploadRefusesNonImages(t *testing.T) {
+	h := newHarness(t)
+	dad := h.signIn("dad@example.com")
+	newFakeStorage(t, h)
+	story := h.makeStory(dad, "A story")
+
+	// A PDF, and an SVG — scriptable, so not something to serve back to family.
+	for _, c := range []struct {
+		name, declared string
+		content        []byte
+	}{
+		{"notes.pdf", "application/pdf", []byte("%PDF-1.4 not an image")},
+		{"evil.svg", "image/svg+xml", []byte(`<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>`)},
+		{"sneaky.png", "application/octet-stream", []byte("MZ\x00\x00 definitely not a png")},
+	} {
+		rec := h.uploadPhoto(story.ID, c.name, c.declared, c.content, "", dad)
+		if rec.Code != http.StatusUnsupportedMediaType {
+			t.Errorf("%s: status = %d, want 415", c.name, rec.Code)
+		}
+	}
+}
+
+// Photographs belong to the writing they illustrate.
+func TestPhotoUploadRefusesSomeoneElsesEntry(t *testing.T) {
+	h := newHarness(t)
+	dad := h.signIn("dad@example.com")
+	mom := h.signIn("mom@example.com")
+	newFakeStorage(t, h)
+	story := h.makeStory(dad, "Dad's story")
+
+	rec := h.uploadPhoto(story.ID, "x.png", "image/png", tinyPNG, "", mom)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403", rec.Code)
+	}
+}
+
+// If the database write fails after the object landed, the object must not be
+// left orphaned in the bucket.
+func TestPhotoUploadCleansUpWhenStorageFails(t *testing.T) {
+	h := newHarness(t)
+	dad := h.signIn("dad@example.com")
+	fs := newFakeStorage(t, h)
+	story := h.makeStory(dad, "A story")
+
+	fs.failNext = true
+	rec := h.uploadPhoto(story.ID, "x.png", "image/png", tinyPNG, "", dad)
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, want 502", rec.Code)
+	}
+	// The message must reassure them their writing survived.
+	if !strings.Contains(rec.Body.String(), "words are safe") {
+		t.Errorf("unhelpful failure message: %s", rec.Body.String())
+	}
+	attachments, _ := h.store.AttachmentsForEntries(context.Background(), []int64{story.ID})
+	if len(attachments[story.ID]) != 0 {
+		t.Error("a failed upload must not leave an attachment row")
+	}
+}
+
+func TestPhotoDeleteOnlyByUploader(t *testing.T) {
+	h := newHarness(t)
+	dad := h.signIn("dad@example.com")
+	mom := h.signIn("mom@example.com")
+	fs := newFakeStorage(t, h)
+	story := h.makeStory(dad, "A story")
+
+	h.uploadPhoto(story.ID, "x.png", "image/png", tinyPNG, "", dad)
+	attachments, _ := h.store.AttachmentsForEntries(context.Background(), []int64{story.ID})
+	id := strconv.FormatInt(attachments[story.ID][0].ID, 10)
+
+	if rec := h.post("/photos/"+id+"/delete", url.Values{}, mom); rec.Code != http.StatusForbidden {
+		t.Errorf("other person: status = %d, want 403", rec.Code)
+	}
+	if rec := h.post("/photos/"+id+"/delete", url.Values{}, dad); rec.Code != http.StatusSeeOther {
+		t.Errorf("uploader: status = %d, want 303", rec.Code)
+	}
+	attachments, _ = h.store.AttachmentsForEntries(context.Background(), []int64{story.ID})
+	if len(attachments[story.ID]) != 0 {
+		t.Error("attachment row survived deletion")
+	}
+	if len(fs.deleted) != 1 {
+		t.Errorf("stored object was not removed: %v", fs.deleted)
+	}
+}
+
+// Until the service key is copied off the server, the site must degrade rather
+// than break.
+func TestPhotosDegradeGracefullyWithoutAServiceKey(t *testing.T) {
+	h := newHarness(t)
+	dad := h.signIn("dad@example.com")
+	story := h.makeStory(dad, "A story")
+
+	if h.server.Storage.Configured() {
+		t.Fatal("harness should start with no service key")
+	}
+	body := h.get("/stories", dad).Body.String()
+	if strings.Contains(body, "Add a photo") {
+		t.Error("the upload form should be hidden until storage is configured")
+	}
+
+	rec := h.uploadPhoto(story.ID, "x.png", "image/png", tinyPNG, "", dad)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want 503", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "aren't switched on yet") {
+		t.Errorf("expected a plain explanation, got: %s", rec.Body.String())
+	}
+}
+
+// Signed photo URLs point at Supabase, so the CSP has to permit that origin for
+// images while still refusing outside scripts.
+func TestCSPAllowsSupabaseImagesButNotScripts(t *testing.T) {
+	h := newHarness(t)
+	csp := h.get("/login", nil).Header().Get("Content-Security-Policy")
+
+	if !strings.Contains(csp, "img-src 'self' data: "+h.server.Config.SupabaseURL) {
+		t.Errorf("img-src should allow Supabase, got: %s", csp)
+	}
+	if !strings.Contains(csp, "script-src 'self'") {
+		t.Errorf("script-src must stay self-only, got: %s", csp)
+	}
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/grimechristopher/family-history-site/assets"
 	"github.com/grimechristopher/family-history-site/internal/auth"
 	"github.com/grimechristopher/family-history-site/internal/config"
+	"github.com/grimechristopher/family-history-site/internal/storage"
 	"github.com/grimechristopher/family-history-site/internal/store"
 )
 
@@ -23,6 +24,7 @@ type Server struct {
 	Store    *store.Store
 	Sessions *auth.Sessions
 	Supabase *auth.Supabase
+	Storage  *storage.Client
 	Log      *slog.Logger
 
 	templates    map[string]*template.Template
@@ -35,6 +37,7 @@ func New(cfg config.Config, s *store.Store, log *slog.Logger, assetVersion strin
 		Store:    s,
 		Sessions: &auth.Sessions{Store: s, Secure: strings.HasPrefix(cfg.BaseURL, "https://")},
 		Supabase: auth.NewSupabase(cfg.SupabaseURL, cfg.SupabaseAnonKey),
+		Storage:  storage.New(cfg.SupabaseURL, cfg.SupabaseServiceKey),
 		Log:      log,
 
 		assetVersion: assetVersion,
@@ -114,13 +117,17 @@ type pageData struct {
 
 	// stories
 	Stories []storyView
+
+	// photos
+	PhotosEnabled bool
 }
 
 func (s *Server) newPageData(r *http.Request, title string) pageData {
 	return pageData{
-		Title:        title,
-		AssetVersion: s.assetVersion,
-		User:         auth.User(r.Context()),
+		Title:         title,
+		AssetVersion:  s.assetVersion,
+		User:          auth.User(r.Context()),
+		PhotosEnabled: s.Storage.Configured(),
 	}
 }
 
@@ -202,7 +209,10 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("POST /stories", require(http.HandlerFunc(s.handleCreateStory)))
 	mux.Handle("POST /stories/{id}/delete", require(http.HandlerFunc(s.handleDeleteStory)))
 
-	return securityHeaders(mux)
+	mux.Handle("POST /entries/{id}/photos", require(http.HandlerFunc(s.handleUploadPhoto)))
+	mux.Handle("POST /photos/{id}/delete", require(http.HandlerFunc(s.handleDeletePhoto)))
+
+	return s.securityHeaders(mux)
 }
 
 func questionID(r *http.Request) (int64, error) {
@@ -221,15 +231,17 @@ func cacheStatic(next http.Handler) http.Handler {
 	})
 }
 
-func securityHeaders(next http.Handler) http.Handler {
+func (s *Server) securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "same-origin")
-		// Everything is served from this origin; no CDN, no inline script.
+		// Scripts and styles come only from this origin. Images additionally come
+		// from Supabase Storage, because signed photo URLs point there.
 		w.Header().Set("Content-Security-Policy",
-			"default-src 'self'; img-src 'self' data:; style-src 'self'; "+
-				"script-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'")
+			"default-src 'self'; img-src 'self' data: "+s.Config.SupabaseURL+"; "+
+				"style-src 'self'; script-src 'self'; connect-src 'self'; "+
+				"form-action 'self'; frame-ancestors 'none'")
 		next.ServeHTTP(w, r)
 	})
 }

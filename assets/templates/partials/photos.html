@@ -1,0 +1,32 @@
+{{define "photos"}}
+{{if .Photos}}
+  <ul class="photos">
+    {{range .Photos}}
+      <li>
+        {{if .SignedURL}}
+          <img src="{{.SignedURL}}" alt="{{if .Caption}}{{.Caption}}{{else}}Family photograph{{end}}" loading="lazy">
+        {{else}}
+          <p class="banner banner-quiet">This picture couldn&rsquo;t be loaded just now.</p>
+        {{end}}
+        {{if .Caption}}<p class="photo-caption">{{.Caption}}</p>{{end}}
+      </li>
+    {{end}}
+  </ul>
+{{end}}
+{{end}}
+
+{{define "photo-form"}}
+{{if and .PhotosEnabled .IsMine}}
+  <details class="photo-form">
+    <summary>Add a photo</summary>
+    <form method="post" action="/entries/{{.ID}}/photos" enctype="multipart/form-data">
+      <input type="hidden" name="return_to" value="{{.ReturnTo}}">
+      <label for="photo-{{.ID}}">Choose a picture</label>
+      <input id="photo-{{.ID}}" name="photo" type="file" accept="image/*" required>
+      <label for="caption-{{.ID}}">What is it? (optional)</label>
+      <input id="caption-{{.ID}}" name="caption" type="text" placeholder="The house on Elm Street">
+      <div class="btn-row"><button class="btn btn-quiet" type="submit">Upload photo</button></div>
+    </form>
+  </details>
+{{end}}
+{{end}}

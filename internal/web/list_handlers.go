@@ -91,9 +91,14 @@ func (s *Server) handleQuestion(w http.ResponseWriter, r *http.Request) {
 type answerView struct {
 	store.Entry
 	Replies []store.Reply
+	Photos  []store.Attachment
 	IsMine  bool
 	// IsPrimary marks the answer from the person the question was asked of.
 	IsPrimary bool
+	// PhotosEnabled and ReturnTo are carried on the view so the shared photo
+	// partial needs no template helpers to reach page-level state.
+	PhotosEnabled bool
+	ReturnTo      string
 }
 
 func (s *Server) questionData(r *http.Request, id int64) (pageData, error) {
@@ -119,15 +124,23 @@ func (s *Server) questionData(r *http.Request, id int64) (pageData, error) {
 	if err != nil {
 		return data, err
 	}
+	photos, err := s.Store.AttachmentsForEntries(r.Context(), ids)
+	if err != nil {
+		return data, err
+	}
+	s.signAttachments(r, photos)
 
 	// AnswersTo already sorts the intended person first, which is what makes the
 	// primary / Others split fall out naturally.
 	for _, e := range entries {
 		view := answerView{
-			Entry:     e,
-			Replies:   replies[e.ID],
-			IsMine:    e.AuthorUserID == u.ID,
-			IsPrimary: e.AuthorUserID == q.AskedOfUserID,
+			Entry:         e,
+			Replies:       replies[e.ID],
+			Photos:        photos[e.ID],
+			IsMine:        e.AuthorUserID == u.ID,
+			IsPrimary:     e.AuthorUserID == q.AskedOfUserID,
+			PhotosEnabled: s.Storage.Configured(),
+			ReturnTo:      "/questions/" + strconv.FormatInt(id, 10),
 		}
 		if view.IsPrimary {
 			data.PrimaryAnswers = append(data.PrimaryAnswers, view)
