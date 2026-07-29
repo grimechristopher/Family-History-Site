@@ -1,0 +1,13 @@
+# Secrets — this repo will hold Supabase service_role and JWT secrets. Never commit them.
+.env
+.env.*
+!.env.example
+
+# Build output
+/bin/
+/tmp/
+static/css/tailwind.css
+
+# Local data
+*.ged
+*.dump
