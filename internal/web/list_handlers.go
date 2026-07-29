@@ -53,6 +53,7 @@ func (s *Server) handleQuestions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := s.newPageData(r, "All questions")
+	data.Nav = "questions"
 	data.Unanswered = unansweredItems
 	data.Answered = answeredItems
 	data.Counts = &counts

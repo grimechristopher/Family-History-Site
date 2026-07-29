@@ -43,6 +43,7 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 func (s *Server) stackData(r *http.Request, flash string) (pageData, error) {
 	u := auth.User(r.Context())
 	data := s.newPageData(r, "Questions")
+	data.Nav = "cards"
 	data.Flash = flash
 	data.Mode = u.QueueMode
 

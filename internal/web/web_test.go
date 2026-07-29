@@ -1224,7 +1224,7 @@ func TestSubjectPageGathersQuestionsAndStories(t *testing.T) {
 	for _, want := range []string{
 		"Peter Samuel Hale",
 		"What kind of cars did he have?",
-		"Answer just these questions", // straight into a focused card stack
+		"Start on ", // straight into a focused card stack
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("subject page missing %q", want)
@@ -1238,6 +1238,62 @@ func TestSubjectPageGathersQuestionsAndStories(t *testing.T) {
 
 	if rec := h.get("/subjects/no-such-person", cookie); rec.Code != http.StatusNotFound {
 		t.Errorf("unknown subject = %d, want 404", rec.Code)
+	}
+}
+
+// Stories belong to a person rather than to a top-level list, and they appear
+// next to that person's answered questions.
+func TestStoriesLiveOnThePersonsPage(t *testing.T) {
+	h := newHarness(t)
+	dad := h.signIn("dad@example.com")
+
+	page := h.get("/subjects/peter-samuel-hale", dad).Body.String()
+	if !strings.Contains(page, "Add a story about") {
+		t.Error("expected a way to add a story from the person's page")
+	}
+	if !strings.Contains(page, `name="subject" value="peter-samuel-hale"`) {
+		t.Error("the story form should already be about this person")
+	}
+
+	rec := h.post("/stories", url.Values{
+		"title":     {"The drive back from Chicago"},
+		"body":      {"He drove it through a blizzard."},
+		"subject":   {"peter-samuel-hale"},
+		"return_to": {"/subjects/peter-samuel-hale"},
+	}, dad)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	// Saving from a person's page returns there, not to a stories list.
+	if loc := rec.Header().Get("Location"); loc != "/subjects/peter-samuel-hale" {
+		t.Errorf("Location = %q, want the person's page", loc)
+	}
+
+	page = h.get("/subjects/peter-samuel-hale", dad).Body.String()
+	if !strings.Contains(page, "The drive back from Chicago") {
+		t.Error("story did not appear on the person's page")
+	}
+	if !strings.Contains(page, "What&rsquo;s been said") {
+		t.Error("stories should sit under the same heading as answered questions")
+	}
+}
+
+// The nav is down to three tabs, and Stories is no longer one of them.
+func TestNavIsThreeTabsAndMarksTheCurrentOne(t *testing.T) {
+	h := newHarness(t)
+	cookie := h.signIn("dad@example.com")
+
+	body := h.get("/cards", cookie).Body.String()
+	for _, want := range []string{"Questions to answer", "Everything", "The family"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("nav missing %q", want)
+		}
+	}
+	if strings.Contains(body, `class="tab" href="/stories"`) {
+		t.Error("Stories should no longer be a top-level tab")
+	}
+	if !strings.Contains(body, `href="/cards" aria-current="page"`) {
+		t.Error("the current tab should be marked for screen readers")
 	}
 }
 

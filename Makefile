@@ -19,9 +19,10 @@ test-unit: ## Tests needing no database
 	go test ./internal/config/ ./internal/gedcom/ ./internal/prompts/ ./internal/subjects/ ./internal/auth/
 
 # -p 1 is required: these packages share one schema and drop it between tests,
-# so running the packages concurrently makes them fight over it.
+# so running the packages concurrently makes them fight over it. They run against
+# a separate database from the dev data, which they would otherwise wipe.
 test-db: testdb-start ## Tests needing Postgres
-	eval "$$(./scripts/testdb.sh start)" && go test -p 1 ./internal/migrate/ ./internal/store/
+	eval "$$(./scripts/testdb.sh start)" && go test -p 1 ./internal/migrate/ ./internal/store/ ./internal/web/
 
 test: test-unit test-db ## Everything
 
@@ -42,10 +43,10 @@ import-dry: ## Parse and match without writing anything
 	  -gedcom "$(GEDCOM)" -prompts "$(PROMPTS)" \
 	  -dad-email "$(DAD_EMAIL)" -mom-email "$(MOM_EMAIL)" -admin-email "$(ADMIN_EMAIL)"
 
-import: ## Seed the database
-	go run ./cmd/import \
+import: ## Seed the development database
+	eval "$$(./scripts/testdb.sh start)" && DATABASE_URL="$$DEV_DATABASE_URL" go run ./cmd/import \
 	  -gedcom "$(GEDCOM)" -prompts "$(PROMPTS)" \
 	  -dad-email "$(DAD_EMAIL)" -mom-email "$(MOM_EMAIL)" -admin-email "$(ADMIN_EMAIL)"
 
-run: ## Run the server
-	go run ./cmd/server
+run: ## Run the server against the development database
+	eval "$$(./scripts/testdb.sh start)" && DATABASE_URL="$$DEV_DATABASE_URL" go run ./cmd/server

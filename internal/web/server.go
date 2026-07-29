@@ -76,6 +76,7 @@ func templateFuncs() template.FuncMap {
 // pageData is the shape every template receives.
 type pageData struct {
 	Title        string
+	Nav          string // which tab is current
 	AssetVersion string
 	User         *store.User
 	Progress     *store.Progress

@@ -95,7 +95,11 @@ func (s *Server) handleCreateStory(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	http.Redirect(w, r, "/stories", http.StatusSeeOther)
+	back := r.FormValue("return_to")
+	if back == "" {
+		back = "/stories"
+	}
+	http.Redirect(w, r, back, http.StatusSeeOther)
 }
 
 func (s *Server) handleDeleteStory(w http.ResponseWriter, r *http.Request) {
@@ -123,5 +127,9 @@ func (s *Server) handleDeleteStory(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	http.Redirect(w, r, "/stories", http.StatusSeeOther)
+	back := r.FormValue("return_to")
+	if back == "" {
+		back = "/stories"
+	}
+	http.Redirect(w, r, back, http.StatusSeeOther)
 }

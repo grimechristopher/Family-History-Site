@@ -14,12 +14,7 @@
 {{if .User}}
 <header class="bar">
   <a class="bar-title" href="/">Family History</a>
-  <nav class="bar-nav" aria-label="Sections">
-    <a class="link" href="/cards">Cards</a>
-    <a class="link" href="/questions">All questions</a>
-    <a class="link" href="/tree">Tree</a>
-    <a class="link" href="/stories">Stories</a>
-    {{if .Progress}}<span class="progress">You&rsquo;ve answered {{.Progress.Answered}}</span>{{end}}
+  <div class="bar-tools">
     <details class="display-settings">
       <summary>Text &amp; colours</summary>
       <div class="display-panel">
@@ -29,25 +24,22 @@
           <button type="button" data-setting="size" data-value="lg">Larger</button>
           <button type="button" data-setting="size" data-value="xl">Largest</button>
         </div>
-
-        <h3 id="ds-theme">Colours</h3>
-        <div class="display-row" role="group" aria-labelledby="ds-theme">
-          <button type="button" data-setting="theme" data-value="auto">Automatic</button>
-          <button type="button" data-setting="theme" data-value="light">Dark on light</button>
-          <button type="button" data-setting="theme" data-value="dark">Light on dark</button>
-          <button type="button" data-setting="theme" data-value="amber">Amber on black</button>
-        </div>
-
         <h3 id="ds-contrast">Contrast</h3>
         <div class="display-row" role="group" aria-labelledby="ds-contrast">
           <button type="button" data-setting="contrast" data-value="auto">Normal</button>
-          <button type="button" data-setting="contrast" data-value="more">Maximum</button>
+          <button type="button" data-setting="contrast" data-value="more">Stronger</button>
         </div>
       </div>
     </details>
     <form method="post" action="/logout"><button class="link" type="submit">Sign out</button></form>
-  </nav>
+  </div>
 </header>
+
+<nav class="tabs" aria-label="Sections">
+  <a class="tab" href="/cards" {{if eq .Nav "cards"}}aria-current="page"{{end}}>Questions to answer</a>
+  <a class="tab" href="/questions" {{if eq .Nav "questions"}}aria-current="page"{{end}}>Everything</a>
+  <a class="tab" href="/tree" {{if eq .Nav "tree"}}aria-current="page"{{end}}>The family</a>
+</nav>
 {{end}}
 
 <main class="page" id="main" tabindex="-1">

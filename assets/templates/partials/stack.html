@@ -41,8 +41,8 @@
         hx-disabled-elt="find button">
     <label for="answer-{{.QuestionID}}">Your answer</label>
     <p class="dictate" id="dictate-{{.QuestionID}}">
-      <span aria-hidden="true">🎤</span>
-      <span>Tap the microphone on the keyboard and just talk &mdash; it types for you.
+      <span class="dictate-icon" aria-hidden="true">&#127908;</span>
+      <span>Tap the microphone on your keyboard and just talk &mdash; it types for you.
       Nothing is lost if you stop partway.</span>
     </p>
     <textarea id="answer-{{.QuestionID}}" name="body" rows="8"

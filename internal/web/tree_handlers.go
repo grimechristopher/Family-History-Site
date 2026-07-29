@@ -72,6 +72,7 @@ func (s *Server) handleTree(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := s.newPageData(r, "Family tree")
+	data.Nav = "tree"
 	// Four levels covers Mom and Dad through their great-grandparents, which is
 	// everything imported.
 	data.Tree = buildTree(people, rootIDs, 4)

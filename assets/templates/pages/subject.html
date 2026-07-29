@@ -1,10 +1,12 @@
 {{define "content"}}
+<p class="eyebrow">{{if eq .Subject.Kind "couple"}}A couple{{else if eq .Subject.Kind "group"}}Further back{{else}}In the family{{end}}</p>
 <h1>{{.Subject.DisplayName}}</h1>
-<p class="lede">
-  {{if .Subject.Total}}{{.Subject.Answered}} of {{.Subject.Total}} questions answered{{else}}No questions about them yet{{end}}
-</p>
 
-{{if .Members}}
+{{/* For one person the name is already the heading, so only the years are
+     worth repeating. Couples and groups genuinely need their members listed. */}}
+{{if eq .Subject.Kind "individual"}}
+  {{range .Members}}{{if .Lifespan}}<p class="lifespan">{{.Lifespan}}</p>{{end}}{{end}}
+{{else if .Members}}
   <ul class="members">
     {{range .Members}}
       <li><strong>{{.FullName}}</strong>{{if .Lifespan}} <span class="tyears">{{.Lifespan}}</span>{{end}}</li>
@@ -13,39 +15,67 @@
 {{end}}
 
 {{if .Unanswered}}
+  <h2>Questions waiting <span class="count">{{len .Unanswered}}</span></h2>
   <form method="post" action="/subjects/{{.Subject.Slug}}/focus">
+    <p class="lede">Answer just these, one at a time.</p>
     <div class="btn-row">
-      <button class="btn" type="submit">Answer just these questions</button>
+      <button class="btn" type="submit">Start on {{.Subject.DisplayName}}</button>
     </div>
   </form>
+  <ul class="qlist qlist-onesubject">{{range .Unanswered}}{{template "qrow" .}}{{end}}</ul>
 {{end}}
 
-<h2>Still waiting{{if .Unanswered}} <span class="count">{{len .Unanswered}}</span>{{end}}</h2>
-{{if .Unanswered}}
-  <ul class="qlist">{{range .Unanswered}}{{template "qrow" .}}{{end}}</ul>
-{{else}}
-  <p class="lede">Nothing left waiting here.</p>
-{{end}}
+{{if or .Answered .Stories}}
+  <h2>What&rsquo;s been said <span class="count">{{len .Answered}} answered{{if .Stories}} &middot; {{len .Stories}} {{if eq (len .Stories) 1}}story{{else}}stories{{end}}{{end}}</span></h2>
 
-<h2>Answered{{if .Answered}} <span class="count">{{len .Answered}}</span>{{end}}</h2>
-{{if .Answered}}
-  <ul class="qlist">{{range .Answered}}{{template "qrow" .}}{{end}}</ul>
-{{else}}
-  <p class="lede">Nothing answered here yet.</p>
-{{end}}
-
-{{if .Stories}}
-  <h2>Stories</h2>
   {{range .Stories}}
-    <article class="answer">
+    <article class="answer answer-primary">
       <h3>{{.Title}}</h3>
-      <p class="answer-by">{{.AuthorName}}
-        <span class="answer-when">{{.CreatedAt.Format "2 January 2006"}}</span></p>
+      <p class="answer-by">
+        {{.AuthorName}}
+        <span class="answer-when">{{.CreatedAt.Format "2 January 2006"}}</span>
+        <span class="card-badge">a story</span>
+        {{if .IsDraft}}<span class="card-badge">unfinished</span>{{end}}
+      </p>
       <div class="answer-body">{{.Body}}</div>
       {{template "photos" .}}
+      {{template "photo-form" .}}
+      {{if .IsMine}}
+        <form method="post" action="/stories/{{.ID}}/delete"
+              onsubmit="return confirm('Delete this story? It cannot be undone.')">
+          <input type="hidden" name="return_to" value="/subjects/{{$.Subject.Slug}}">
+          <button class="link" type="submit">Delete this story</button>
+        </form>
+      {{end}}
     </article>
+  {{end}}
+
+  {{if .Answered}}
+    <ul class="qlist qlist-onesubject">{{range .Answered}}{{template "qrow" .}}{{end}}</ul>
   {{end}}
 {{end}}
 
-<p><a class="link" href="/tree">Back to the tree</a></p>
+<h2>Add a story about {{.Subject.DisplayName}}</h2>
+<p class="lede">For something no question happens to ask about.</p>
+<details class="new-story">
+  <summary>Write a story</summary>
+  <form method="post" action="/stories">
+    <input type="hidden" name="subject" value="{{.Subject.Slug}}">
+    <input type="hidden" name="return_to" value="/subjects/{{.Subject.Slug}}">
+
+    <label for="title">What would you call it?</label>
+    <input id="title" name="title" type="text" placeholder="The drive back from Chicago">
+
+    <label for="story-body">The story</label>
+    <p class="dictate" id="dictate-story">
+      <span class="dictate-icon" aria-hidden="true">&#127908;</span>
+      <span>Tap the microphone on the keyboard and just talk &mdash; it types for you.</span>
+    </p>
+    <textarea id="story-body" name="body" rows="8" aria-describedby="dictate-story"></textarea>
+
+    <div class="btn-row"><button class="btn" type="submit">Save this story</button></div>
+  </form>
+</details>
+
+<p><a class="link" href="/tree">Back to the family</a></p>
 {{end}}

@@ -8,30 +8,44 @@
 <div id="stack-region">
   {{if .Flash}}<div class="banner banner-quiet">{{.Flash}}</div>{{end}}
 
-  <div class="mode-picker" role="group" aria-label="How to order the questions">
-    <button type="button" aria-pressed="{{eq .Mode "in_order"}}"
-            hx-post="/cards/mode" hx-vals='{"mode":"in_order"}'
-            hx-target="#stack-region" hx-swap="outerHTML">In order</button>
-    <button type="button" aria-pressed="{{eq .Mode "shuffle"}}"
-            hx-post="/cards/mode" hx-vals='{"mode":"shuffle"}'
-            hx-target="#stack-region" hx-swap="outerHTML">Shuffle</button>
-    <button type="button" aria-pressed="{{eq .Mode "one_subject"}}"
-            hx-post="/cards/mode" hx-vals='{"mode":"one_subject"}'
-            hx-target="#stack-region" hx-swap="outerHTML">One person at a time</button>
-  </div>
-
-  {{if eq .Mode "one_subject"}}
-    <div class="mode-picker" role="group" aria-label="Whose questions">
-      {{range .Subjects}}
-        <button type="button" aria-pressed="{{eq .Slug $.FocusSlug}}"
-                hx-post="/cards/mode"
-                hx-vals='{"mode":"one_subject","subject":"{{.Slug}}"}'
-                hx-target="#stack-region" hx-swap="outerHTML">{{.DisplayName}}</button>
-      {{end}}
-    </div>
-  {{end}}
-
+  {{/* The question comes first. Anything about choosing which questions is
+       secondary and lives below it, folded away. */}}
   {{template "stack" .}}
+
+  {{if .Cards}}
+    <details class="picker">
+      <summary>Choose what to answer</summary>
+
+      <div class="picker-body">
+        <h3 id="pick-order">Order</h3>
+        <div class="mode-picker" role="group" aria-labelledby="pick-order">
+          <button type="button" aria-pressed="{{eq .Mode "in_order"}}"
+                  hx-post="/cards/mode" hx-vals='{"mode":"in_order"}'
+                  hx-target="#stack-region" hx-swap="outerHTML">In order</button>
+          <button type="button" aria-pressed="{{eq .Mode "shuffle"}}"
+                  hx-post="/cards/mode" hx-vals='{"mode":"shuffle"}'
+                  hx-target="#stack-region" hx-swap="outerHTML">Mix them up</button>
+          <button type="button" aria-pressed="{{eq .Mode "one_subject"}}"
+                  hx-post="/cards/mode" hx-vals='{"mode":"one_subject"}'
+                  hx-target="#stack-region" hx-swap="outerHTML">One person at a time</button>
+        </div>
+
+        {{if eq .Mode "one_subject"}}
+          <h3 id="pick-who">Whose questions</h3>
+          <form hx-post="/cards/mode" hx-target="#stack-region" hx-swap="outerHTML">
+            <input type="hidden" name="mode" value="one_subject">
+            <label class="visually-hidden" for="who">Whose questions</label>
+            <select id="who" name="subject" aria-labelledby="pick-who">
+              {{range .Subjects}}
+                <option value="{{.Slug}}" {{if eq .Slug $.FocusSlug}}selected{{end}}>{{.DisplayName}}</option>
+              {{end}}
+            </select>
+            <div class="btn-row"><button class="btn btn-quiet" type="submit">Show these</button></div>
+          </form>
+        {{end}}
+      </div>
+    </details>
+  {{end}}
 </div>
 {{end}}
 
