@@ -1,0 +1,15 @@
+{{define "content"}}
+<p class="eyebrow">Hello {{.User.DisplayName}}</p>
+<h1>{{.Greeting}}</h1>
+
+{{if .Progress}}
+  <p class="lede">
+    You&rsquo;ve answered <strong>{{.Progress.Answered}}</strong>
+    of {{.Progress.Total}} questions.
+  </p>
+{{end}}
+
+<div class="btn-row">
+  <a class="btn" href="/cards">{{if .Progress}}{{if gt .Progress.Answered 0}}Keep going{{else}}Start answering{{end}}{{else}}Start answering{{end}}</a>
+</div>
+{{end}}

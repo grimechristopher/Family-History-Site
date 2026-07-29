@@ -1,0 +1,40 @@
+{{define "content"}}
+<div id="stack-region">
+  {{template "stack-region" .}}
+</div>
+{{end}}
+
+{{define "stack-region"}}
+<div id="stack-region">
+  {{if .Flash}}<div class="banner banner-quiet">{{.Flash}}</div>{{end}}
+
+  <div class="mode-picker" role="group" aria-label="How to order the questions">
+    <button type="button" aria-pressed="{{eq .Mode "in_order"}}"
+            hx-post="/cards/mode" hx-vals='{"mode":"in_order"}'
+            hx-target="#stack-region" hx-swap="outerHTML">In order</button>
+    <button type="button" aria-pressed="{{eq .Mode "shuffle"}}"
+            hx-post="/cards/mode" hx-vals='{"mode":"shuffle"}'
+            hx-target="#stack-region" hx-swap="outerHTML">Shuffle</button>
+    <button type="button" aria-pressed="{{eq .Mode "one_subject"}}"
+            hx-post="/cards/mode" hx-vals='{"mode":"one_subject"}'
+            hx-target="#stack-region" hx-swap="outerHTML">One person at a time</button>
+  </div>
+
+  {{if eq .Mode "one_subject"}}
+    <div class="mode-picker" role="group" aria-label="Whose questions">
+      {{range .Subjects}}
+        <button type="button" aria-pressed="{{eq .Slug $.FocusSlug}}"
+                hx-post="/cards/mode"
+                hx-vals='{"mode":"one_subject","subject":"{{.Slug}}"}'
+                hx-target="#stack-region" hx-swap="outerHTML">{{.DisplayName}}</button>
+      {{end}}
+    </div>
+  {{end}}
+
+  {{template "stack" .}}
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script src="/static/js/swipe.js?v={{.AssetVersion}}" defer></script>
+{{end}}

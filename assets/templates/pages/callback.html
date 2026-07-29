@@ -1,0 +1,11 @@
+{{define "content"}}
+<h1>Signing you in&hellip;</h1>
+<p class="lede" id="status">One moment.</p>
+<noscript>
+  <div class="banner">This step needs JavaScript switched on. Once you&rsquo;re signed in, the rest of the site doesn&rsquo;t.</div>
+</noscript>
+{{end}}
+
+{{define "scripts"}}
+<script src="/static/js/callback.js?v={{.AssetVersion}}"></script>
+{{end}}

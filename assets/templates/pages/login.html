@@ -1,0 +1,25 @@
+{{define "content"}}
+<h1>Family History</h1>
+
+{{if .Sent}}
+  <p class="lede">Check your email. There&rsquo;s a link in there &mdash; tap it and you&rsquo;re in.</p>
+  <p class="lede">We sent it to <strong>{{.Email}}</strong>. It can take a minute to arrive.</p>
+  <div class="btn-row">
+    <a class="btn btn-quiet" href="/login">Use a different address</a>
+  </div>
+{{else}}
+  {{if .Expired}}<div class="banner banner-quiet">You were signed out. Anything you had written was saved.</div>{{end}}
+  {{if .Error}}<div class="banner">{{.Error}}</div>{{end}}
+
+  <p class="lede">Enter your email and we&rsquo;ll send you a link. No password to remember.</p>
+  <form method="post" action="/login">
+    <label for="email">Your email address</label>
+    <input id="email" name="email" type="email" required autocomplete="email"
+           inputmode="email" autocapitalize="off" spellcheck="false"
+           value="{{.Email}}" placeholder="you@example.com">
+    <div class="btn-row">
+      <button class="btn" type="submit">Send me a link</button>
+    </div>
+  </form>
+{{end}}
+{{end}}

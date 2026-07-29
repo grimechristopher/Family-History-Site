@@ -1,0 +1,27 @@
+{{define "layout"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{{.Title}} &middot; Family History</title>
+<link rel="stylesheet" href="/static/css/app.css?v={{.AssetVersion}}">
+</head>
+<body>
+{{if .User}}
+<header class="bar">
+  <a class="bar-title" href="/">Family History</a>
+  <nav class="bar-nav">
+    {{if .Progress}}<span class="progress">You&rsquo;ve answered {{.Progress.Answered}}</span>{{end}}
+    <form method="post" action="/logout"><button class="link" type="submit">Sign out</button></form>
+  </nav>
+</header>
+{{end}}
+
+<main class="page">
+  {{block "content" .}}{{end}}
+</main>
+
+<script src="/static/js/htmx.min.js?v={{.AssetVersion}}" defer></script>
+{{block "scripts" .}}{{end}}
+</body>
+</html>{{end}}

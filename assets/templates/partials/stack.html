@@ -1,0 +1,58 @@
+{{define "stack"}}
+<div id="stack" class="stack">
+  {{if .Cards}}
+    {{$rest := len .Cards}}
+    {{if gt $rest 2}}<div class="stack-peek stack-peek-2" aria-hidden="true"></div>{{end}}
+    {{if gt $rest 1}}<div class="stack-peek stack-peek-1" aria-hidden="true"></div>{{end}}
+    {{template "card" (index .Cards 0)}}
+  {{else}}
+    <div class="empty">
+      <h1>{{if .Focused}}That&rsquo;s everything for {{.FocusName}}.{{else}}You&rsquo;ve answered everything.{{end}}</h1>
+      <p class="lede">
+        {{if .Focused}}
+          Pick someone else, or go back to all the questions.
+        {{else}}
+          Every question has an answer from you. Thank you &mdash; genuinely.
+        {{end}}
+      </p>
+      {{if .Focused}}
+        <div class="btn-row" style="justify-content:center">
+          <button class="btn" hx-post="/cards/mode" hx-vals='{"mode":"in_order"}'
+                  hx-target="#stack-region" hx-swap="outerHTML">All questions</button>
+        </div>
+      {{end}}
+    </div>
+  {{end}}
+</div>
+{{end}}
+
+{{define "card"}}
+<article class="card" id="card-{{.QuestionID}}" data-question="{{.QuestionID}}">
+  <p class="card-subject">
+    {{.SubjectName}}
+    {{if .Topic}}<span class="card-badge">{{.Topic}}</span>{{end}}
+    {{if gt .DeferCount 0}}<span class="card-badge">come back to this</span>{{end}}
+  </p>
+
+  <h1 class="card-question">{{.Body}}</h1>
+
+  <form hx-post="/cards/{{.QuestionID}}/answer"
+        hx-target="#stack-region" hx-swap="outerHTML"
+        hx-disabled-elt="find button">
+    <label for="answer-{{.QuestionID}}">Your answer</label>
+    <textarea id="answer-{{.QuestionID}}" name="body" rows="7"
+              data-draft-url="/cards/{{.QuestionID}}/draft"
+              placeholder="Tap the microphone on the keyboard and just talk, if that&rsquo;s easier.">{{.DraftBody}}</textarea>
+    <p class="save-state" data-save-state aria-live="polite"></p>
+
+    <div class="btn-row">
+      <button class="btn" type="submit">Save &amp; next</button>
+      <button class="btn btn-quiet" type="button"
+              data-later
+              hx-post="/cards/{{.QuestionID}}/defer"
+              hx-target="#stack-region" hx-swap="outerHTML">Later</button>
+    </div>
+  </form>
+  <p class="hint">&ldquo;Later&rdquo; puts this one back in the pile &mdash; nothing is lost, and it&rsquo;ll come round again.</p>
+</article>
+{{end}}
