@@ -159,10 +159,21 @@ func PruneSubjectsNotIn(ctx context.Context, db DBTX, slugs []string) (deleted, 
 	row := db.QueryRow(ctx, `
 		WITH stale AS (
 			SELECT s.id,
-			       EXISTS (SELECT 1 FROM family.questions q WHERE q.subject_id = s.id) AS has_questions,
-			       EXISTS (SELECT 1 FROM family.entries   e WHERE e.subject_id = s.id) AS has_entries
+			       -- An archived question is one this import no longer produces, so
+			       -- it is not a reason to keep the subject. Only a live question or
+			       -- something somebody wrote counts.
+			       EXISTS (SELECT 1 FROM family.questions q
+			                WHERE q.subject_id = s.id AND q.archived_at IS NULL) AS has_questions,
+			       EXISTS (SELECT 1 FROM family.entries e WHERE e.subject_id = s.id) AS has_entries
 			  FROM family.subjects s
 			 WHERE s.family_id = $2 AND NOT (s.slug = ANY($1::text[]))
+		),
+		-- Their archived questions go with them: nothing was ever answered, and
+		-- leaving orphans behind is what made the counts confusing.
+		gone_questions AS (
+			DELETE FROM family.questions
+			 WHERE subject_id IN (SELECT id FROM stale WHERE NOT has_questions AND NOT has_entries)
+			RETURNING 1
 		),
 		gone AS (
 			DELETE FROM family.subjects
