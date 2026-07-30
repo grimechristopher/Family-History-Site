@@ -722,23 +722,29 @@ a.tperson:hover { border-color: var(--teal); background: var(--teal-wash); }
   .with-side > .with-side-main          { grid-column: 2; grid-row: 2; }
   /* The first heading in the main column should line up with the sidebar. */
   .with-side-main > h2:first-child { margin-top: 0; }
-  .side-group > summary { pointer-events: none; }        /* always open, no toggle */
-  /* These are always open at this width, so [open] has to be named or
-     details[open] > summary::after wins on specificity and leaves a stray "–"
-     hanging off "Whose questions". */
-  .side-group > summary::after,
-  .side-group[open] > summary::after { content: none; }
 }
 
 .side { min-width: 0; }
-.side-group { margin-bottom: var(--s4); }
+.side-group { margin-bottom: var(--s3); }
+
+/* A group of names that opens and closes. Smaller than the page's other headings:
+   there are five of these in a column beside the questions, and at reading size
+   they took more room than the names inside them. */
 .side-group > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
   font-family: var(--sans);
-  font-size: var(--t-small);
-  color: var(--ink);
-  border-bottom: 2px solid var(--rule);
-  padding-bottom: var(--s2);
-  margin-bottom: var(--s2);
+  font-size: var(--t-micro);
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--ink-mid);
+  cursor: pointer;
+  list-style: none;
+  border-bottom: 1px solid var(--rule);
+  padding: var(--s1) 0;
+  margin-bottom: var(--s1);
 }
 
 .side-list { list-style: none; margin: 0; padding: 0; }
@@ -1430,5 +1436,28 @@ a.pnode-hit:focus-visible .pnode-box { stroke: var(--teal); stroke-width: 3; }
   color: var(--ink-mid);
 }
 
-/* A count beside a group name, so a collapsed group still says how much is in it. */
-.side-group > summary .side-count { margin-left: var(--s2); }
+/* A count beside a group name, so a collapsed group still says how much is in it,
+   pushed to the far edge where the eye can run down it. */
+.side-group > summary .side-count { margin-left: auto; }
+
+/* The marker has to be drawn here: summary stops generating its own ::marker once
+   it is display: flex, and the site's global summary::after "+" was suppressed for
+   these back when they never opened. A caret that turns is clearer than +/- for a
+   list of names. */
+.side-group > summary::before {
+  content: "";
+  width: .4rem; height: .4rem;
+  border-right: 2px solid var(--ink-soft);
+  border-bottom: 2px solid var(--ink-soft);
+  transform: rotate(-45deg);
+  transition: transform 120ms var(--ease);
+  flex: none;
+}
+.side-group[open] > summary::before { transform: rotate(45deg); }
+.side-group > summary::after,
+.side-group[open] > summary::after { content: none; }
+.side-group > summary::-webkit-details-marker { display: none; }
+
+/* Tighter rows too, since the whole family is listed now rather than a filtered few. */
+.side-group .side-list { margin: 0 0 var(--s2); }
+.side-group .side-link { padding-top: var(--s1); padding-bottom: var(--s1); }

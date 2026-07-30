@@ -94,6 +94,9 @@ func (s *Server) inFamily(next http.Handler) http.Handler {
 			ctx = context.WithValue(ctx, membershipCtxKey{}, member)
 			ctx = auth.WithUser(ctx, &here)
 
+			// So the root sends them back here next time instead of asking.
+			rememberFamily(w, fam.Slug, s.Sessions.Secure)
+
 			next.ServeHTTP(w, r.WithContext(ctx))
 			return nil
 		})
