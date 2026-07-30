@@ -42,6 +42,12 @@ func (s *Server) handleDevLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.Log.Warn("dev login used", "as", u.DisplayName, "user", u.ID)
+	// /dev/login/{family}/{name} lands straight in that family; without one the
+	// root sends you to your only family, or to the chooser.
+	if fam := r.PathValue("family"); fam != "" {
+		http.Redirect(w, r, "/f/"+fam+"/", http.StatusSeeOther)
+		return
+	}
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 

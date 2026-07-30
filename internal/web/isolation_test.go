@@ -6,7 +6,9 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -193,5 +195,68 @@ func TestTheAppRoleSeesNothingWithoutAFamily(t *testing.T) {
 	}
 	if n != 0 {
 		t.Fatalf("an unscoped read saw %d questions; row-level security is not in force", n)
+	}
+}
+
+// Adding somebody is three writes that have to happen together: an identity, a
+// membership, and the link saying who they are on the tree. The link is the one
+// that broke -- it was run on the pool while the membership was still uncommitted
+// in the request's transaction, so it updated nothing and reported success.
+func TestAddingSomeoneLinksThemToTheTree(t *testing.T) {
+	h := newHarness(t)
+	// The harness deliberately starts without one, so photo uploads can be tested
+	// degrading. Adding somebody needs it: without a service key their Supabase
+	// account cannot be made, and the handler saves the membership but warns.
+	h.server.Config.SupabaseServiceKey = "service-key"
+
+	handler, _ := appServer(t, h)
+	cookie := h.signIn("chris@example.com")
+
+	// Somebody in this family's tree for her to be. Seeded here rather than looked
+	// up, so the test cannot quietly skip when the fixture has no tree.
+	var personID int64
+	err := h.store.Pool.QueryRow(h.ctx, `
+		INSERT INTO family.people (family_id, gedcom_id, given_name, surname)
+		VALUES ($1, '@JANE@', 'Jane', 'Hale') RETURNING id`, h.familyID).Scan(&personID)
+	if err != nil {
+		t.Fatalf("seed a person for her to be: %v", err)
+	}
+
+	form := url.Values{
+		"display_name": {"Aunt Jane"},
+		"email":        {"jane@example.com"},
+		"person_id":    {strconv.FormatInt(personID, 10)},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/f/home/people",
+		strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(cookie)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	// Supabase is stubbed, so account creation succeeds and this should redirect.
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("adding somebody = %d, want 303. body: %s", rec.Code, rec.Body.String())
+	}
+
+	var gotPerson *int64
+	var role string
+	err = h.store.Pool.QueryRow(h.ctx, `
+		SELECT m.person_id, m.role
+		  FROM core.family_members m
+		  JOIN core.users u ON u.id = m.user_id
+		 WHERE m.family_id = $1 AND u.email = 'jane@example.com'`, h.familyID).
+		Scan(&gotPerson, &role)
+	if err != nil {
+		t.Fatalf("she is not a member: %v", err)
+	}
+	if role != "contributor" {
+		t.Errorf("role = %q, want contributor", role)
+	}
+	if gotPerson == nil {
+		t.Fatal("she was added but not linked to the tree; the link ran outside the transaction")
+	}
+	if *gotPerson != personID {
+		t.Errorf("linked to person %d, want %d", *gotPerson, personID)
 	}
 }

@@ -1,0 +1,55 @@
+{{define "content"}}
+<h1>Who&rsquo;s here</h1>
+
+{{if .Added}}
+  <div class="banner banner-quiet">
+    <strong>{{.Added}}</strong> is in. Tell them to go to this site and sign in with
+    their email &mdash; there&rsquo;s nothing for them to accept.
+  </div>
+{{end}}
+{{if .Error}}<div class="banner">{{.Error}}</div>{{end}}
+
+<ul class="note-list">
+  {{range .Members2}}
+    <li>
+      <strong>{{.DisplayName}}</strong>
+      {{if .PersonName}}<span class="qrow-subject">&middot; {{.PersonName}} on the tree</span>{{end}}
+      <p class="qrow-meta">{{.Email}}{{if eq .Role "admin"}} &middot; admin{{end}}</p>
+    </li>
+  {{end}}
+</ul>
+
+<section class="panel note">
+  <p class="eyebrow">Add someone</p>
+  <p>
+    Anyone here can add a family member. Once they&rsquo;re on this list, they sign
+    in with their own email like everybody else &mdash; no invitation to accept.
+  </p>
+
+  <form method="post" action="{{fam $.FamilySlug "/people"}}">
+    <label for="display_name">Their name</label>
+    <input id="display_name" name="display_name" type="text" required
+           autocomplete="off" placeholder="Aunt Jane">
+
+    <label for="email">Their email address</label>
+    <input id="email" name="email" type="email" required autocomplete="off"
+           inputmode="email" autocapitalize="off" spellcheck="false"
+           value="{{.Email}}" placeholder="jane@example.com">
+
+    {{/* Linking them to the tree is what lets the site know whose questions are
+         whose, and later how everyone is related. Optional, because somebody can
+         be in the family without being in the tree. */}}
+    <label for="person_id">Who are they on the tree?</label>
+    <select id="person_id" name="person_id">
+      <option value="">Not on the tree</option>
+      {{range .TreePeople}}
+        <option value="{{.ID}}">{{.Given}} {{.Surname}}{{if .BirthYear}} (b. {{.BirthYear}}){{end}}</option>
+      {{end}}
+    </select>
+
+    <div class="btn-row">
+      <button class="btn" type="submit">Add them</button>
+    </div>
+  </form>
+</section>
+{{end}}

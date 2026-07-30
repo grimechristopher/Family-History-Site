@@ -81,3 +81,15 @@ CREATE INDEX questions_by_family ON family.questions (family_id);
 CREATE INDEX entries_by_family   ON family.entries   (family_id);
 CREATE INDEX subjects_by_family  ON family.subjects  (family_id);
 CREATE INDEX people_by_family    ON family.people    (family_id);
+
+-- 0003 creates a family to hold whatever already existed. On a database that had
+-- nothing -- a fresh install -- it holds nothing and nobody, and would sit in the
+-- chooser forever as a family that never existed. Removing it here, once the data
+-- has been assigned, means an existing deployment keeps its family and a new one
+-- starts empty.
+DELETE FROM core.families f
+ WHERE f.slug = 'home'
+   AND NOT EXISTS (SELECT 1 FROM core.family_members m WHERE m.family_id = f.id)
+   AND NOT EXISTS (SELECT 1 FROM family.people        p WHERE p.family_id = f.id)
+   AND NOT EXISTS (SELECT 1 FROM family.subjects      s WHERE s.family_id = f.id)
+   AND NOT EXISTS (SELECT 1 FROM family.questions     q WHERE q.family_id = f.id);

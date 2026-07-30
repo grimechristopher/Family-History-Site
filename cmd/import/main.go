@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -42,6 +43,7 @@ func main() {
 		"comma-separated GEDCOM names to include who are not blood ancestors, such as a "+
 			"step-parent (defaults to $EXTRA_GEDCOM_NAMES)")
 	generations := fs.Int("generations", 3, "generations above the two roots to import")
+	familySlug := fs.String("family", "home", "slug of the family to import into")
 	adminLabel := fs.String("admin-label", envOr("ADMIN_LABEL", "Admin"),
 		"how the admin is named on the site (defaults to $ADMIN_LABEL)")
 	dryRun := fs.Bool("dry-run", false, "parse and match, then roll back without committing")
@@ -87,7 +89,7 @@ func main() {
 	cfg := importConfig{
 		GedPath: *gedPath, PromptsPath: *promptsPath, DatabaseURL: *databaseURL,
 		DadEmail: *dadEmail, MomEmail: *momEmail, AdminEmail: *adminEmail,
-		DadName: *dadName, MomName: *momName, AdminLabel: *adminLabel,
+		DadName: *dadName, MomName: *momName, AdminLabel: *adminLabel, Family: *familySlug,
 		ExtraNames: extras, Generations: *generations, DryRun: *dryRun,
 	}
 	if err := run(cfg); err != nil {
@@ -104,9 +106,11 @@ type importConfig struct {
 	DadEmail, MomEmail, AdminEmail    string
 	// GEDCOM-form names of the two people being asked, and how they are labelled.
 	DadName, MomName, AdminLabel string
-	ExtraNames                   []string
-	Generations                  int
-	DryRun                       bool
+	// Family is the slug this import writes into.
+	Family      string
+	ExtraNames  []string
+	Generations int
+	DryRun      bool
 }
 
 // envOr reads an environment variable, falling back to a default that names
@@ -170,12 +174,27 @@ func run(cfg importConfig) error {
 	}
 
 	s := store.New(pool)
+
+	// Which family this import belongs to. Everything it writes carries the id, and
+	// the transaction sets app.family_id so row-level security applies to the
+	// importer exactly as it does to the site.
+	fam, err := s.FamilyBySlug(ctx, cfg.Family)
+	if err != nil {
+		return fmt.Errorf("family %q: %w (create it with cmd/family)", cfg.Family, err)
+	}
+	ctx = store.WithFamily(ctx, fam.ID)
+	fmt.Printf("importing into %s (%s)\n", fam.DisplayName, fam.Slug)
+
 	var res *importer.Result
 
 	// A dry run does the entire import and then deliberately fails, so the
 	// transaction rolls back and nothing is written.
 	errSentinel := fmt.Errorf("dry run: rolling back")
 	err = s.InTx(ctx, func(db store.DBTX) error {
+		if _, err := db.Exec(ctx, "SELECT set_config('app.family_id', $1, true)",
+			strconv.FormatInt(fam.ID, 10)); err != nil {
+			return fmt.Errorf("scope the import to family %d: %w", fam.ID, err)
+		}
 		r, runErr := importer.Run(ctx, db, ged, qs, opts)
 		if runErr != nil {
 			return runErr

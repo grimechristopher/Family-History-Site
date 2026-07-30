@@ -194,3 +194,49 @@ func (s *Supabase) UserFromToken(ctx context.Context, accessToken string) (Claim
 		Email:   strings.ToLower(strings.TrimSpace(body.Email)),
 	}, nil
 }
+
+// EnsureAccount creates the Supabase account for an address, already confirmed.
+//
+// Nothing is emailed until this exists: the site asks for magic links with
+// should_create_user false, so an address Supabase has never seen gets no mail at
+// all and the person waits for a link that was never sent. Confirming normally
+// needs an email they would have to receive first, which is the chicken and egg
+// email_confirm avoids.
+//
+// Idempotent: an address Supabase already knows is reported as success, because
+// the caller wants the account to exist, not to have created it.
+func (s *Supabase) EnsureAccount(ctx context.Context, email, serviceKey string) error {
+	if serviceKey == "" {
+		return errors.New("SUPABASE_SERVICE_ROLE_KEY is unset, so accounts cannot be created")
+	}
+
+	body, err := json.Marshal(map[string]any{"email": email, "email_confirm": true})
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		s.BaseURL+"/auth/v1/admin/users", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("apikey", serviceKey)
+	req.Header.Set("Authorization", "Bearer "+serviceKey)
+
+	resp, err := s.Client.Do(req)
+	if err != nil {
+		return fmt.Errorf("reach supabase: %w", err)
+	}
+	defer resp.Body.Close()
+	detail, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+
+	switch {
+	case resp.StatusCode >= 200 && resp.StatusCode < 300:
+		return nil
+	case resp.StatusCode == http.StatusUnprocessableEntity &&
+		bytes.Contains(bytes.ToLower(detail), []byte("already")):
+		return nil
+	default:
+		return fmt.Errorf("supabase returned %s: %s", resp.Status, bytes.TrimSpace(detail))
+	}
+}

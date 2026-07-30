@@ -128,11 +128,14 @@ func newHarness(t *testing.T) *harness {
 	h.server = srv
 	h.handler = srv.Routes()
 
-	// The family everything is seeded into. 0003 creates it; the fixtures join it.
-	fam, err := s.FamilyBySlug(ctx, "home")
+	// The family everything is seeded into. The migrations leave a fresh database
+	// with no families at all -- the one they create to hold pre-existing data is
+	// removed when there is none -- so the harness makes its own.
+	famID, err := s.CreateFamily(ctx, "home", "Our family")
 	if err != nil {
-		t.Fatalf("the migration should have created a family: %v", err)
+		t.Fatalf("create the fixture family: %v", err)
 	}
+	fam := &store.Family{ID: famID, Slug: "home", DisplayName: "Our family"}
 	h.familyID = fam.ID
 	h.familySlug = fam.Slug
 	ctx = store.WithFamily(ctx, fam.ID)

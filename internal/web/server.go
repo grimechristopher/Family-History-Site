@@ -52,7 +52,7 @@ func New(cfg config.Config, s *store.Store, log *slog.Logger, assetVersion strin
 // all at once means every page can define "content" without colliding.
 func (s *Server) parseTemplates() error {
 	pages := []string{"home", "login", "denied", "callback", "cards",
-		"questions", "question", "stories", "subjects", "subject", "tree", "families"}
+		"questions", "question", "stories", "subjects", "subject", "tree", "families", "people"}
 	s.templates = make(map[string]*template.Template, len(pages))
 
 	for _, name := range pages {
@@ -152,6 +152,9 @@ type pageData struct {
 	// families
 	Families   []store.Family
 	FamilySlug string
+	Members2   []store.Member
+	TreePeople []store.TreePerson
+	Added      string
 
 	// tree and subject pages
 	Tree    []*treeNode
@@ -240,6 +243,7 @@ func (s *Server) Routes() http.Handler {
 	if s.Config.DevLogin {
 		s.Log.Warn("DEV_LOGIN is on: /dev/login/{name} will sign in as any contributor without a link")
 		mux.Handle("GET /dev/login/{name}", http.HandlerFunc(s.handleDevLogin))
+		mux.Handle("GET /dev/login/{family}/{name}", http.HandlerFunc(s.handleDevLogin))
 	}
 
 	require := s.Sessions.Require
@@ -274,6 +278,9 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("GET /f/{family}/subjects/{slug}", family(s.handleSubject))
 	mux.Handle("POST /f/{family}/subjects/{slug}/focus", family(s.handleFocusSubject))
 	mux.Handle("POST /f/{family}/subjects/{slug}/questions", family(s.handleAskQuestion))
+
+	mux.Handle("GET /f/{family}/people", family(s.handlePeople))
+	mux.Handle("POST /f/{family}/people", family(s.handleAddPerson))
 
 	return s.securityHeaders(mux)
 }

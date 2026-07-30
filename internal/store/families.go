@@ -124,3 +124,91 @@ func AddMemberTx(ctx context.Context, db DBTX, familyID, userID int64, role stri
 	}
 	return nil
 }
+
+// Member is somebody in a family, as the people page shows them.
+type Member struct {
+	UserID      int64
+	DisplayName string
+	Email       string
+	Role        string
+	PersonName  string // who they are on the tree, empty when not linked
+}
+
+// Members lists everybody in this family, in the order they joined, so the page
+// reads as a history of who was added rather than an alphabetical roster.
+func (s *Store) Members(ctx context.Context) ([]Member, error) {
+	rows, err := s.q(ctx).Query(ctx, `
+		SELECT u.id, u.display_name, u.email, m.role,
+		       coalesce(trim(p.given_name || ' ' || p.surname), '')
+		  FROM core.family_members m
+		  JOIN core.users u ON u.id = m.user_id
+		  LEFT JOIN family.people p ON p.id = m.person_id AND p.family_id = m.family_id
+		 WHERE m.family_id = $1
+		 ORDER BY m.created_at`, FamilyFrom(ctx))
+	if err != nil {
+		return nil, fmt.Errorf("members: %w", err)
+	}
+	defer rows.Close()
+
+	var out []Member
+	for rows.Next() {
+		var m Member
+		if err := rows.Scan(&m.UserID, &m.DisplayName, &m.Email, &m.Role, &m.PersonName); err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+// UnclaimedTreePeople are the people in this family's tree who are not already
+// somebody's account, for the picker when adding a member. Offering a person who
+// is already claimed would let two accounts be the same person.
+func (s *Store) UnclaimedTreePeople(ctx context.Context) ([]TreePerson, error) {
+	rows, err := s.q(ctx).Query(ctx, `
+		SELECT p.id, p.given_name, p.surname, p.birth_year
+		  FROM family.people p
+		 WHERE NOT EXISTS (
+		       SELECT 1 FROM core.family_members m
+		        WHERE m.family_id = p.family_id AND m.person_id = p.id)
+		 ORDER BY p.surname, p.given_name`)
+	if err != nil {
+		return nil, fmt.Errorf("unclaimed tree people: %w", err)
+	}
+	defer rows.Close()
+
+	var out []TreePerson
+	for rows.Next() {
+		var p TreePerson
+		if err := rows.Scan(&p.ID, &p.Given, &p.Surname, &p.BirthYear); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// SetMemberPerson records which person in the tree a member is.
+//
+// A method rather than the package-level LinkUserToPerson because it has to run on
+// the request's transaction: the membership it updates may have been inserted
+// moments earlier in that same transaction, and a second connection cannot see it
+// yet. Handing this the pool instead updates nothing and reports success.
+func (s *Store) SetMemberPerson(ctx context.Context, userID int64, personID *int64) error {
+	tag, err := s.q(ctx).Exec(ctx, `
+		UPDATE core.family_members SET person_id = $3
+		 WHERE family_id = $1 AND user_id = $2`, FamilyFrom(ctx), userID, personID)
+	if err != nil {
+		return fmt.Errorf("link user %d to person: %w", userID, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("link user %d to person: they are not a member of family %d",
+			userID, FamilyFrom(ctx))
+	}
+	return nil
+}
+
+// UpsertUserIn creates or updates an identity on the request's transaction.
+func (s *Store) UpsertUserIn(ctx context.Context, email, displayName string) (int64, error) {
+	return UpsertUser(ctx, s.q(ctx), email, displayName)
+}
