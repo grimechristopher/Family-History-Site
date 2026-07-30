@@ -123,8 +123,8 @@ func (s *Server) handleSetMode(w http.ResponseWriter, r *http.Request) {
 	// Keep whatever subject was already in focus unless a new one is named, so
 	// switching to shuffle and back does not lose the choice.
 	focus := u.QueueFocusSubjectID
-	if slug := r.FormValue("subject"); slug != "" {
-		sub, err := s.Store.SubjectBySlug(r.Context(), slug, r.FormValue("family"))
+	if raw := r.FormValue("subject"); raw != "" {
+		sub, err := s.subjectFromForm(r, raw)
 		if errors.Is(err, store.ErrNotFound) {
 			http.Error(w, "unknown subject", http.StatusBadRequest)
 			return

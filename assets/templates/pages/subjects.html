@@ -5,8 +5,9 @@
 <ul class="slist">
   {{range .SubjectProgress}}
     <li class="srow">
-      <a class="srow-name" href="/subjects/{{.Slug}}">{{.DisplayName}}</a>
+      <a class="srow-name" href="/subjects/{{.Slug}}?family={{.FamilySlug}}">{{.DisplayName}}</a>
       <p class="srow-meta">
+        {{if gt (len $.Families) 1}}{{.FamilyName}} &middot; {{end}}
         {{if .Total}}
           {{.Answered}} of {{.Total}} answered
         {{else}}

@@ -164,6 +164,13 @@
       'aria-label': 'Show ' + who + ' ' + (count === 1 ? 'child' : count + ' children') +
         ' and grandchildren'
     });
+    // An invisible target around the visible badge. The badge is 24px across, and
+    // this site is sized for thumbs -- everything else on it is at least 52 --
+    // so a 24px tap target is one nobody here can hit reliably. The disc stays
+    // small because a 52px circle in the corner of a box would swallow the name.
+    g.appendChild(el('circle', {
+      cx: cx, cy: cy, r: 26, fill: 'transparent', class: 'pnode-open-hit'
+    }));
     g.appendChild(el('circle', { cx: cx, cy: cy, r: 12, class: 'pnode-open-disc' }));
     var mark = el('text', { x: cx, y: cy + 5, class: 'pnode-open-mark' });
     mark.setAttribute('text-anchor', 'middle');

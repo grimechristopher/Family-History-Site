@@ -62,7 +62,7 @@ func TestRunAppliesMigrationsAndIsIdempotent(t *testing.T) {
 	for schema, tables := range map[string][]string{
 		"family": {"people", "subjects", "subject_members", "questions",
 			"question_deferrals", "entries", "replies", "attachments"},
-		"core": {"users", "sessions", "families", "family_members", "invites"},
+		"core": {"users", "sessions", "families", "family_members"},
 	} {
 		for _, table := range tables {
 			var exists bool
@@ -169,7 +169,7 @@ func TestCoreSchemaHoldsIdentity(t *testing.T) {
 		t.Fatalf("migrate: %v", err)
 	}
 
-	for _, table := range []string{"users", "sessions", "families", "family_members", "invites"} {
+	for _, table := range []string{"users", "sessions", "families", "family_members"} {
 		var exists bool
 		err := pool.QueryRow(ctx, `
 			SELECT EXISTS (SELECT 1 FROM information_schema.tables

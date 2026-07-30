@@ -383,3 +383,16 @@ func (s *Server) securityHeaders(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
+
+// subjectFromForm resolves the subject a picker named. Numeric means an id, which
+// is unambiguous; anything else is a slug from an older link or a hand-typed URL,
+// which can only be resolved within a named line.
+//
+// Both go through row-level security, so neither can reach a family the person
+// making the request is not in.
+func (s *Server) subjectFromForm(r *http.Request, raw string) (*store.Subject, error) {
+	if id, err := strconv.ParseInt(raw, 10, 64); err == nil {
+		return s.Store.SubjectByID(r.Context(), id)
+	}
+	return s.Store.SubjectBySlug(r.Context(), raw, r.FormValue("family"))
+}

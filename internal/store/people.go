@@ -232,3 +232,25 @@ func PrunePeopleNotIn(ctx context.Context, db DBTX, gedcomIDs []string) (int64, 
 	}
 	return tag.RowsAffected(), nil
 }
+
+// SubjectByID is the unambiguous lookup. A slug is unique inside a line and not
+// across them, so anywhere the interface can carry an id it should: a <select>
+// of people offering "further-back" cannot say which of four it means, and an id
+// can.
+//
+// Row-level security still decides what is visible, so an id from another family
+// finds nothing.
+func (s *Store) SubjectByID(ctx context.Context, id int64) (*Subject, error) {
+	var sub Subject
+	err := s.q(ctx).QueryRow(ctx,
+		`SELECT id, slug, kind, display_name, sort_order
+		   FROM family.subjects WHERE id = $1`, id).
+		Scan(&sub.ID, &sub.Slug, &sub.Kind, &sub.DisplayName, &sub.SortOrder)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &sub, nil
+}

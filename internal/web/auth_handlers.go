@@ -3,6 +3,7 @@ package web
 import (
 	"errors"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -53,7 +54,10 @@ func (s *Server) handleDevLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.Log.Warn("dev login used", "as", u.DisplayName, "family", slug, "user", u.ID)
-	http.Redirect(w, r, "/f/"+slug+"/", http.StatusSeeOther)
+	// The questions for that line. It used to be /f/{slug}/, which stopped
+	// existing when the pages moved back to plain addresses -- so every one of
+	// these links signed you in correctly and then landed on a 404.
+	http.Redirect(w, r, "/questions?family="+url.QueryEscape(slug), http.StatusSeeOther)
 }
 
 func (s *Server) handleLoginForm(w http.ResponseWriter, r *http.Request) {

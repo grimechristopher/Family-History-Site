@@ -39,16 +39,17 @@ testdb-start: ## Start the throwaway Postgres
 testdb-stop: ## Remove the throwaway Postgres
 	@./scripts/testdb.sh stop
 
-import-dry: ## Parse and match without writing anything
-	go run ./cmd/import -dry-run \
-	  -gedcom "$(GEDCOM)" -prompts "$(PROMPTS)" \
-	  -dad-email "$(DAD_EMAIL)" -mom-email "$(MOM_EMAIL)" -admin-email "$(ADMIN_EMAIL)"
+import-dry: ## Parse and match one line without writing anything
+	eval "$$(./scripts/testdb.sh start)" && set -a && . ./.env && set +a && \
+	  DATABASE_URL="$$DEV_ADMIN_DATABASE_URL" DRY_RUN=1 ./scripts/import.sh $(FAMILY)
 
-import: ## Seed the development database (FAMILY=slug)
-	eval "$$(./scripts/testdb.sh start)" && DATABASE_URL="$$DEV_ADMIN_DATABASE_URL" go run ./cmd/import \
-	  -family "$(FAMILY)" \
-	  -gedcom "$(GEDCOM)" -prompts "$(PROMPTS)" \
-	  -dad-email "$(DAD_EMAIL)" -mom-email "$(MOM_EMAIL)" -admin-email "$(ADMIN_EMAIL)"
+# The arguments live in lines.conf, not here: they are real names and addresses,
+# and this file is public. See lines.example.conf.
+# make import          -- every line
+# make import FAMILY=grime
+import: ## Seed the development database from lines.conf (FAMILY=slug for one)
+	eval "$$(./scripts/testdb.sh start)" && set -a && . ./.env && set +a && \
+	  DATABASE_URL="$$DEV_ADMIN_DATABASE_URL" ./scripts/import.sh $(FAMILY)
 
 # Both places have to agree: this site's allowlist and Supabase's own auth.users.
 # make set-email NAME=Dad EMAIL=dad@theirdomain.com

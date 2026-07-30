@@ -11,7 +11,7 @@
     <label for="story-subject">Is it about someone in particular? (optional)</label>
     <select id="story-subject" name="subject">
       <option value="">Nobody in particular</option>
-      {{range .Subjects}}<option value="{{.Slug}}">{{.DisplayName}}</option>{{end}}
+      {{range .Subjects}}<option value="{{.ID}}">{{.DisplayName}}</option>{{end}}
     </select>
 
     <label for="story-body">The story</label>

@@ -1,0 +1,11 @@
+-- core.invites was built for a design that did not survive contact with the
+-- family: an invitation somebody had to accept before they could be in.
+--
+-- What replaced it is simpler and is what people actually do. Any member adds an
+-- address, which creates the Supabase account, and then somebody says "go to the
+-- site and log in". Being in the family is the authorisation; there was never a
+-- second step for an invitation to guard.
+--
+-- The table has never held a row. Dropping it so the schema stops describing a
+-- flow the code does not have.
+DROP TABLE IF EXISTS core.invites;

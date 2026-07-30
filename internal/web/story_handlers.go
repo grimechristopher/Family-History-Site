@@ -79,8 +79,8 @@ func (s *Server) handleCreateStory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var subjectID *int64
-	if slug := r.FormValue("subject"); slug != "" {
-		sub, err := s.Store.SubjectBySlug(r.Context(), slug, r.FormValue("family"))
+	if raw := r.FormValue("subject"); raw != "" {
+		sub, err := s.subjectFromForm(r, raw)
 		if errors.Is(err, store.ErrNotFound) {
 			http.Error(w, "unknown subject", http.StatusBadRequest)
 			return

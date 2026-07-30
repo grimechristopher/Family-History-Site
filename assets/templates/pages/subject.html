@@ -93,7 +93,7 @@
 <details class="new-story">
   <summary>Write a story</summary>
   <form method="post" action="/stories">
-    <input type="hidden" name="subject" value="{{.Subject.Slug}}">
+    <input type="hidden" name="subject" value="{{.Subject.ID}}">
     <input type="hidden" name="return_to" value="/subjects/{{.Subject.Slug}}">
 
     <label for="title">What would you call it?</label>

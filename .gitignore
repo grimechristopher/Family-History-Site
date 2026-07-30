@@ -14,6 +14,12 @@ static/css/tailwind.css
 !internal/gedcom/testdata/*.ged
 *.dump
 
+# Which lines to import, and who is asked what. Real names, addresses and
+# family records. The example config is committed; the real one never is.
+/lines.conf
+/prompts/
+/gedcom/
+
 # Notes about the family. The spec and the plan quote real questions and name
 # real people, and none of that belongs in a code repository -- the answers live
 # in Postgres and the family's details should stay with them. Kept on disk,

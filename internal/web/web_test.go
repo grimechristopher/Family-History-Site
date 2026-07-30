@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"mime/multipart"
@@ -1505,7 +1506,15 @@ func TestStoriesLiveOnThePersonsPage(t *testing.T) {
 	if !strings.Contains(page, "Add a story about") {
 		t.Error("expected a way to add a story from the person's page")
 	}
-	if !strings.Contains(page, `name="subject" value="peter-samuel-hale"`) {
+	// By id, not slug: a slug is unique inside a line and not across them, so a
+	// form carrying "further-back" could not say which of four it meant. The
+	// handler still accepts a slug, which is what the POST below sends, so old
+	// links and hand-typed addresses keep working.
+	sub, err := h.store.SubjectBySlug(context.Background(), "peter-samuel-hale", "")
+	if err != nil {
+		t.Fatalf("SubjectBySlug: %v", err)
+	}
+	if !strings.Contains(page, fmt.Sprintf(`name="subject" value="%d"`, sub.ID)) {
 		t.Error("the story form should already be about this person")
 	}
 

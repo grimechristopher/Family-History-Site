@@ -36,8 +36,10 @@
             <input type="hidden" name="mode" value="one_subject">
             <label class="visually-hidden" for="who">Whose questions</label>
             <select id="who" name="subject" aria-labelledby="pick-who">
+              {{/* The id, not the slug: every line has a subject called
+                   "further-back", and a slug in a select cannot say which. */}}
               {{range .Subjects}}
-                <option value="{{.Slug}}" {{if eq .Slug $.FocusSlug}}selected{{end}}>{{.DisplayName}}</option>
+                <option value="{{.ID}}" {{if eq .Slug $.FocusSlug}}selected{{end}}>{{.DisplayName}}</option>
               {{end}}
             </select>
             <div class="btn-row"><button class="btn btn-quiet" type="submit">Show these</button></div>

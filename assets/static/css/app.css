@@ -1234,6 +1234,10 @@ a.pnode-hit:focus-visible .pnode-box { stroke: var(--teal); stroke-width: 3; }
 
 .pnode-open { cursor: pointer; }
 
+/* The reachable target, twice the size of the mark it surrounds. Invisible, but
+   it is what a thumb actually lands on. */
+.pnode-open-hit { fill: transparent; }
+
 .pnode-open-disc {
   fill: var(--sheet);
   stroke: var(--rule-firm);
