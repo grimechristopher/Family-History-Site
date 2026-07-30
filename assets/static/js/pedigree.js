@@ -213,7 +213,8 @@
       Array.prototype.forEach.call(picker.children, function (b, i) {
         b.setAttribute('aria-pressed', String(i === index));
       });
-      try { localStorage.setItem('fhs-tree-line', String(index)); } catch (e) {}
+      // Stored by name rather than position, so it survives a line being added.
+      try { localStorage.setItem('fhs-tree-line', figures[index].label); } catch (e) {}
     }
 
     figures.forEach(function (f, i) {
@@ -225,9 +226,24 @@
       picker.appendChild(button);
     });
 
-    var saved = 0;
-    try { saved = parseInt(localStorage.getItem('fhs-tree-line'), 10) || 0; } catch (e) {}
-    show(saved < figures.length ? saved : 0);
+    function indexOfLabel(label) {
+      if (!label) return -1;
+      for (var i = 0; i < figures.length; i++) {
+        if (figures[i].label === label) return i;
+      }
+      return -1;
+    }
+
+    var saved = null;
+    try { saved = localStorage.getItem('fhs-tree-line'); } catch (e) {}
+
+    // Your own line first: signed in as Mom, her family is the one you came to
+    // look at. A previous explicit choice still wins over that.
+    var viewer = mount.dataset.viewer;
+    var start = indexOfLabel(saved);
+    if (start < 0) start = indexOfLabel(viewer);
+    if (start < 0) start = 0;
+    show(start);
   }
 
   fetch('/tree.json', { credentials: 'same-origin' })
