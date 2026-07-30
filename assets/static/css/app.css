@@ -1258,35 +1258,39 @@ a.pnode-hit:focus-visible .pnode-box { stroke: var(--teal); stroke-width: 3; }
 
 /* ---------- The note on the home page -------------------------------- */
 
-/* Set as a letter rather than as instructions: no headings, one voice, signed at
-   the end. The italic is Atkinson's own -- the only real italic face here, and the
-   reason not to set this in Newsreader, which would have to be slanted by the
-   browser. Italics cost some legibility, so this is a step larger than body text
-   with the line-height opened up to pay it back. */
+/* No headings: the two paragraphs explain themselves, and the blocks below are
+   found by their opening words rather than by a label over them. */
 
-.note {
-  margin-top: var(--s7);
-  background: var(--sheet-warm);
-  border-left: 3px solid var(--apricot);
-}
+.note { margin-top: var(--s7); background: var(--sheet-warm); }
 
-.note p {
-  font-style: italic;
-  font-size: var(--t-lead);
-  line-height: 1.75;
-  color: var(--ink-mid);
+.note p { max-width: var(--measure); text-wrap: pretty; }
+
+.note-list {
+  list-style: none;
+  margin: var(--s5) 0 0;
+  padding: 0;
+  display: grid;
+  gap: var(--s3);
   max-width: var(--measure);
-  text-wrap: pretty;
 }
 
-.note p:last-child { margin-bottom: 0; }
+/* Blocks rather than bordered lines: on a warm sheet the wash is what separates
+   them from the paragraphs above, and the rule marks where each one starts. */
+.note-list li {
+  padding: var(--s4);
+  border-left: 3px solid var(--apricot);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  background: var(--apricot-wash);
+  line-height: 1.65;
+}
 
-/* Upright and darker, so the signature reads as a hand rather than more of the
-   same sentence. */
-.note p.note-sign {
-  font-style: normal;
+/* The opening words are the whole point of the block, so they get the serif and
+   their own line rather than running on in bold. */
+.note-list strong {
+  display: block;
   font-family: var(--wordmark);
   font-size: var(--t-h3);
+  font-weight: 600;
   color: var(--ink);
-  margin-top: var(--s5);
+  margin-bottom: var(--s1);
 }
