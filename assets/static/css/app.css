@@ -236,6 +236,7 @@ body {
   /* At 26px the wordmark was 164px against the 147px left over beside the tools,
      so the tools wrapped and the bar cost three rows on a phone instead of two. */
   .bar-title { font-size: 1.375rem; }
+
 }
 
 /* ---------- Type ---------------------------------------------------- */
@@ -1261,6 +1262,9 @@ a.pnode-hit:focus-visible .pnode-box { stroke: var(--teal); stroke-width: 3; }
 
 .segment:hover { color: var(--ink); background: var(--sheet); }
 
+/* Two labels, one rendered: the phone block swaps them. */
+.seg-short { display: none; }
+
 .segment[aria-pressed="true"] {
   background: var(--teal);
   color: var(--on-teal);
@@ -1359,4 +1363,49 @@ a.pnode-hit:focus-visible .pnode-box { stroke: var(--teal); stroke-width: 3; }
   font-weight: 600;
   color: var(--ink);
   margin-bottom: var(--s1);
+}
+
+/* ---------- Phone -----------------------------------------------------
+   Last in the file on purpose. These override .segment and .side-toggle-btn,
+   which are defined further up; a media query adds no specificity, so an
+   earlier block would simply have lost to them.
+   ------------------------------------------------------------------- */
+
+@media (max-width: 30rem) {
+  /* The toggle wanted all 366px of a phone, so it and the filter menu each took a
+     row of a sticky bar. Shortening the label is what buys the row back: at this
+     width "Still waiting" is 176px a side and no amount of padding closes the gap,
+     whereas "Waiting" fits without making the type any smaller. */
+  .seg-long  { display: none; }
+  .seg-short { display: inline; }
+  .segment { padding: var(--s2) var(--s3); }
+
+  /* 38px and 24px are sized for a desktop column; on a 390px screen the heading
+     and its line under it were 160px of the 440px that sat above the tree. */
+  h1 { font-size: 1.875rem; }
+  .lede { font-size: var(--t-body); }
+
+  /* A phone cannot show a pedigree whole, so it gets a predictable slab of one that
+     pans in both directions, rather than a 777px column of mostly empty canvas.
+     The script opens it on the person the chart is about. */
+  .pedigree-scroll { max-height: 60vh; }
+
+  /* Undoes the width: 100% set at 26rem, which made sense while the toggle had the
+     row to itself and is what kept it 366px wide no matter how short the label got.
+     It is content-sized now so the filter button fits beside it. */
+  .segmented { width: auto; }
+
+  /* Icon alone. The word stays in the accessibility tree rather than being
+     deleted, so the button keeps its name. */
+  /* Square, and still a thumb's worth: without the word it came out 48px wide. */
+  .side-toggle-btn {
+    gap: 0;
+    padding-left: var(--s3); padding-right: var(--s3);
+    min-width: var(--tap); justify-content: center;
+  }
+  .side-toggle-label {
+    position: absolute; width: 1px; height: 1px;
+    padding: 0; margin: -1px; overflow: hidden;
+    clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
 }

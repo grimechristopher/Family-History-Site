@@ -192,10 +192,28 @@
       scroller.appendChild(svg);
       figure.appendChild(scroller);
       mount.appendChild(figure);
-      figures.push({ figure: figure, label: rootData.label || rootData.name });
+      figures.push({
+        figure: figure,
+        scroller: scroller,
+        // Where the person the chart is about sits, so the view can open on them.
+        rootY: root.py + shiftY,
+        label: rootData.label || rootData.name
+      });
     });
 
     buildPicker(figures);
+    if (figures.length) focusRoot(figures.find(function (f) { return !f.figure.hidden; }) || figures[0]);
+  }
+
+  // Opens the chart on the person it is about. The pedigree fans out to the right
+  // with the root halfway down, so a phone-sized window onto it starts on empty
+  // canvas: 366px of a 1176px chart, with the root 364px below the top edge.
+  // Computed from the layout rather than measured, because a hidden figure has no
+  // box to measure.
+  function focusRoot(f) {
+    if (!f || !f.scroller) return;
+    f.scroller.scrollLeft = 0;
+    f.scroller.scrollTop = Math.max(0, f.rootY - f.scroller.clientHeight / 2);
   }
 
   // One button per line. Pointless with a single line, so it is only built when
@@ -210,6 +228,8 @@
       figures.forEach(function (f, i) {
         f.figure.hidden = i !== index;
       });
+      // After unhiding, so clientHeight is real.
+      focusRoot(figures[index]);
       Array.prototype.forEach.call(picker.children, function (b, i) {
         b.setAttribute('aria-pressed', String(i === index));
       });

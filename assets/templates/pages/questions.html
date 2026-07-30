@@ -15,7 +15,8 @@
       <p class="segmented" role="group" aria-label="Which questions to show">
         <a class="segment" aria-pressed="{{eq .Show "waiting"}}"
            href="/questions?show=waiting{{if .FilterAskedOf}}&asked_of={{.FilterAskedOf}}{{end}}{{if .FilterSubject}}&subject={{.FilterSubject}}{{end}}">
-          Still waiting <span class="segment-count">{{.Counts.Unanswered}}</span>
+          <span class="seg-long">Still waiting</span><span class="seg-short">Waiting</span>
+          <span class="segment-count">{{.Counts.Unanswered}}</span>
         </a>
         <a class="segment" aria-pressed="{{eq .Show "answered"}}"
            href="/questions?show=answered{{if .FilterAskedOf}}&asked_of={{.FilterAskedOf}}{{end}}{{if .FilterSubject}}&subject={{.FilterSubject}}{{end}}">
@@ -30,7 +31,7 @@
     <details class="side-toggle" open>
       <summary class="side-toggle-btn">
         <span class="burger" aria-hidden="true"></span>
-        <span>Filters</span>
+        <span class="side-toggle-label">Filters</span>
       </summary>
       <aside class="side" aria-label="Filters">
         <details class="side-group" open>
