@@ -34,7 +34,12 @@
       {{/* Folded away, because this list is read far more often than it is
            edited, and a row of buttons against every name turns a page you skim
            into a page you have to be careful on. */}}
-      {{if ne .UserID $.User.ID}}
+      {{/* A family runs itself: anybody in a line may sort out who is in it. The
+           one person they cannot reach is an admin, or whoever was added last
+           could remove the person who runs the line, or point their sign-in link
+           at their own inbox. The handlers check it again: hiding a button is a
+           courtesy, not a permission. */}}
+      {{if and (ne .UserID $.User.ID) (or $.ViewerRunsLine (ne .Role "admin"))}}
         <details class="member-edit">
           <summary>Change this</summary>
           <div class="member-edit-body">
@@ -47,6 +52,28 @@
                      spellcheck="false" value="{{.Email}}">
               <div class="btn-row">
                 <button class="btn btn-quiet" type="submit">Save the address</button>
+              </div>
+            </form>
+
+            {{/* Who they are on the tree. Somebody added before this existed, or
+                 added against the wrong person, had no way to correct it. */}}
+            <form method="post" action="/people/person">
+              <input type="hidden" name="family" value="{{$.ShownFamily}}">
+              <input type="hidden" name="user_id" value="{{.UserID}}">
+              <label for="person-{{.UserID}}">Who are they on the tree?</label>
+              <select id="person-{{.UserID}}" name="person_id">
+                <option value="">Not on the tree</option>
+                {{if .PersonID}}
+                  <option value="{{.PersonID}}" selected>{{.PersonName}}</option>
+                {{end}}
+                {{range $.TreePeople}}
+                  <option value="{{.ID}}">
+                    {{.Given}} {{.Surname}}{{if .BirthYear}} (b. {{.BirthYear}}){{end}}
+                  </option>
+                {{end}}
+              </select>
+              <div class="btn-row">
+                <button class="btn btn-quiet" type="submit">Save who they are</button>
               </div>
             </form>
 
@@ -89,25 +116,37 @@
        submitted at all once somebody was in more than one family. */}}
   <form method="post" action="/people">
     <input type="hidden" name="family" value="{{.ShownFamily}}">
-    <label for="display_name">Their name</label>
-    <input id="display_name" name="display_name" type="text" required
-           autocomplete="off" placeholder="Aunt Jane">
+    {{/* Who they are on the tree comes first, because it answers the next
+         question too. Somebody already in the tree has a name recorded there and
+         should not be asked to type it again -- and typing it again is how you
+         end up with "Carolyn" on the tree and "Aunt Carolyn" on her answers. */}}
+    <label for="person_id">Who are they on the tree?</label>
+    <select id="person_id" name="person_id" data-names-field="display_name">
+      <option value="">Not on the tree</option>
+      {{range .TreePeople}}
+        <option value="{{.ID}}" data-name="{{.ShortName}}">
+          {{.Given}} {{.Surname}}{{if .BirthYear}} (b. {{.BirthYear}}){{end}}
+        </option>
+      {{end}}
+    </select>
+
+    {{/* Only asked for when there is nobody on the tree to take it from. The
+         field stays in the form with no JavaScript, where it is optional and the
+         server fills it in from the chosen person -- hidden, not removed, so the
+         page still works if the script never runs. */}}
+    <div id="name-field" data-hide-when-picked>
+      <label for="display_name">Their name</label>
+      <p class="hint" id="name-hint">
+        What appears next to their answers, so it is the name the family calls them.
+      </p>
+      <input id="display_name" name="display_name" type="text"
+             autocomplete="off" placeholder="Aunt Jane" aria-describedby="name-hint">
+    </div>
 
     <label for="email">Their email address</label>
     <input id="email" name="email" type="email" required autocomplete="off"
            inputmode="email" autocapitalize="off" spellcheck="false"
            value="{{.Email}}" placeholder="jane@example.com">
-
-    {{/* Linking them to the tree is what lets the site know whose questions are
-         whose, and later how everyone is related. Optional, because somebody can
-         be in the family without being in the tree. */}}
-    <label for="person_id">Who are they on the tree?</label>
-    <select id="person_id" name="person_id">
-      <option value="">Not on the tree</option>
-      {{range .TreePeople}}
-        <option value="{{.ID}}">{{.Given}} {{.Surname}}{{if .BirthYear}} (b. {{.BirthYear}}){{end}}</option>
-      {{end}}
-    </select>
 
     <div class="btn-row">
       <button class="btn" type="submit">Add them</button>

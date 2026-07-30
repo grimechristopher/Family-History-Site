@@ -197,6 +197,9 @@ type pageData struct {
 	FilterSubjectName string
 	// ShownFamilyName is the line the people page is showing, named for a heading.
 	ShownFamilyName string
+	// ViewerRunsLine is whether they are an admin of the line being shown, which
+	// is what removing somebody and changing an address require.
+	ViewerRunsLine bool
 	// OwnFooter is set by a page that places the footer itself, inside whatever
 	// part of it actually scrolls.
 	OwnFooter bool
@@ -366,6 +369,7 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("POST /people", inFamilies(s.handleAddPerson))
 	mux.Handle("POST /people/remove", inFamilies(s.handleRemovePerson))
 	mux.Handle("POST /people/email", inFamilies(s.handleChangeEmail))
+	mux.Handle("POST /people/person", inFamilies(s.handleSetPerson))
 
 	return s.securityHeaders(mux)
 }

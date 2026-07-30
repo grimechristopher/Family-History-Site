@@ -114,10 +114,13 @@ func (s *Store) AddMember(ctx context.Context, familyID, userID int64, role stri
 // family: the same person is an admin in theirs and a contributor in somebody
 // else's.
 func AddMemberTx(ctx context.Context, db DBTX, familyID, userID int64, role string) error {
+	// removed_at is cleared, so adding somebody back is bringing them back rather
+	// than leaving a membership that exists and does not work.
 	_, err := db.Exec(ctx, `
 		INSERT INTO core.family_members (family_id, user_id, role)
 		VALUES ($1, $2, $3)
-		ON CONFLICT (family_id, user_id) DO UPDATE SET role = EXCLUDED.role`,
+		ON CONFLICT (family_id, user_id) DO UPDATE
+		   SET role = EXCLUDED.role, removed_at = NULL`,
 		familyID, userID, role)
 	if err != nil {
 		return fmt.Errorf("add member %d to family %d: %w", userID, familyID, err)
@@ -131,18 +134,22 @@ type Member struct {
 	DisplayName string
 	Email       string
 	Role        string
-	PersonName  string // who they are on the tree, empty when not linked
+	PersonID    *int64 // who they are on the tree, nil when not linked
+	PersonName  string
 	// Written is how many answers and stories they have contributed to this line.
 	// Removing somebody who has written nothing is housekeeping; removing somebody
 	// who has written is a thing to say out loud first.
 	Written int
+	// Removed marks a membership that has ended. The row stays because everything
+	// they wrote hangs off it.
+	Removed bool
 }
 
 // Members lists everybody in this family, in the order they joined, so the page
 // reads as a history of who was added rather than an alphabetical roster.
 func (s *Store) Members(ctx context.Context, familyID int64) ([]Member, error) {
 	rows, err := s.q(ctx).Query(ctx, `
-		SELECT u.id, u.display_name, u.email, m.role,
+		SELECT u.id, u.display_name, u.email, m.role, m.person_id,
 		       coalesce(trim(p.given_name || ' ' || p.surname), ''),
 		       -- What they have written, which decides how removing them reads.
 		       (SELECT count(*) FROM family.entries e
@@ -160,8 +167,8 @@ func (s *Store) Members(ctx context.Context, familyID int64) ([]Member, error) {
 	var out []Member
 	for rows.Next() {
 		var m Member
-		if err := rows.Scan(&m.UserID, &m.DisplayName, &m.Email, &m.Role, &m.PersonName,
-			&m.Written); err != nil {
+		if err := rows.Scan(&m.UserID, &m.DisplayName, &m.Email, &m.Role, &m.PersonID,
+			&m.PersonName, &m.Written); err != nil {
 			return nil, err
 		}
 		out = append(out, m)
@@ -177,7 +184,7 @@ func (s *Store) Members(ctx context.Context, familyID int64) ([]Member, error) {
 // Grime line is a choice that could only ever be a mistake.
 func (s *Store) UnclaimedTreePeople(ctx context.Context, familyID int64) ([]TreePerson, error) {
 	rows, err := s.q(ctx).Query(ctx, `
-		SELECT p.id, p.given_name, p.surname, p.birth_year
+		SELECT p.id, p.given_name, p.surname, p.married_surname, p.birth_year
 		  FROM family.people p
 		 WHERE p.family_id = $1
 		   AND NOT EXISTS (
@@ -200,7 +207,7 @@ func (s *Store) UnclaimedTreePeople(ctx context.Context, familyID int64) ([]Tree
 	var out []TreePerson
 	for rows.Next() {
 		var p TreePerson
-		if err := rows.Scan(&p.ID, &p.Given, &p.Surname, &p.BirthYear); err != nil {
+		if err := rows.Scan(&p.ID, &p.Given, &p.Surname, &p.MarriedSurname, &p.BirthYear); err != nil {
 			return nil, err
 		}
 		out = append(out, p)
@@ -347,22 +354,22 @@ func (s *Store) HomeLine(ctx context.Context, userID int64) (string, error) {
 // no longer has any way into this one: membership is what every policy is written
 // against, so removing it removes the access.
 func (s *Store) RemoveMember(ctx context.Context, familyID, userID int64) error {
-	// Out of everybody's stack first. A question put to four people stays for the
-	// other three; one put only to this person is asked of nobody now, and is
-	// archived rather than left waiting forever.
+	// Out of their card stack. A question put to four people stays for the other
+	// three; one put only to this person is now asked of nobody, and stays exactly
+	// where it is.
+	//
+	// It used to be archived at that point, which was too strong by a long way.
+	// Removing the last person from a line archived all 107 of its questions at
+	// once -- recoverable, but indistinguishable from having destroyed the line.
+	// A question nobody is asked is still a question about somebody's grandmother;
+	// it waits until there is somebody to put it to. Archiving is for questions the
+	// prompts file no longer contains, which is a different thing entirely.
 	if _, err := s.q(ctx).Exec(ctx, `
 		DELETE FROM family.question_askees a
 		 USING family.questions q
 		 WHERE q.id = a.question_id AND q.family_id = $1 AND a.user_id = $2`,
 		familyID, userID); err != nil {
 		return fmt.Errorf("remove from stacks: %w", err)
-	}
-	if _, err := s.q(ctx).Exec(ctx, `
-		UPDATE family.questions q SET archived_at = now()
-		 WHERE q.family_id = $1 AND q.archived_at IS NULL
-		   AND NOT EXISTS (SELECT 1 FROM family.question_askees a
-		                    WHERE a.question_id = q.id)`, familyID); err != nil {
-		return fmt.Errorf("archive unasked questions: %w", err)
 	}
 
 	// The membership is ended rather than deleted. Every answer, reply and
@@ -406,7 +413,7 @@ func (s *Store) SetMemberEmail(ctx context.Context, userID int64, email string) 
 func (s *Store) Member(ctx context.Context, familyID, userID int64) (*Member, error) {
 	var m Member
 	err := s.q(ctx).QueryRow(ctx, `
-		SELECT u.id, u.display_name, u.email, m.role,
+		SELECT u.id, u.display_name, u.email, m.role, m.person_id,
 		       coalesce(trim(p.given_name || ' ' || p.surname), ''),
 		       (SELECT count(*) FROM family.entries e
 		         WHERE e.author_user_id = u.id AND e.family_id = m.family_id)
@@ -414,12 +421,42 @@ func (s *Store) Member(ctx context.Context, familyID, userID int64) (*Member, er
 		  JOIN core.users u ON u.id = m.user_id
 		  LEFT JOIN family.people p ON p.id = m.person_id AND p.family_id = m.family_id
 		 WHERE m.family_id = $1 AND m.user_id = $2 AND m.removed_at IS NULL`, familyID, userID).
-		Scan(&m.UserID, &m.DisplayName, &m.Email, &m.Role, &m.PersonName, &m.Written)
+		Scan(&m.UserID, &m.DisplayName, &m.Email, &m.Role, &m.PersonID, &m.PersonName, &m.Written)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("member: %w", err)
+	}
+	return &m, nil
+}
+
+// MemberByNameAnyState finds somebody in a family by the name they are shown
+// under, whether or not their membership has ended.
+//
+// Adding is keyed on an email address, so somebody added back under a new address
+// becomes a second account with the same name -- a second Robert Lucero standing
+// beside the first, with the questions still attached to the one who was there
+// before. This is how the add path notices and says so instead.
+func (s *Store) MemberByNameAnyState(ctx context.Context, familyID int64, name string) (*Member, error) {
+	var m Member
+	err := s.q(ctx).QueryRow(ctx, `
+		SELECT u.id, u.display_name, u.email, m.role, m.person_id,
+		       coalesce(trim(p.given_name || ' ' || p.surname), ''), 0,
+		       m.removed_at IS NOT NULL
+		  FROM core.family_members m
+		  JOIN core.users u ON u.id = m.user_id
+		  LEFT JOIN family.people p ON p.id = m.person_id AND p.family_id = m.family_id
+		 WHERE m.family_id = $1 AND lower(u.display_name) = lower($2)
+		 ORDER BY m.removed_at NULLS FIRST
+		 LIMIT 1`, familyID, name).
+		Scan(&m.UserID, &m.DisplayName, &m.Email, &m.Role, &m.PersonID, &m.PersonName,
+			&m.Written, &m.Removed)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("member by name: %w", err)
 	}
 	return &m, nil
 }

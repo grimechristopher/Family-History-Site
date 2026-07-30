@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strings"
 	"testing"
@@ -292,5 +293,129 @@ func TestChangingSomebodysAddress(t *testing.T) {
 	}
 	if len(items) == 0 {
 		t.Error("his questions were orphaned by the change of address")
+	}
+}
+
+// A family runs itself: anybody in a line may sort out who is in it, because
+// waiting on an admin to fix a mistyped address is the friction this is meant not
+// to have. The one person they cannot reach is an admin -- otherwise whoever was
+// added last could remove the person who runs the line, or point their sign-in
+// link at their own inbox and read everything as them.
+func TestAContributorManagesTheFamilyButNotItsAdmins(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	dad := h.signIn("dad@example.com")
+
+	chris, err := h.store.UserByEmail(ctx, "chris@example.com")
+	if err != nil {
+		t.Fatalf("UserByEmail: %v", err)
+	}
+	mom, err := h.store.UserByEmail(ctx, "mom@example.com")
+	if err != nil {
+		t.Fatalf("UserByEmail: %v", err)
+	}
+	fam, err := h.store.FamilyBySlug(ctx, "home")
+	if err != nil {
+		t.Fatalf("FamilyBySlug: %v", err)
+	}
+	famCtx := store.WithFamily(ctx, fam.ID)
+
+	// Dad is a contributor. Chris runs the line.
+	t.Run("cannot reach an admin", func(t *testing.T) {
+		for _, c := range []struct {
+			what string
+			path string
+			form url.Values
+		}{
+			{"removing the admin", "/people/remove", url.Values{
+				"family": {"home"}, "user_id": {fmt.Sprint(chris.ID)}}},
+			{"moving the admin's address", "/people/email", url.Values{
+				"family": {"home"}, "user_id": {fmt.Sprint(chris.ID)},
+				"email": {"attacker@example.com"}}},
+		} {
+			if rec := h.post(c.path, c.form, dad); rec.Code != http.StatusForbidden {
+				t.Errorf("%s as a contributor: status %d, want 403", c.what, rec.Code)
+			}
+		}
+		if _, err := h.store.Member(famCtx, fam.ID, chris.ID); err != nil {
+			t.Errorf("a contributor removed the admin: %v", err)
+		}
+		if again, err := h.store.UserByEmail(ctx, "chris@example.com"); err != nil || again.ID != chris.ID {
+			t.Error("a contributor moved the admin's sign-in address")
+		}
+	})
+
+	t.Run("but manages everybody else", func(t *testing.T) {
+		rec := h.post("/people/email", url.Values{
+			"family": {"home"}, "user_id": {fmt.Sprint(mom.ID)},
+			"email": {"mom@herrealdomain.com"}}, dad)
+		if rec.Code == http.StatusForbidden {
+			t.Fatalf("a contributor should be able to fix another member's address")
+		}
+		if _, err := h.store.UserByEmail(ctx, "mom@herrealdomain.com"); err != nil {
+			t.Errorf("the address did not move: %v", err)
+		}
+
+		if rec := h.post("/people/remove", url.Values{
+			"family": {"home"}, "user_id": {fmt.Sprint(mom.ID)}}, dad); rec.Code == http.StatusForbidden {
+			t.Error("a contributor should be able to remove another member")
+		}
+	})
+
+	// And the controls follow the same rule, so nobody is offered a button that
+	// will refuse them.
+	t.Run("the page offers what it allows", func(t *testing.T) {
+		body := h.get("/people", dad).Body.String()
+		if strings.Contains(body, fmt.Sprintf(`name="user_id" value="%d"`, chris.ID)) {
+			t.Error("a contributor is offered controls against the admin")
+		}
+	})
+}
+
+// Somebody already in the tree has their name recorded there, and being asked to
+// type it again is how you end up with two versions of it.
+func TestNameComesFromTheTree(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	chris := h.signIn("chris@example.com")
+
+	fam, err := h.store.FamilyBySlug(ctx, "home")
+	if err != nil {
+		t.Fatalf("FamilyBySlug: %v", err)
+	}
+	people, err := h.store.UnclaimedTreePeople(store.WithFamily(ctx, fam.ID), fam.ID)
+	if err != nil {
+		t.Fatalf("UnclaimedTreePeople: %v", err)
+	}
+	if len(people) == 0 {
+		t.Skip("no unclaimed living people in the fixture tree")
+	}
+	who := people[0]
+
+	// No name given at all.
+	rec := h.post("/people", url.Values{
+		"family":    {"home"},
+		"email":     {"fromtree@example.com"},
+		"person_id": {fmt.Sprint(who.ID)},
+	}, chris)
+	if rec.Code == 400 {
+		t.Fatalf("adding somebody from the tree without typing a name: %s", rec.Body.String())
+	}
+
+	added, err := h.store.UserByEmail(ctx, "fromtree@example.com")
+	if err != nil {
+		t.Fatalf("the person was not added: %v", err)
+	}
+	if added.DisplayName != who.ShortName() {
+		t.Errorf("named them %q, want %q from the tree", added.DisplayName, who.ShortName())
+	}
+
+	// With neither a name nor a person there is nothing to go on, and saying so is
+	// better than inventing one from the address.
+	rec = h.post("/people", url.Values{
+		"family": {"home"}, "email": {"nobody@example.com"},
+	}, chris)
+	if rec.Code != 400 {
+		t.Errorf("adding somebody with no name and no tree person: status %d, want 400", rec.Code)
 	}
 }

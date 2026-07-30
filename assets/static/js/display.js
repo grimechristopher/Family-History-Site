@@ -83,3 +83,40 @@
     start();
   }
 })();
+
+// Fill in the name from the tree, so it is visible and correctable before the
+// form is sent rather than appearing afterwards. The server derives it too: this
+// is the courtesy, not the rule.
+(function () {
+  'use strict';
+  var picker = document.querySelector('select[data-names-field]');
+  if (!picker) return;
+  var field = document.getElementById(picker.dataset.namesField);
+  if (!field) return;
+
+  // Asking for a name is only worth doing when there is nobody on the tree to
+  // take it from. Hidden rather than removed, so the form still carries the field
+  // and still works for somebody whose browser never ran this.
+  var wrapper = document.querySelector('[data-hide-when-picked]');
+  var syncWrapper = function () {
+    if (wrapper) wrapper.hidden = picker.value !== '';
+  };
+  syncWrapper();
+
+  picker.addEventListener('change', function () {
+    syncWrapper();
+    var chosen = picker.options[picker.selectedIndex];
+    var name = chosen && chosen.dataset ? chosen.dataset.name : '';
+    // Never over-write something typed by hand: somebody who has written "Aunt
+    // Jane" meant it, and the tree's version of her name is not an improvement.
+    if (name && (!field.value || field.dataset.fromTree === 'yes')) {
+      field.value = name;
+      field.dataset.fromTree = 'yes';
+    } else if (!name && field.dataset.fromTree === 'yes') {
+      field.value = '';
+      delete field.dataset.fromTree;
+    }
+  });
+
+  field.addEventListener('input', function () { delete field.dataset.fromTree; });
+})();

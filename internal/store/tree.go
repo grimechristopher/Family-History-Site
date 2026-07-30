@@ -240,3 +240,22 @@ func (s *Store) SubjectProgressBySlug(ctx context.Context, slug, familySlug stri
 	}
 	return &p, nil
 }
+
+// ShortName is the name somebody goes by, which is what belongs next to their
+// answers: "Lori Grime", not "Lori Ann (Ayres) Grime".
+//
+// The first of their given names and the surname they are known by now. That is
+// not a guess about the convention -- it is the one every account already set up
+// by hand follows, Lori Ann (Ayres) Grime signing in as Lori Grime and Violeta
+// Piedra Puente as Violeta Lucero.
+func (p TreePerson) ShortName() string {
+	given := p.Given
+	if i := strings.IndexByte(given, ' '); i > 0 {
+		given = given[:i]
+	}
+	surname := p.Surname
+	if p.MarriedSurname != nil && *p.MarriedSurname != "" {
+		surname = *p.MarriedSurname
+	}
+	return strings.TrimSpace(given + " " + surname)
+}

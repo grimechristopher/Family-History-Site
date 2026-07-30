@@ -57,14 +57,6 @@ func (s *Server) handleAddPerson(w http.ResponseWriter, r *http.Request) {
 		fail("That doesn't look like an email address.")
 		return
 	}
-	if name == "" {
-		// The name is what everyone sees against their answers, so it is not
-		// optional. Defaulting to the address would put a stranger's email on the
-		// page next to their memories.
-		fail("Give them a name — it's what shows up next to their answers.")
-		return
-	}
-
 	// Which person in the tree they are, so relationship labels and their own
 	// questions can find them. Optional: an in-law may be in the family without
 	// being in the tree.
@@ -76,6 +68,31 @@ func (s *Server) handleAddPerson(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		personID = &id
+	}
+
+	// Somebody already in the tree has a name recorded there, and being asked to
+	// type it again is both a chore and how you end up with two versions of it.
+	// Derived here rather than only in the browser, so the form works the same
+	// with no JavaScript and a hand-made request cannot slip an empty name past.
+	if name == "" && personID != nil {
+		people, err := s.Store.UnclaimedTreePeople(r.Context(), fam.ID)
+		if err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+		for _, p := range people {
+			if p.ID == *personID {
+				name = p.ShortName()
+				break
+			}
+		}
+	}
+	if name == "" {
+		// The name is what everyone sees against their answers, so it is not
+		// optional. Defaulting to the address would put a stranger's email on the
+		// page next to their memories.
+		fail("Give them a name, or pick who they are on the tree.")
+		return
 	}
 
 	userID, err := s.Store.UpsertUserIn(r.Context(), email, name)
@@ -91,6 +108,30 @@ func (s *Server) handleAddPerson(w http.ResponseWriter, r *http.Request) {
 	}
 	if existing != nil {
 		fail(name + " is already here.")
+		return
+	}
+
+	// Somebody of this name may already be here under a different address, which
+	// adding again would not notice: an account is keyed on its email, so the
+	// result is a second Robert Lucero standing beside the first with all the
+	// questions still attached to the one who was there before.
+	//
+	// Only when it really is a different account -- adding the same person back
+	// under the same address is a revival and goes through.
+	if twin, err := s.Store.MemberByNameAnyState(r.Context(), fam.ID, name); err == nil &&
+		twin.UserID != userID {
+		if twin.Removed {
+			fail(name + " was removed from this line and is still on record, under " +
+				twin.Email + ". Add them back with that address, or change it " +
+				"from their entry, so their questions and answers stay theirs.")
+		} else {
+			fail(name + " is already here, signing in with " + twin.Email + ". " +
+				"To move them to a different address use “Change this” on their entry, " +
+				"which keeps everything they have written.")
+		}
+		return
+	} else if err != nil && !errors.Is(err, store.ErrNotFound) {
+		s.serverError(w, r, err)
 		return
 	}
 
@@ -151,6 +192,10 @@ func (s *Server) peoplePageData(r *http.Request, title string) (pageData, error)
 	}
 	data.ShownFamily = shown.Slug
 	data.ShownFamilyName = shown.DisplayName
+	// Whether they run this line, which is not the same as being an admin of one
+	// of their own. The controls are hidden accordingly, and the handlers check it
+	// again -- hiding a button is a courtesy, not a permission.
+	data.ViewerRunsLine = s.adminOf(r, shown.ID)
 
 	members, err := s.Store.Members(r.Context(), shown.ID)
 	if err != nil {
@@ -170,6 +215,34 @@ func (s *Server) peoplePageData(r *http.Request, title string) (pageData, error)
 		data.Added = note
 	}
 	return data, nil
+}
+
+// adminOf reports whether the person making this request runs this particular
+// line. Read from their membership of it rather than from the role on the user,
+// which is true if they are an admin of any family they belong to -- being an
+// admin of your own parents' line is not authority over your in-laws'.
+func (s *Server) adminOf(r *http.Request, familyID int64) bool {
+	u := auth.User(r.Context())
+	m, err := s.Store.MembershipOf(r.Context(), familyID, u.ID)
+	if err != nil || m == nil {
+		return false
+	}
+	return m.Role == store.RoleAdmin
+}
+
+// mayManage reports whether the person making this request may remove somebody or
+// move the address they sign in with.
+//
+// A family runs itself: anybody in a line may sort out who is in it, because
+// waiting on an admin to fix a mistyped address is exactly the friction this is
+// meant not to have. The one thing they cannot do is reach an admin -- otherwise
+// whoever was added last could remove the person who runs the line, or point their
+// sign-in link at their own inbox and read everything as them.
+func (s *Server) mayManage(r *http.Request, familyID int64, target *store.Member) bool {
+	if target.Role != store.RoleAdmin {
+		return true
+	}
+	return s.adminOf(r, familyID)
 }
 
 // familyFromForm resolves the family a form names, and refuses one the person is
@@ -192,6 +265,7 @@ func (s *Server) handleRemovePerson(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Pick which family to remove them from.", http.StatusBadRequest)
 		return
 	}
+
 	userID, err := strconv.ParseInt(r.FormValue("user_id"), 10, 64)
 	if err != nil {
 		http.Error(w, "that wasn't somebody", http.StatusBadRequest)
@@ -212,6 +286,11 @@ func (s *Server) handleRemovePerson(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		s.serverError(w, r, err)
+		return
+	}
+
+	if !s.mayManage(r, fam.ID, member) {
+		http.Error(w, "Only an admin can remove an admin.", http.StatusForbidden)
 		return
 	}
 
@@ -240,6 +319,7 @@ func (s *Server) handleChangeEmail(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Pick which family they're in.", http.StatusBadRequest)
 		return
 	}
+
 	userID, err := strconv.ParseInt(r.FormValue("user_id"), 10, 64)
 	if err != nil {
 		http.Error(w, "that wasn't somebody", http.StatusBadRequest)
@@ -274,6 +354,13 @@ func (s *Server) handleChangeEmail(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
+	// Sign-in is a link sent to an address, so moving somebody's address is a way
+	// of receiving it. Nobody reaches an admin that way but another admin.
+	if !s.mayManage(r, fam.ID, member) {
+		http.Error(w, "Only an admin can change an admin's sign-in address.", http.StatusForbidden)
+		return
+	}
+
 	if member.Email == email {
 		http.Redirect(w, r, "/people?family="+url.QueryEscape(fam.Slug), http.StatusSeeOther)
 		return
@@ -294,6 +381,80 @@ func (s *Server) handleChangeEmail(w http.ResponseWriter, r *http.Request) {
 			"could not be set up. Tell Chris before asking them to log in."
 	}
 	s.Log.Info("changed sign-in address", "family", fam.Slug, "who", member.DisplayName,
+		"by", auth.User(r.Context()).DisplayName)
+	http.Redirect(w, r, "/people?family="+url.QueryEscape(fam.Slug)+
+		"&note="+url.QueryEscape(note), http.StatusSeeOther)
+}
+
+// handleSetPerson says which person on the tree somebody is.
+//
+// It is not decoration. Whose questions are whose, whether the chart marks a box
+// as you, and which line's chart opens first all follow from it -- and somebody
+// added before the link existed, or added under the wrong person, had no way to
+// fix it without a terminal.
+func (s *Server) handleSetPerson(w http.ResponseWriter, r *http.Request) {
+	fam, err := s.familyFromForm(r)
+	if err != nil {
+		http.Error(w, "Pick which family they're in.", http.StatusBadRequest)
+		return
+	}
+	userID, err := strconv.ParseInt(r.FormValue("user_id"), 10, 64)
+	if err != nil {
+		http.Error(w, "that wasn't somebody", http.StatusBadRequest)
+		return
+	}
+
+	member, err := s.Store.Member(r.Context(), fam.ID, userID)
+	if errors.Is(err, store.ErrNotFound) {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	if !s.mayManage(r, fam.ID, member) {
+		http.Error(w, "Only an admin can change an admin's entry.", http.StatusForbidden)
+		return
+	}
+
+	// Empty means nobody, which is a real answer: an in-law may be in the family
+	// without being anywhere in the tree.
+	var personID *int64
+	note := member.DisplayName + " is nobody on the tree now."
+	if raw := r.FormValue("person_id"); raw != "" {
+		id, parseErr := strconv.ParseInt(raw, 10, 64)
+		if parseErr != nil {
+			http.Error(w, "that wasn't a person on the tree", http.StatusBadRequest)
+			return
+		}
+		// Checked against the people this line may actually offer, so a hand-made
+		// request cannot attach somebody to a person in another family.
+		people, listErr := s.Store.UnclaimedTreePeople(r.Context(), fam.ID)
+		if listErr != nil {
+			s.serverError(w, r, listErr)
+			return
+		}
+		var ok bool
+		for _, p := range people {
+			if p.ID == id {
+				ok = true
+				note = member.DisplayName + " is " + p.ShortName() + " on the tree."
+				break
+			}
+		}
+		if !ok && (member.PersonID == nil || *member.PersonID != id) {
+			http.Error(w, "that person is already somebody else", http.StatusBadRequest)
+			return
+		}
+		personID = &id
+	}
+
+	if err := s.Store.SetMemberPerson(r.Context(), fam.ID, userID, personID); err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	s.Log.Info("linked to the tree", "family", fam.Slug, "who", member.DisplayName,
 		"by", auth.User(r.Context()).DisplayName)
 	http.Redirect(w, r, "/people?family="+url.QueryEscape(fam.Slug)+
 		"&note="+url.QueryEscape(note), http.StatusSeeOther)
