@@ -215,8 +215,15 @@ body {
 .page {
   max-width: var(--column);
   margin: 0 auto;
-  padding: clamp(var(--s5), 5vw, var(--s7)) clamp(var(--s4), 4vw, var(--s6));
-  padding-bottom: max(var(--s8), calc(env(safe-area-inset-bottom) + var(--s6)));
+  /* Tight gutters on a phone, generous on a desktop. The old floor of 1rem each
+     side still wasted space that the cards could use. */
+  padding: clamp(var(--s4), 4vw, var(--s7)) clamp(var(--s3), 3.5vw, var(--s6));
+  padding-bottom: max(var(--s7), calc(env(safe-area-inset-bottom) + var(--s5)));
+}
+
+@media (max-width: 30rem) {
+  .page { padding-left: var(--s3); padding-right: var(--s3); }
+  .panel, .card, .qrow, .answer { padding: var(--s4); }
 }
 
 /* ---------- Type ---------------------------------------------------- */
@@ -1036,11 +1043,6 @@ a.tperson:hover { border-color: var(--teal); background: var(--teal-wash); }
    inherits the theme rather than carrying its own palette.
    ------------------------------------------------------------------ */
 
-#pedigree-views[data-view="list"] .pedigree-chart,
-#pedigree-views[data-view="chart"] .pedigree-list { display: none; }
-
-.pedigree-switch { margin: 0 0 var(--s5); }
-
 .pedigree-figure { margin: 0 0 var(--s6); }
 
 .pedigree-caption {
@@ -1101,4 +1103,36 @@ a.pnode-hit:focus-visible .pnode-box { stroke: var(--teal); stroke-width: 3; }
   .page:has(.pedigree-chart) { max-width: 78rem; }
 }
 
-.pedigree-list { max-width: var(--column); }
+
+/* A great-grandparent couple is one box, because that is also how their
+   questions are asked and how the book's chapters are organised. */
+.pnode-couple .pnode-box { fill: var(--sheet-warm); stroke: var(--rule-firm); stroke-width: 1.5; }
+.pnode-couple.pnode-flat .pnode-box,
+.pnode-couple .pnode-flat .pnode-box { fill: var(--oat-deep); stroke-dasharray: 4 4; }
+.pnode-count { font-size: 12px; }
+
+/* ---------- Whose line ----------------------------------------------- */
+
+.line-picker { display: flex; gap: var(--s2); flex-wrap: wrap; margin: 0 0 var(--s5); }
+
+.line-button {
+  min-height: var(--tap);
+  padding: var(--s2) var(--s5);
+  border: 2px solid var(--rule-firm);
+  border-radius: var(--r-pill);
+  background: var(--sheet);
+  color: var(--ink-mid);
+  font: 700 var(--t-small)/1.2 var(--sans);
+  cursor: pointer;
+}
+.line-button:hover { border-color: var(--teal); background: var(--teal-wash); color: var(--ink); }
+.line-button[aria-pressed="true"] {
+  border-color: var(--teal); background: var(--teal); color: var(--on-teal);
+}
+
+.pedigree-figure[hidden] { display: none; }
+
+/* Two names have to share the width of one box, so they are set a little
+   smaller than a single name. */
+.pnode-couple .pnode-name { font-size: 13.5px; }
+.pnode-couple .pnode-meta { font-size: 12px; }

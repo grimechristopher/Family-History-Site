@@ -257,10 +257,7 @@ func (s *Server) handleReply(w http.ResponseWriter, r *http.Request) {
 
 	// Replies can hang off a story as well as an answer, so return to whichever
 	// page the reply came from, landing on the entry rather than the top.
-	back := r.FormValue("return_to")
-	if back == "" {
-		back = "/stories"
-	}
+	back := returnTo(r, "/stories")
 	http.Redirect(w, r, back+"#entry-"+strconv.FormatInt(entryID, 10), http.StatusSeeOther)
 }
 
@@ -277,4 +274,14 @@ func (s *Server) redirectOrFragment(w http.ResponseWriter, r *http.Request, path
 		return
 	}
 	s.renderNamed(w, r, "question", "answers", data)
+}
+
+// returnTo reads where a form wants to go back to, refusing anything that is not
+// a path on this site so the field cannot be used to bounce somebody elsewhere.
+func returnTo(r *http.Request, fallback string) string {
+	back := r.FormValue("return_to")
+	if back == "" || !strings.HasPrefix(back, "/") || strings.HasPrefix(back, "//") {
+		return fallback
+	}
+	return back
 }

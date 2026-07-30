@@ -203,13 +203,27 @@ func (s *Server) handleFocusSubject(w http.ResponseWriter, r *http.Request) {
 // pedigreeNode is the shape the browser gets. Deliberately small: names, years,
 // where to click through to, and how much has been said.
 type pedigreeNode struct {
-	Name     string          `json:"name"`
-	Years    string          `json:"years,omitempty"`
-	Slug     string          `json:"slug,omitempty"`
-	Total    int             `json:"total,omitempty"`
-	Answered int             `json:"answered,omitempty"`
+	Name string `json:"name"`
+	// Label names the line for the switcher — "Dad", "Mom" — set on roots only.
+	Label string `json:"label,omitempty"`
+	Years string `json:"years,omitempty"`
+	Slug  string `json:"slug,omitempty"`
+	// Members is set for a couple, which the great-grandparent generation is
+	// drawn as: one box for the pair, since that is how their questions are
+	// asked and how the book's chapters are organised.
+	Members []pedigreeMember `json:"members,omitempty"`
+	// Not omitempty on the counts: a zero is meaningful, and dropping it had the
+	// chart rendering "undefined/62 answered".
+	Total    int             `json:"total"`
+	Answered int             `json:"answered"`
 	Gen      int             `json:"gen"`
 	Parents  []*pedigreeNode `json:"parents,omitempty"`
+}
+
+// pedigreeMember is one person inside a couple's box.
+type pedigreeMember struct {
+	Name  string `json:"name"`
+	Years string `json:"years,omitempty"`
 }
 
 // handleTreeJSON serves the pedigree for the drawn view.
@@ -228,6 +242,21 @@ func (s *Server) handleTreeJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	link := func(p *store.TreePerson) string {
+		// Linked only where there is something to read, matching the list view.
+		if p.SubjectSlug != nil && p.QuestionCount > 0 {
+			return *p.SubjectSlug
+		}
+		return ""
+	}
+
+	// A married pair sharing one subject is drawn as one box. Both members carry
+	// the same subject slug, which is what identifies them as a couple.
+	sameSubject := func(a, b *treeNode) bool {
+		x, y := a.Person.SubjectSlug, b.Person.SubjectSlug
+		return x != nil && y != nil && *x == *y
+	}
+
 	var convert func(n *treeNode) *pedigreeNode
 	convert = func(n *treeNode) *pedigreeNode {
 		p := n.Person
@@ -237,21 +266,54 @@ func (s *Server) handleTreeJSON(w http.ResponseWriter, r *http.Request) {
 			Total:    p.QuestionCount,
 			Answered: p.AnsweredCount,
 			Gen:      n.Generation,
+			Slug:     link(p),
 		}
-		// Only linked when there is something to read, matching the list view.
-		if p.SubjectSlug != nil && p.QuestionCount > 0 {
-			out.Slug = *p.SubjectSlug
+
+		if len(n.Parents) == 2 && sameSubject(n.Parents[0], n.Parents[1]) {
+			a, b := n.Parents[0].Person, n.Parents[1].Person
+			couple := &pedigreeNode{
+				Gen:      n.Parents[0].Generation,
+				Total:    a.QuestionCount,
+				Answered: a.AnsweredCount,
+				Slug:     link(a),
+				Members: []pedigreeMember{
+					{Name: a.FullName(), Years: a.Lifespan()},
+					{Name: b.FullName(), Years: b.Lifespan()},
+				},
+			}
+			if a.SubjectName != nil {
+				couple.Name = *a.SubjectName
+			}
+			out.Parents = append(out.Parents, couple)
+			return out
 		}
+
 		for _, parent := range n.Parents {
 			out.Parents = append(out.Parents, convert(parent))
 		}
 		return out
 	}
 
+	// Whose line each root is, so the switcher can say "Dad" rather than repeating
+	// the full name.
+	contributors, err := s.Store.Contributors(r.Context())
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	labelFor := map[int64]string{}
+	for _, c := range contributors {
+		if c.PersonID != nil {
+			labelFor[*c.PersonID] = c.DisplayName
+		}
+	}
+
 	roots := buildTree(people, rootIDs, 4)
 	out := make([]*pedigreeNode, 0, len(roots))
-	for _, r := range roots {
-		out = append(out, convert(r))
+	for _, root := range roots {
+		node := convert(root)
+		node.Label = labelFor[root.Person.ID]
+		out = append(out, node)
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")

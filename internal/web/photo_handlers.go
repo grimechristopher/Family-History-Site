@@ -130,11 +130,10 @@ func (s *Server) handleUploadPhoto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	back := r.FormValue("return_to")
-	if back == "" {
-		back = "/stories"
-	}
-	http.Redirect(w, r, back, http.StatusSeeOther)
+	// Anchored on the entry: redirecting to the bare path reloaded the page and
+	// threw the reader back to the top, losing the answer they were illustrating.
+	back := returnTo(r, "/stories")
+	http.Redirect(w, r, back+"#entry-"+strconv.FormatInt(entryID, 10), http.StatusSeeOther)
 }
 
 func (s *Server) handleDeletePhoto(w http.ResponseWriter, r *http.Request) {
@@ -172,11 +171,8 @@ func (s *Server) handleDeletePhoto(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	back := r.FormValue("return_to")
-	if back == "" {
-		back = "/stories"
-	}
-	http.Redirect(w, r, back, http.StatusSeeOther)
+	back := returnTo(r, "/stories")
+	http.Redirect(w, r, back+"#entry-"+strconv.FormatInt(a.EntryID, 10), http.StatusSeeOther)
 }
 
 // signAttachments fills in temporary read URLs. A failure to sign one picture

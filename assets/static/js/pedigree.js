@@ -5,10 +5,10 @@
 // Three.js would mean a WebGL renderer and camera to draw boxes and text that
 // SVG carries natively.
 //
-// This is the view for someone browsing on a laptop. The nested list on the same
-// page stays the accessible path: a screen reader gets a usable outline from a
-// list of links and nothing usable from a diagram, and text reflows under
-// magnification where a drawing does not. Neither is a fallback for the other.
+// Since this is now the only view of the tree, every box is a real SVG <a> with a
+// spoken label naming the person, their years and their progress. That makes the
+// chart keyboard-navigable and readable aloud — weaker than a list of links, but
+// the diagram is no longer a dead end for anyone using one.
 
 (function () {
   'use strict';
@@ -16,10 +16,15 @@
   var mount = document.getElementById('pedigree');
   if (!mount || !window.d3 || !window.d3.hierarchy) return;
 
-  var NODE_W = 210;
-  var NODE_H = 62;
-  var GAP_X = 78;    // between generations
-  var GAP_Y = 14;    // between siblings
+  // Sized so all four generations fit the page without scrolling on a laptop.
+  // Wider boxes looked better in isolation and pushed the great-grandparents off
+  // the right edge, which is worse.
+  var NODE_W = 200;
+  var NODE_H = 60;
+  var COUPLE_W = 240;   // a pair needs room for two names
+  var COUPLE_H = 92;
+  var GAP_X = 56;       // between generations
+  var GAP_Y = 12;       // between siblings
 
   var css = getComputedStyle(document.documentElement);
   function token(name, fallback) {
@@ -45,13 +50,15 @@
 
   function render(roots) {
     mount.textContent = '';
+    var figures = [];
 
-    roots.forEach(function (rootData) {
+    roots.forEach(function (rootData, rootIndex) {
       var root = window.d3.hierarchy(rootData, function (d) { return d.parents; });
 
       // Laid out vertically then transposed, so generations run left to right
-      // and names have room to be read.
-      var layout = window.d3.tree().nodeSize([NODE_H + GAP_Y, NODE_W + GAP_X]);
+      // and names have room to be read. Spaced for the tallest box, so a couple
+      // never overlaps its neighbour.
+      var layout = window.d3.tree().nodeSize([COUPLE_H + GAP_Y, COUPLE_W + GAP_X]);
       layout(root);
 
       var nodes = root.descendants();
@@ -66,16 +73,17 @@
       });
 
       var padding = 24;
-      var height = (maxY - minY) + NODE_H + padding * 2;
-      var width = maxX + NODE_W + padding * 2;
-      var shiftY = padding - minY + NODE_H / 2;
+      var height = (maxY - minY) + COUPLE_H + padding * 2;
+      var width = maxX + COUPLE_W + padding * 2;
+      var shiftY = padding - minY + COUPLE_H / 2;
 
       var figure = document.createElement('figure');
       figure.className = 'pedigree-figure';
+      figure.dataset.line = String(rootIndex);
 
       var caption = document.createElement('figcaption');
       caption.className = 'pedigree-caption';
-      caption.textContent = rootData.name + '’s line';
+      caption.textContent = rootData.name;
       figure.appendChild(caption);
 
       var scroller = document.createElement('div');
@@ -94,11 +102,14 @@
       linkLayer.setAttribute('stroke', token('--rule-firm', '#c9b697'));
       svg.appendChild(linkLayer);
 
+      function boxW(d) { return d.members ? COUPLE_W : NODE_W; }
+      function boxH(d) { return d.members ? COUPLE_H : NODE_H; }
+
       root.links().forEach(function (link) {
         // Drawn from the child's right edge to the parent's left edge.
         linkLayer.appendChild(el('path', {
           d: elbow(
-            { x: link.source.px + padding + NODE_W, y: link.source.py + shiftY },
+            { x: link.source.px + padding + boxW(link.source.data), y: link.source.py + shiftY },
             { x: link.target.px + padding, y: link.target.py + shiftY }
           )
         }));
@@ -106,42 +117,71 @@
 
       nodes.forEach(function (n) {
         var d = n.data;
+        var w = boxW(d), h = boxH(d);
         var x = n.px + padding;
-        var y = n.py + shiftY - NODE_H / 2;
+        var y = n.py + shiftY - h / 2;
 
-        var group = el('g', { class: 'pnode' + (d.gen === 0 ? ' pnode-root' : '') });
+        var cls = 'pnode';
+        if (d.gen === 0) cls += ' pnode-root';
+        if (d.members) cls += ' pnode-couple';
+        var group = el('g', { class: cls });
 
-        // Anchor is a link only where there is something to read, matching the
-        // list exactly.
+        // Spoken label, so tabbing through the chart reads as sentences rather
+        // than as a pile of shapes.
+        var spoken = d.members
+          ? d.members.map(function (m) {
+              return m.name + (m.years ? ', ' + m.years : '');
+            }).join(' and ')
+          : d.name + (d.years ? ', ' + d.years : '');
+        if (d.total) spoken += '. ' + (d.answered || 0) + ' of ' + d.total + ' questions answered';
+
         var shell = d.slug
-          ? el('a', { href: '/subjects/' + d.slug, class: 'pnode-hit' })
-          : el('g', { class: 'pnode-hit pnode-flat' });
+          ? el('a', { href: '/subjects/' + d.slug, class: 'pnode-hit', 'aria-label': spoken })
+          : el('g', { class: 'pnode-hit pnode-flat', role: 'text', 'aria-label': spoken });
 
         shell.appendChild(el('rect', {
-          x: x, y: y, width: NODE_W, height: NODE_H, rx: 10,
-          class: 'pnode-box'
+          x: x, y: y, width: w, height: h, rx: 10, class: 'pnode-box'
         }));
 
-        var name = el('text', {
-          x: x + 14, y: y + 25, class: 'pnode-name'
-        });
-        name.textContent = d.name;
-        shell.appendChild(name);
+        if (d.members) {
+          // One box, both names, each with their own years underneath.
+          d.members.forEach(function (m, i) {
+            var top = y + 23 + i * 35;
+            var nm = el('text', { x: x + 14, y: top, class: 'pnode-name' });
+            nm.textContent = m.name;
+            shell.appendChild(nm);
+            if (m.years) {
+              var yr = el('text', { x: x + 14, y: top + 16, class: 'pnode-meta' });
+              yr.textContent = m.years;
+              shell.appendChild(yr);
+            }
+          });
+          if (d.total) {
+            var count = el('text', { x: x + w - 14, y: y + h - 10, class: 'pnode-meta pnode-count' });
+            count.setAttribute('text-anchor', 'end');
+            count.textContent = (d.answered || 0) + '/' + d.total + ' answered';
+            shell.appendChild(count);
+          }
+        } else {
+          var name = el('text', { x: x + 14, y: y + 25, class: 'pnode-name' });
+          name.textContent = d.name;
+          shell.appendChild(name);
 
-        var meta = [];
-        if (d.years) meta.push(d.years);
-        if (d.total) meta.push((d.answered || 0) + '/' + d.total + ' answered');
-        if (meta.length) {
-          var sub = el('text', { x: x + 14, y: y + 46, class: 'pnode-meta' });
-          sub.textContent = meta.join('  ·  ');
-          shell.appendChild(sub);
+          var meta = [];
+          if (d.years) meta.push(d.years);
+          if (d.total) meta.push((d.answered || 0) + '/' + d.total + ' answered');
+          if (meta.length) {
+            var sub = el('text', { x: x + 14, y: y + 46, class: 'pnode-meta' });
+            sub.textContent = meta.join('  ·  ');
+            shell.appendChild(sub);
+          }
         }
 
-        // A left edge in the accent marks people who have been talked about,
-        // the same signal the list uses.
+        // A left edge in the accent marks people already talked about, the same
+        // signal the list uses.
         if (d.answered > 0) {
           shell.appendChild(el('rect', {
-            x: x, y: y, width: 4, height: NODE_H, rx: 2, class: 'pnode-told'
+            x: x, y: y, width: 4, height: h, rx: 2, class: 'pnode-told'
           }));
         }
 
@@ -152,7 +192,42 @@
       scroller.appendChild(svg);
       figure.appendChild(scroller);
       mount.appendChild(figure);
+      figures.push({ figure: figure, label: rootData.label || rootData.name });
     });
+
+    buildPicker(figures);
+  }
+
+  // One button per line. Pointless with a single line, so it is only built when
+  // there is more than one.
+  function buildPicker(figures) {
+    var picker = document.getElementById('line-picker');
+    if (!picker) return;
+    picker.textContent = '';
+    if (figures.length < 2) return;
+
+    function show(index) {
+      figures.forEach(function (f, i) {
+        f.figure.hidden = i !== index;
+      });
+      Array.prototype.forEach.call(picker.children, function (b, i) {
+        b.setAttribute('aria-pressed', String(i === index));
+      });
+      try { localStorage.setItem('fhs-tree-line', String(index)); } catch (e) {}
+    }
+
+    figures.forEach(function (f, i) {
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'line-button';
+      button.textContent = f.label + '\u2019s family';
+      button.addEventListener('click', function () { show(i); });
+      picker.appendChild(button);
+    });
+
+    var saved = 0;
+    try { saved = parseInt(localStorage.getItem('fhs-tree-line'), 10) || 0; } catch (e) {}
+    show(saved < figures.length ? saved : 0);
   }
 
   fetch('/tree.json', { credentials: 'same-origin' })
@@ -162,19 +237,12 @@
     })
     .then(function (roots) {
       render(roots);
-      // Only reveal the switch once a drawing actually exists. Which view is
-      // showing is the toggle's business alone: setting it here as well had the
-      // two scripts overwriting each other.
-      var toggle = document.querySelector('[data-pedigree-toggle]');
-      if (toggle) {
-        toggle.hidden = false;
-        toggle.dispatchEvent(new CustomEvent('pedigree:ready'));
-      }
     })
     .catch(function (err) {
-      // The list is already on the page, so say what happened and leave it.
-      mount.innerHTML = '<p class="banner banner-quiet">The chart could not be ' +
-        'drawn just now. The family is listed below.</p>';
+      // The chart is the only view now, so the failure has to offer a way on.
+      mount.innerHTML = '<p class="banner">The family chart could not be drawn ' +
+        'just now. You can still reach everyone from ' +
+        '<a class="link" href="/questions">Questions</a>.</p>';
       if (window.console) console.warn('pedigree:', err);
     });
 })();

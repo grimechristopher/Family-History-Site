@@ -1,26 +1,11 @@
 {{define "content"}}
 <h1>The family</h1>
-<p class="lede">Another way round the questions. Tap anyone to see what&rsquo;s been said about them.</p>
+<p class="lede">Tap anyone to see what&rsquo;s been said about them.</p>
 
-{{/* Two views of the same walk, so they can never disagree about who is family.
-     The list is not a fallback: it is the one that works with a screen reader
-     and under magnification. Starts as the list, and the switch only appears
-     once the chart has actually drawn. */}}
-<div id="pedigree-views" data-view="list">
-  <p class="pedigree-switch">
-    <button type="button" class="btn btn-quiet" data-pedigree-toggle hidden
-            aria-pressed="false">Show as a chart</button>
-  </p>
-
-  <div id="pedigree" class="pedigree-chart" aria-hidden="true"></div>
-
-  <div class="pedigree-list">
-    {{range .Tree}}
-      <section class="pedigree">
-        {{template "treenode" .}}
-      </section>
-    {{end}}
-  </div>
+<div id="pedigree-views">
+  {{/* Filled in once the chart is drawn: one button per line. */}}
+  <p class="line-picker" id="line-picker" role="group" aria-label="Whose line to show"></p>
+  <div id="pedigree" class="pedigree-chart"></div>
 </div>
 
 {{if .SubjectProgress}}
@@ -37,35 +22,9 @@
 {{end}}
 {{end}}
 
-{{define "treenode"}}
-<div class="tnode tnode-gen{{.Generation}}">
-  {{with .Person}}
-    {{if and .SubjectSlug .QuestionCount}}
-      <a class="tperson{{if .HasStories}} tperson-told{{end}}" href="/subjects/{{.SubjectSlug}}">
-        <span class="tname">{{.FullName}}</span>
-        {{if .Lifespan}}<span class="tyears">{{.Lifespan}}</span>{{end}}
-        {{if .QuestionCount}}
-          <span class="tcount">{{.AnsweredCount}}/{{.QuestionCount}} answered</span>
-        {{end}}
-      </a>
-    {{else}}
-      <span class="tperson tperson-plain">
-        <span class="tname">{{.FullName}}</span>
-        {{if .Lifespan}}<span class="tyears">{{.Lifespan}}</span>{{end}}
-      </span>
-    {{end}}
-  {{end}}
-
-  {{if .Parents}}
-    <div class="tparents">
-      {{range .Parents}}{{template "treenode" .}}{{end}}
-    </div>
-  {{end}}
-</div>
-{{end}}
+{{define "treenode"}}{{end}}
 
 {{define "scripts"}}
 <script src="/static/js/vendor/d3-hierarchy.js?v={{.AssetVersion}}" defer></script>
 <script src="/static/js/pedigree.js?v={{.AssetVersion}}" defer></script>
-<script src="/static/js/pedigree-toggle.js?v={{.AssetVersion}}" defer></script>
 {{end}}

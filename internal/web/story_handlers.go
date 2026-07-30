@@ -91,15 +91,15 @@ func (s *Server) handleCreateStory(w http.ResponseWriter, r *http.Request) {
 		subjectID = &sub.ID
 	}
 
-	if _, err := s.Store.CreateStory(r.Context(), u.ID, title, body, subjectID, false); err != nil {
+	id, err := s.Store.CreateStory(r.Context(), u.ID, title, body, subjectID, false)
+	if err != nil {
 		s.serverError(w, r, err)
 		return
 	}
-	back := r.FormValue("return_to")
-	if back == "" {
-		back = "/stories"
-	}
-	http.Redirect(w, r, back, http.StatusSeeOther)
+	// Anchored on the new story, so it is the first thing seen rather than the
+	// top of the page it was written from.
+	back := returnTo(r, "/stories")
+	http.Redirect(w, r, back+"#entry-"+strconv.FormatInt(id, 10), http.StatusSeeOther)
 }
 
 func (s *Server) handleDeleteStory(w http.ResponseWriter, r *http.Request) {
@@ -127,9 +127,6 @@ func (s *Server) handleDeleteStory(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	back := r.FormValue("return_to")
-	if back == "" {
-		back = "/stories"
-	}
-	http.Redirect(w, r, back, http.StatusSeeOther)
+	// Nothing to anchor to any more, so the page it came from is right.
+	http.Redirect(w, r, returnTo(r, "/stories"), http.StatusSeeOther)
 }

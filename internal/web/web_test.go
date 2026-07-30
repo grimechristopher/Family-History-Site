@@ -1296,9 +1296,10 @@ func TestStoriesLiveOnThePersonsPage(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d", rec.Code)
 	}
-	// Saving from a person's page returns there, not to a stories list.
-	if loc := rec.Header().Get("Location"); loc != "/subjects/peter-samuel-hale" {
-		t.Errorf("Location = %q, want the person's page", loc)
+	// Saving from a person's page returns there, anchored on the new story rather
+	// than at the top, and not to a stories list.
+	if loc := rec.Header().Get("Location"); !strings.HasPrefix(loc, "/subjects/peter-samuel-hale#entry-") {
+		t.Errorf("Location = %q, want the person's page anchored on the story", loc)
 	}
 
 	page = h.get("/subjects/peter-samuel-hale", dad).Body.String()
@@ -1512,5 +1513,53 @@ func TestReplyingSwapsInPlaceInsteadOfReloading(t *testing.T) {
 	}
 	if loc := plain.Header().Get("Location"); !strings.HasSuffix(loc, "#entry-"+entryID) {
 		t.Errorf("Location = %q, want an anchor on the entry", loc)
+	}
+}
+
+// Photo uploads and new stories also redirected to the top of the page. They now
+// land on the entry, and return_to cannot be used to bounce somebody off-site.
+func TestRedirectsLandOnTheEntryAndStayOnSite(t *testing.T) {
+	h := newHarness(t)
+	dad := h.signIn("dad@example.com")
+	newFakeStorage(t, h)
+
+	// A new story anchors on itself.
+	rec := h.post("/stories", url.Values{
+		"title": {"The drive back"}, "body": {"Through a blizzard."},
+		"return_to": {"/subjects/peter-samuel-hale"},
+	}, dad)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("create story status = %d", rec.Code)
+	}
+	loc := rec.Header().Get("Location")
+	if !strings.HasPrefix(loc, "/subjects/peter-samuel-hale#entry-") {
+		t.Errorf("Location = %q, want the person's page anchored on the new story", loc)
+	}
+
+	stories, err := h.store.ListStories(context.Background(), h.dadID)
+	if err != nil || len(stories) == 0 {
+		t.Fatalf("ListStories = %v, %v", stories, err)
+	}
+	story := stories[0]
+
+	// A photo anchors on the entry it illustrates.
+	up := h.uploadPhoto(story.ID, "x.png", "image/png", tinyPNG, "", dad)
+	if up.Code != http.StatusSeeOther {
+		t.Fatalf("upload status = %d", up.Code)
+	}
+	want := "#entry-" + strconv.FormatInt(story.ID, 10)
+	if loc := up.Header().Get("Location"); !strings.HasSuffix(loc, want) {
+		t.Errorf("Location = %q, want it to end %q", loc, want)
+	}
+
+	// An off-site return_to is refused rather than followed.
+	for _, evil := range []string{"https://example.com/phish", "//example.com/phish"} {
+		rec := h.post("/stories", url.Values{
+			"body": {"x"}, "return_to": {evil},
+		}, dad)
+		loc := rec.Header().Get("Location")
+		if strings.Contains(loc, "example.com") {
+			t.Errorf("return_to %q was followed off-site: %q", evil, loc)
+		}
 	}
 }
