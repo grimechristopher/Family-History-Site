@@ -51,8 +51,8 @@ type Person struct {
 	Generation int
 
 	// AliasSurnames holds surnames this person is commonly referred to by but
-	// is not recorded under — chiefly married names. "Grandma Mary Brennan" is
-	// recorded as Nora Angeline Radley.
+	// is not recorded under — chiefly married names. "Grandma Alice Nash" is
+	// recorded as Alice Mae Fletcher.
 	AliasSurnames []string
 
 	// MarriedSurname is set for women who took a husband's name, so they can be
@@ -60,14 +60,14 @@ type Person struct {
 	MarriedSurname string
 }
 
-// FullName is the name as recorded: "Nora Angeline Radley".
+// FullName is the name as recorded: "Alice Mae Fletcher".
 func (p Person) FullName() string {
 	return strings.TrimSpace(p.Given + " " + p.Surname)
 }
 
 // DisplayName follows the genealogical convention, putting the maiden name in
 // parentheses between the given names and the married surname:
-// "Nora Angeline (Radley) Brennan". Everyone else is unchanged.
+// "Alice Mae (Fletcher) Nash". Everyone else is unchanged.
 func (p Person) DisplayName() string {
 	if p.MarriedSurname == "" || p.MarriedSurname == p.Surname {
 		return p.FullName()
@@ -87,31 +87,23 @@ type Tree struct {
 	generations int
 }
 
-// Options names the two root individuals and how far up to walk.
+// Options names the root individuals and how far up to walk.
+//
+// Every field is supplied by the caller. Nothing here defaults to a particular
+// family: the names belong to whoever is running the site and are passed in from
+// their own configuration, not carried in this repository.
 type Options struct {
 	// RootNames are GEDCOM-form names ("Given /Surname/") of the people whose
-	// ancestors are imported — Dad and Mom.
+	// ancestors are imported — the two people being asked the questions.
 	RootNames []string
 	// Generations above the roots to include. 3 gives parents, grandparents,
 	// and great-grandparents.
 	Generations int
-	// ExtraNames are individuals to include who are not blood ancestors, such
-	// as a step-parent. Resolved against the whole file, so they must be
-	// unambiguous there.
+	// ExtraNames are individuals to include who are not blood ancestors, such as
+	// a step-parent: no ancestor walk reaches them, yet the prompts may devote a
+	// whole block of questions to them. Resolved against the whole file, so they
+	// must be unambiguous there.
 	ExtraNames []string
-}
-
-// DefaultOptions matches the approved scope: Mom, Dad, and three generations up.
-//
-// Vera is named explicitly because she is Dad's stepmother — Peter Samuel
-// Hale's second wife — so no ancestor walk reaches her, yet the prompts file
-// devotes a whole block of questions to her.
-func DefaultOptions() Options {
-	return Options{
-		RootNames:   []string{"Peter John /Hale/", "Ruth Ann /Brennan/"},
-		Generations: 3,
-		ExtraNames:  []string{"Vera /Lindqvist/"},
-	}
 }
 
 // Derive builds the bounded tree and its subjects from a parsed GEDCOM.
@@ -217,16 +209,15 @@ func generationOfSpouse(f *gedcom.File, id string, window map[string]int) int {
 // marriedSurname picks which husband's name to show her under: the last one she
 // married.
 //
-// Alma Jean Nash remarried a Whitby in 1969, so she is Alma Jean (Nash)
-// Whitby even though the family grew up calling her Grandma Osgood. Alice
-// Matilda Crowe married George Marsh in 1918 after Pierce Radley, so she is
-// Marsh even though Radley is the husband who connects her to this tree.
+// Someone who remarried takes the later husband's surname, and is recorded under
+// it even when the family grew up calling her by the earlier one, and even when
+// the earlier husband is the one who connects her to this tree.
 // Whether a marriage ended in divorce or a death turns out not to matter: the
 // latest one is the answer either way.
 //
 // When no marriage carries a date the order is genuinely unknowable from the
 // file, so the marriage into this family wins — that is the only real signal
-// available, and it matches what the family calls her. Vera Lindqvist is the
+// available, and it matches what the family calls her. A stepmother is the
 // one person this affects.
 func marriedSurname(f *gedcom.File, ind *gedcom.Individual, window map[string]int) string {
 	type marriage struct {

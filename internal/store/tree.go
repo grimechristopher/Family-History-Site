@@ -37,7 +37,7 @@ type TreePerson struct {
 
 // FullName follows the genealogical convention, putting the maiden name in
 // parentheses between the given names and the married surname:
-// "Nora Angeline (Radley) Brennan".
+// "Alice Mae (Fletcher) Nash".
 func (p TreePerson) FullName() string {
 	if p.MarriedSurname == nil || *p.MarriedSurname == "" || *p.MarriedSurname == p.Surname {
 		return strings.TrimSpace(p.Given + " " + p.Surname)

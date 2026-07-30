@@ -8,6 +8,17 @@ import (
 	"github.com/grimechristopher/family-history-site/internal/gedcom"
 )
 
+// fixtureOptions is the shape of the real configuration -- two roots, three
+// generations, one person who no ancestor walk reaches -- over the invented family
+// in testdata. The real names live in the operator's environment, never here.
+func fixtureOptions() Options {
+	return Options{
+		RootNames:   []string{"Peter John /Hale/", "Ruth Ann /Brennan/"},
+		Generations: 3,
+		ExtraNames:  []string{"Vera /Lindqvist/"},
+	}
+}
+
 // A woman who married more than once is shown under her last marriage, which is
 // the name she was known by — even when an earlier husband is the one who puts
 // her in this family.
@@ -26,7 +37,7 @@ func TestMarriedSurnameUsesTheLastMarriage(t *testing.T) {
 		t.Fatalf("Parse: %v", err)
 	}
 
-	tree, err := Derive(f, DefaultOptions())
+	tree, err := Derive(f, fixtureOptions())
 	if err != nil {
 		t.Fatalf("Derive: %v", err)
 	}
@@ -43,17 +54,17 @@ func TestMarriedSurnameUsesTheLastMarriage(t *testing.T) {
 		// Divorced Arlen Pruitt in the seventies, married James Hale in 1990.
 		"Ruth Ann Brennan": "Ruth Ann (Brennan) Hale",
 		// Remarried a Whitby in 1969, so that is her name, even though the family
-		// grew up calling her Grandma Osgood.
+		// grew up calling her Grandma Fletcher.
 		"Alma Jean Nash": "Alma Jean (Nash) Whitby",
 		// Also married a Peavler, but neither marriage is dated, so the order is
 		// unknowable from the file. Falls back to the marriage into this family.
 		"Vera Lindqvist": "Vera (Lindqvist) Hale",
 		// Single marriages, which must not regress.
-		"Margaret Irene Ward":    "Margaret Irene (Ward) Hale",
-		"Nora Angeline Radley":    "Nora Angeline (Radley) Brennan",
-		"Alice May Osgood":       "Alice May (Osgood) Brennan",
+		"Margaret Irene Ward":       "Margaret Irene (Ward) Hale",
+		"Nora Angeline Osgood":      "Nora Angeline (Osgood) Brennan",
+		"Alice May Fletcher":        "Alice May (Fletcher) Brennan",
 		"Margaret Lucille Alderman": "Margaret Lucille (Alderman) Ward",
-		"Anna Lund":            "Anna (Lund) Alderman",
+		"Anna Lund":              "Anna (Lund) Alderman",
 		"Margaret Mary Fletcher":    "Margaret Mary (Fletcher) Hale",
 	}
 	for recorded, want := range cases {

@@ -28,7 +28,7 @@ func TestParseAssignsHierarchy(t *testing.T) {
 	}
 
 	first := qs[0]
-	if first.Person != "Dad" || first.Section != "Parents" || first.Subsection != "James R Hale" {
+	if first.Person != "Dad" || first.Section != "Parents" || first.Subsection != "Peter S Hale" {
 		t.Errorf("hierarchy = %q/%q/%q", first.Person, first.Section, first.Subsection)
 	}
 	if first.Body != "What do you remember about your Aunts and Uncles?" {
@@ -43,7 +43,7 @@ func TestParseOrdinalResetsPerHeading(t *testing.T) {
 	qs := load(t)
 
 	if qs[0].Ordinal != 1 || qs[1].Ordinal != 2 {
-		t.Errorf("ordinals under James R Hale = %d,%d; want 1,2", qs[0].Ordinal, qs[1].Ordinal)
+		t.Errorf("ordinals under Peter S Hale = %d,%d; want 1,2", qs[0].Ordinal, qs[1].Ordinal)
 	}
 	if qs[2].Ordinal != 1 {
 		t.Errorf("first ordinal under Grandma Vera = %d, want 1", qs[2].Ordinal)
@@ -53,7 +53,7 @@ func TestParseOrdinalResetsPerHeading(t *testing.T) {
 // The key must depend on the question, not on where it sits. Two positional
 // schemes corrupted data before this one: see ImportKey's comment.
 func TestImportKeyIsContentAddressed(t *testing.T) {
-	const subject, body = "alice-may-fletcher", "What kind of cars did he have?"
+	const subject, body = "alice-may-osgood", "What kind of cars did he have?"
 
 	if ImportKey("Dad", subject, body, 1) != ImportKey("Dad", subject, body, 1) {
 		t.Fatal("the same inputs must give the same key")
@@ -159,11 +159,11 @@ func TestHeadingsCountsAndOrder(t *testing.T) {
 	if len(order) != 5 {
 		t.Fatalf("distinct headings = %d, want 5: %v", len(order), order)
 	}
-	if order[0].Subsection != "James R Hale" {
+	if order[0].Subsection != "Peter S Hale" {
 		t.Errorf("first heading = %v", order[0])
 	}
 	if counts[order[0]] != 2 {
-		t.Errorf("James R Hale count = %d, want 2", counts[order[0]])
+		t.Errorf("Peter S Hale count = %d, want 2", counts[order[0]])
 	}
 	if got := order[2].String(); got != "Dad / Great Grandparents" {
 		t.Errorf("String() with no subsection = %q", got)

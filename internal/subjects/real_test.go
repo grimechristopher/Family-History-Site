@@ -2,6 +2,7 @@ package subjects
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/grimechristopher/family-history-site/internal/gedcom"
@@ -12,7 +13,7 @@ import (
 // against the real tree and prints what matched and why, so the mapping can be
 // checked by eye instead of authored by hand.
 //
-//	REAL_GEDCOM="/home/chris/Documents/Github/genealogy-export/Brennan-Hale Tree.ged" \
+//	REAL_GEDCOM=/path/to/your-tree.ged \
 //	REAL_PROMPTS="/path/to/notes/General Notebook/General Notebook/Areas/Ancestry Book/Prompts 3.md" \
 //	go test ./internal/subjects/ -run RealMatch -v
 func TestRealMatchHeadings(t *testing.T) {
@@ -32,7 +33,24 @@ func TestRealMatchHeadings(t *testing.T) {
 		t.Fatalf("parse gedcom: %v", err)
 	}
 
-	tree, err := Derive(parsed, DefaultOptions())
+	// The names are the operator's, so they come from the environment alongside the
+	// paths this test already needs.
+	opts := Options{
+		RootNames:   []string{os.Getenv("REAL_DAD_NAME"), os.Getenv("REAL_MOM_NAME")},
+		Generations: 3,
+	}
+	if extra := os.Getenv("REAL_EXTRA_NAMES"); extra != "" {
+		for _, n := range strings.Split(extra, ",") {
+			if n = strings.TrimSpace(n); n != "" {
+				opts.ExtraNames = append(opts.ExtraNames, n)
+			}
+		}
+	}
+	if opts.RootNames[0] == "" || opts.RootNames[1] == "" {
+		t.Skip("set REAL_DAD_NAME and REAL_MOM_NAME to run against the real tree")
+	}
+
+	tree, err := Derive(parsed, opts)
 	if err != nil {
 		t.Fatalf("Derive: %v", err)
 	}
@@ -54,8 +72,8 @@ func TestRealMatchHeadings(t *testing.T) {
 	headings, counts := prompts.Headings(qs)
 
 	personSubjects, err := tree.PersonSubjects(map[string]string{
-		"Dad": "Peter John /Hale/",
-		"Mom": "Ruth Ann /Brennan/",
+		"Dad": opts.RootNames[0],
+		"Mom": opts.RootNames[1],
 	})
 	if err != nil {
 		t.Fatalf("PersonSubjects: %v", err)

@@ -78,7 +78,7 @@ func (s *Server) handleTree(w http.ResponseWriter, r *http.Request) {
 	// everything imported.
 	data.Tree = buildTree(people, rootIDs, 4)
 
-	// A pedigree only reaches blood ancestors, so a step-parent like Vera and the
+	// A pedigree only reaches blood ancestors, so a step-parent and the
 	// "Further Back" bucket would otherwise have no route in from here — between
 	// them that is thirty questions with no way to find them. Anything with
 	// questions that the pedigree does not reach is listed alongside it.

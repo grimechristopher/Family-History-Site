@@ -2,6 +2,7 @@ package gedcom
 
 import (
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -11,7 +12,8 @@ import (
 //
 // Run with:
 //
-//	REAL_GEDCOM="/home/chris/Documents/Github/genealogy-export/Brennan-Hale Tree.ged" go test ./internal/gedcom/
+//	REAL_GEDCOM=/path/to/your-tree.ged REAL_DAD_NAME="Given /Surname/" \
+//	  REAL_MOM_NAME="Given /Surname/" go test ./internal/gedcom/
 func TestRealGedcomResolvesMappedNames(t *testing.T) {
 	path := os.Getenv("REAL_GEDCOM")
 	if path == "" {
@@ -40,13 +42,17 @@ func TestRealGedcomResolvesMappedNames(t *testing.T) {
 	// Mom and Dad are unambiguous, so they can be resolved against the whole
 	// file. Everyone else is resolved within the ancestor window, which is how
 	// the importer works.
-	dad, err := f.FindByName("Peter John /Hale/")
-	if err != nil {
-		t.Fatalf("Dad: %v", err)
+	dadName, momName := os.Getenv("REAL_DAD_NAME"), os.Getenv("REAL_MOM_NAME")
+	if dadName == "" || momName == "" {
+		t.Skip("set REAL_DAD_NAME and REAL_MOM_NAME to check the roots resolve")
 	}
-	mom, err := f.FindByName("Ruth Ann /Brennan/")
+	dad, err := f.FindByName(dadName)
 	if err != nil {
-		t.Fatalf("Mom: %v", err)
+		t.Fatalf("first root: %v", err)
+	}
+	mom, err := f.FindByName(momName)
+	if err != nil {
+		t.Fatalf("second root: %v", err)
 	}
 
 	anc := f.Ancestors([]string{dad, mom}, 3)
@@ -69,22 +75,14 @@ func TestRealGedcomResolvesMappedNames(t *testing.T) {
 		t.Errorf("generation 2 = %d, want at least 8", byGen[2])
 	}
 
-	// Every name mapping/subjects.yaml will key on must resolve to exactly one
-	// individual inside that window.
-	for _, name := range []string{
-		"Peter John /Hale/",
-		"Ruth Ann /Brennan/",
-		"Peter Samuel /Hale/",
-		"Margaret Irene /Ward/",
-		"Louis Raymond /Hale/",
-		"Margaret Mary /Fletcher/",
-		"Clarence Vernon /Ward/",
-		"Margaret Lucille /Alderman/",
-		"Edward Robert /Brennan/",
-		"Alice May /Fletcher/",
-		"Bertram Lyle /Fletcher/",
-		"Alma Jean /Nash/",
-	} {
+	// Every name the importer keys on must resolve to exactly one individual inside
+	// that window. Which names those are is the operator's own data, so they are
+	// supplied rather than written down here.
+	names := strings.Split(os.Getenv("REAL_EXPECT_NAMES"), ",")
+	for _, name := range names {
+		if name = strings.TrimSpace(name); name == "" {
+			continue
+		}
 		id, err := f.FindByNameIn(name, anc)
 		if err != nil {
 			t.Errorf("%s: %v", name, err)
@@ -125,5 +123,5 @@ func TestRealGedcomDuplicateOutsideWindowIsExcluded(t *testing.T) {
 	if err != nil {
 		t.Fatalf("restricted lookup should be unambiguous: %v", err)
 	}
-	t.Logf("Bertram Lyle Osgood resolves to %s at generation %d", id, anc[id])
+	t.Logf("Bertram Lyle Fletcher resolves to %s at generation %d", id, anc[id])
 }

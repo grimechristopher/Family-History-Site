@@ -525,7 +525,7 @@ func TestCardsRendersTheTopQuestion(t *testing.T) {
 
 	for _, want := range []string{
 		"What kind of cars did he have?", // first by sort_order
-		"Peter Samuel Hale",            // the subject
+		"Peter Samuel Hale",              // the subject
 		"data-draft-url",                 // autosave wired up
 		"data-later",                     // the Later button exists without JS
 		"Save &amp; next",

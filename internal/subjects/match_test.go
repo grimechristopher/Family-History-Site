@@ -132,13 +132,13 @@ func TestHonorificSexDisambiguates(t *testing.T) {
 
 // A woman recorded under her maiden name is still found by her married one.
 func TestMarriedSurnameAliasMatches(t *testing.T) {
-	got, ambs := match(t, testTree(), "Grandparents", "Grandma Mary Brennan")
+	got, ambs := match(t, testTree(), "Grandparents", "Grandma Nora Brennan")
 
 	if len(ambs) != 0 {
 		t.Fatalf("unexpected ambiguities: %v", ambs)
 	}
-	if got.Subject != "mary-angeline-radley" {
-		t.Errorf("Subject = %q, want mary-angeline-radley", got.Subject)
+	if got.Subject != "nora-angeline-radley" {
+		t.Errorf("Subject = %q, want nora-angeline-radley", got.Subject)
 	}
 }
 
@@ -226,10 +226,10 @@ func TestOverrideNamingUnknownSubjectIsRejected(t *testing.T) {
 
 func TestSlugify(t *testing.T) {
 	cases := map[string]string{
-		"Peter John Hale":                 "peter-john-hale",
-		"Anna B. Broome":                      "anna-b-hudry",
-		"Edward Agusta Brennan and Ella Vance": "edwin-agusta-brennan-and-ella-cooper",
-		"  spaced  out  ":                    "spaced-out",
+		"Peter John Hale":                      "peter-john-hale",
+		"Anna B. Broome":                       "anna-b-broome",
+		"Edward Agusta Brennan and Ella Vance": "edward-agusta-brennan-and-ella-vance",
+		"  spaced  out  ":                      "spaced-out",
 	}
 	for in, want := range cases {
 		if got := slugify(in); got != want {

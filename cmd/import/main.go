@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -31,6 +32,18 @@ func main() {
 	dadEmail := fs.String("dad-email", "", "Dad's email address (required)")
 	momEmail := fs.String("mom-email", "", "Mom's email address (required)")
 	adminEmail := fs.String("admin-email", "", "your email address, for admin access (required)")
+	// The family's own names are configuration, not code: they come from the
+	// environment so this repository never has to carry them.
+	dadName := fs.String("dad-name", os.Getenv("DAD_GEDCOM_NAME"),
+		`GEDCOM name of the first person being asked, "Given /Surname/" (defaults to $DAD_GEDCOM_NAME)`)
+	momName := fs.String("mom-name", os.Getenv("MOM_GEDCOM_NAME"),
+		`GEDCOM name of the second person (defaults to $MOM_GEDCOM_NAME)`)
+	extraNames := fs.String("extra-names", os.Getenv("EXTRA_GEDCOM_NAMES"),
+		"comma-separated GEDCOM names to include who are not blood ancestors, such as a "+
+			"step-parent (defaults to $EXTRA_GEDCOM_NAMES)")
+	generations := fs.Int("generations", 3, "generations above the two roots to import")
+	adminLabel := fs.String("admin-label", envOr("ADMIN_LABEL", "Admin"),
+		"how the admin is named on the site (defaults to $ADMIN_LABEL)")
 	dryRun := fs.Bool("dry-run", false, "parse and match, then roll back without committing")
 
 	fs.Usage = func() {
@@ -48,6 +61,8 @@ func main() {
 		"-dad-email":    *dadEmail,
 		"-mom-email":    *momEmail,
 		"-admin-email":  *adminEmail,
+		"-dad-name":     *dadName,
+		"-mom-name":     *momName,
 	}
 	var absent []string
 	for name, value := range missing {
@@ -62,17 +77,52 @@ func main() {
 		os.Exit(2)
 	}
 
-	if err := run(*gedPath, *promptsPath, *databaseURL, *dadEmail, *momEmail, *adminEmail, *dryRun); err != nil {
+	var extras []string
+	for _, name := range strings.Split(*extraNames, ",") {
+		if name = strings.TrimSpace(name); name != "" {
+			extras = append(extras, name)
+		}
+	}
+
+	cfg := importConfig{
+		GedPath: *gedPath, PromptsPath: *promptsPath, DatabaseURL: *databaseURL,
+		DadEmail: *dadEmail, MomEmail: *momEmail, AdminEmail: *adminEmail,
+		DadName: *dadName, MomName: *momName, AdminLabel: *adminLabel,
+		ExtraNames: extras, Generations: *generations, DryRun: *dryRun,
+	}
+	if err := run(cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "\nimport failed: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func run(gedPath, promptsPath, databaseURL, dadEmail, momEmail, adminEmail string, dryRun bool) error {
+// importConfig is everything the import needs. A struct rather than a dozen
+// positional arguments, which is what it had grown into once the family's names
+// moved out of the code and became configuration too.
+type importConfig struct {
+	GedPath, PromptsPath, DatabaseURL string
+	DadEmail, MomEmail, AdminEmail    string
+	// GEDCOM-form names of the two people being asked, and how they are labelled.
+	DadName, MomName, AdminLabel string
+	ExtraNames                   []string
+	Generations                  int
+	DryRun                       bool
+}
+
+// envOr reads an environment variable, falling back to a default that names
+// nobody.
+func envOr(name, fallback string) string {
+	if v := os.Getenv(name); v != "" {
+		return v
+	}
+	return fallback
+}
+
+func run(cfg importConfig) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	gf, err := os.Open(gedPath)
+	gf, err := os.Open(cfg.GedPath)
 	if err != nil {
 		return fmt.Errorf("open gedcom: %w", err)
 	}
@@ -83,7 +133,7 @@ func run(gedPath, promptsPath, databaseURL, dadEmail, momEmail, adminEmail strin
 	}
 	fmt.Printf("parsed gedcom: %d individuals, %d families\n", len(ged.Individuals), len(ged.Families))
 
-	pf, err := os.Open(promptsPath)
+	pf, err := os.Open(cfg.PromptsPath)
 	if err != nil {
 		return fmt.Errorf("open prompts: %w", err)
 	}
@@ -95,7 +145,7 @@ func run(gedPath, promptsPath, databaseURL, dadEmail, momEmail, adminEmail strin
 	headings, _ := prompts.Headings(qs)
 	fmt.Printf("parsed prompts: %d questions across %d headings\n", len(qs), len(headings))
 
-	pool, err := pgxpool.New(ctx, databaseURL)
+	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return fmt.Errorf("connect: %w", err)
 	}
@@ -107,12 +157,16 @@ func run(gedPath, promptsPath, databaseURL, dadEmail, momEmail, adminEmail strin
 	fmt.Println("schema up to date")
 
 	opts := importer.Options{
-		Tree: subjects.DefaultOptions(),
-		Contributors: []importer.Contributor{
-			{Label: "Dad", Email: dadEmail, GedcomName: "Peter John /Hale/"},
-			{Label: "Mom", Email: momEmail, GedcomName: "Ruth Ann /Brennan/"},
+		Tree: subjects.Options{
+			RootNames:   []string{cfg.DadName, cfg.MomName},
+			Generations: cfg.Generations,
+			ExtraNames:  cfg.ExtraNames,
 		},
-		Admins: []importer.Admin{{Label: "Chris", Email: adminEmail}},
+		Contributors: []importer.Contributor{
+			{Label: "Dad", Email: cfg.DadEmail, GedcomName: cfg.DadName},
+			{Label: "Mom", Email: cfg.MomEmail, GedcomName: cfg.MomName},
+		},
+		Admins: []importer.Admin{{Label: cfg.AdminLabel, Email: cfg.AdminEmail}},
 	}
 
 	s := store.New(pool)
@@ -127,7 +181,7 @@ func run(gedPath, promptsPath, databaseURL, dadEmail, momEmail, adminEmail strin
 			return runErr
 		}
 		res = r
-		if dryRun {
+		if cfg.DryRun {
 			return errSentinel
 		}
 		return nil
@@ -161,7 +215,7 @@ func run(gedPath, promptsPath, databaseURL, dadEmail, momEmail, adminEmail strin
 		fmt.Printf("archived:  %d question(s) no longer in the markdown\n", res.Archived)
 	}
 
-	if dryRun {
+	if cfg.DryRun {
 		fmt.Println("\ndry run: nothing was written")
 		return nil
 	}

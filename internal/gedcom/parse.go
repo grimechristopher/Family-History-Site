@@ -161,7 +161,7 @@ func (f *File) FindByName(name string) (string, error) {
 // a set produced by Ancestors. Passing nil considers everyone.
 //
 // The restriction is not a convenience: the real tree contains Ancestry merge
-// duplicates — "Bertram Lyle /Fletcher/" appears twice — and only one of each
+// duplicates — the same name can appear twice in one file — and only one of each
 // pair is an actual ancestor. Scoping the search to the imported window
 // disambiguates on a real property rather than a hand-picked xref, and still
 // fails loudly if two candidates survive.
@@ -228,7 +228,7 @@ func parseLine(s string) (level int, xref, tag, value string, ok bool) {
 	return level, xref, rest[:sp], rest[sp+1:], true
 }
 
-// splitName turns "Thomas James /Hale/" into given and surname parts.
+// splitName turns "Peter John /Hale/" into given and surname parts.
 func splitName(v string) (given, surname string) {
 	i := strings.IndexByte(v, '/')
 	if i < 0 {

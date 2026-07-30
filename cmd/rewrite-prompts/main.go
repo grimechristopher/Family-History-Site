@@ -31,19 +31,40 @@ func main() {
 	gedPath := flag.String("gedcom", "", "path to the GEDCOM export (required)")
 	promptsPath := flag.String("prompts", "", "path to Prompts 3.md (required)")
 	out := flag.String("out", "", "where to write the rewritten file (required)")
+	// Names come from the environment, so this repository carries none.
+	dadName := flag.String("dad-name", os.Getenv("DAD_GEDCOM_NAME"),
+		`GEDCOM name of the first person being asked (defaults to $DAD_GEDCOM_NAME)`)
+	momName := flag.String("mom-name", os.Getenv("MOM_GEDCOM_NAME"),
+		`GEDCOM name of the second person (defaults to $MOM_GEDCOM_NAME)`)
+	extraNames := flag.String("extra-names", os.Getenv("EXTRA_GEDCOM_NAMES"),
+		"comma-separated GEDCOM names to include who are not blood ancestors "+
+			"(defaults to $EXTRA_GEDCOM_NAMES)")
+	generations := flag.Int("generations", 3, "generations above the two roots")
 	flag.Parse()
 
 	if *gedPath == "" || *promptsPath == "" || *out == "" {
 		fmt.Fprintln(os.Stderr, "usage: rewrite-prompts -gedcom FILE -prompts FILE -out FILE")
 		os.Exit(2)
 	}
-	if err := run(*gedPath, *promptsPath, *out); err != nil {
+	var extras []string
+	for _, name := range strings.Split(*extraNames, ",") {
+		if name = strings.TrimSpace(name); name != "" {
+			extras = append(extras, name)
+		}
+	}
+	if *dadName == "" || *momName == "" {
+		fmt.Fprintln(os.Stderr, "rewrite-prompts: -dad-name and -mom-name are required "+
+			"(or set $DAD_GEDCOM_NAME and $MOM_GEDCOM_NAME)")
+		os.Exit(2)
+	}
+
+	if err := run(*gedPath, *promptsPath, *out, *dadName, *momName, extras, *generations); err != nil {
 		fmt.Fprintf(os.Stderr, "rewrite-prompts: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func run(gedPath, promptsPath, outPath string) error {
+func run(gedPath, promptsPath, outPath, dadName, momName string, extraNames []string, generations int) error {
 	gf, err := os.Open(gedPath)
 	if err != nil {
 		return err
@@ -54,7 +75,11 @@ func run(gedPath, promptsPath, outPath string) error {
 		return fmt.Errorf("parse gedcom: %w", err)
 	}
 
-	tree, err := subjects.Derive(ged, subjects.DefaultOptions())
+	tree, err := subjects.Derive(ged, subjects.Options{
+		RootNames:   []string{dadName, momName},
+		Generations: generations,
+		ExtraNames:  extraNames,
+	})
 	if err != nil {
 		return fmt.Errorf("derive tree: %w", err)
 	}
@@ -70,8 +95,8 @@ func run(gedPath, promptsPath, outPath string) error {
 	}
 
 	personSubjects, err := tree.PersonSubjects(map[string]string{
-		"Dad": "Peter John /Hale/",
-		"Mom": "Ruth Ann /Brennan/",
+		"Dad": dadName,
+		"Mom": momName,
 	})
 	if err != nil {
 		return err

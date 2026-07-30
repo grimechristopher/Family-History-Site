@@ -8,8 +8,10 @@
 /tmp/
 static/css/tailwind.css
 
-# Local data
+# Local data. The family's own GEDCOM export stays out; the small invented one the
+# parser is tested against has to be in, or those tests cannot run from a clone.
 *.ged
+!internal/gedcom/testdata/*.ged
 *.dump
 
 # Notes about the family. The spec and the plan quote real questions and name

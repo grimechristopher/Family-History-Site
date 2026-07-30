@@ -1,5 +1,6 @@
-GEDCOM ?= $(HOME)/Documents/Github/genealogy-export/Brennan-Hale Tree.ged
-PROMPTS ?= $(HOME)/Documents/Obsidian/General Notebook/General Notebook/Areas/Ancestry Book/Prompts 3.md
+# Paths to your own data. Override on the command line or in the environment.
+GEDCOM ?= $(GEDCOM_PATH)
+PROMPTS ?= $(PROMPTS_PATH)
 
 .PHONY: help build test test-unit test-db test-real fmt vet check testdb-start testdb-stop import import-dry run set-email
 

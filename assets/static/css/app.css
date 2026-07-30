@@ -5,7 +5,7 @@
    -------------------------------------------------------------------- */
 
 /* Atkinson Hyperlegible — drawn by the Braille Institute for readers with
-   low vision. Chosen for Ruth, who has macular degeneration: unambiguous
+   low vision. Chosen for a reader with macular degeneration: unambiguous
    letterforms, open apertures, no confusable I/l/1. Everything read as
    content is set in this. */
 @font-face {
@@ -51,7 +51,7 @@
 }
 
 /* ---------- Tokens ----------------------------------------------------
-   Who this is for: James and Ruth, 68 and 70, on iPads. Ruth is partially
+   Who this is for: two people in their late sixties, on iPads. One is partially
    sighted and answers by speaking into the keyboard microphone. The single job
    of a screen is to get one memory out of one person, right now.
 

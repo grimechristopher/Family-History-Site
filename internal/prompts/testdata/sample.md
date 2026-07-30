@@ -1,6 +1,6 @@
 # Dad
 ## Parents
-### James R Hale
+### Peter S Hale
 What do you remember about your Aunts and Uncles?
 What kind of cars did he have?
 ### Grandma Vera Hale

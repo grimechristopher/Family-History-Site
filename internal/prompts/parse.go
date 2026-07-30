@@ -17,7 +17,7 @@ import (
 type Question struct {
 	Person     string // "Dad", "Mom"
 	Section    string // "Parents", "About You"
-	Subsection string // "James R Hale", "Childhood", or "" when absent
+	Subsection string // "Peter S Hale", "Childhood", or "" when absent
 	IsProposed bool
 	Ordinal    int // 1-based position within (Person, Section, Subsection)
 	Body       string
@@ -48,7 +48,7 @@ func (h Heading) String() string {
 // can be added, removed or reordered in the prompts file freely.
 //
 // Two positional schemes were tried first and both corrupted data. Keying on the
-// heading text meant renaming "### Alice May Osgood" gave all seventeen of her
+// heading text meant renaming "### Alice May Fletcher" gave all seventeen of her
 // questions new identities and archived their answers. Keying on position within
 // the subject meant that routing a question onto a different subject shifted
 // every ordinal after it, so the next import wrote one question's text into

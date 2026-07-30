@@ -14,12 +14,12 @@ import (
 //
 // This routes only the unambiguous ones. Two rules keep it honest:
 //
-//   - The surname has to be written as a family: "the Aldermans", "the Osgood
-//     family", "the Alderman's", "the Nash side", "the Vale line". A bare
+//   - The surname has to be written as a family: "the Aldermans", "the Fletcher
+//     family", "the Alderman's", "the Osgood side", "the Ward line". A bare
 //     mention is not enough, because these questions also name people in
 //     passing.
 //   - Exactly one couple may match. "the Hales, and the Fletchers" names two and
-//     stays put, as does "Radley and Vance ancestors".
+//     stays put, as does "Osgood and Ward ancestors".
 //
 // Everything it declines is reported rather than dropped, so the decisions can
 // be reviewed instead of trusted.
@@ -48,7 +48,7 @@ func singular(name string) string {
 	n = strings.TrimSuffix(n, "s'")
 	n = strings.TrimSuffix(n, "'")
 	if strings.HasSuffix(n, "s") && len(n) > 3 {
-		// "Osgood" is already singular, so callers try both forms.
+		// A surname like "Fletchers" may already be singular, so callers try both.
 		return strings.TrimSuffix(n, "s")
 	}
 	return n
@@ -114,10 +114,10 @@ type Routing struct {
 //
 // Two different reads of the text are used on purpose. Whether the question
 // means to name a family at all comes from the family-style phrasing — "the
-// Aldermans", "the Nash side", "the Vale line". Whether it names more than
+// Aldermans", "the Osgood side", "the Ward line". Whether it names more than
 // one comes from scanning every capitalised word against the couples' surnames,
-// which is what catches "Grandma Alice's Radley and Vance ancestors": the
-// phrasing only marks Vance, but Radley is there too, so the question is
+// which is what catches "Grandma Alice's Osgood and Ward ancestors": the
+// phrasing only marks Ward, but Osgood is there too, so the question is
 // ambiguous and stays put.
 func (t *Tree) RouteToCouple(body string) Routing {
 	names := FamilyNamesIn(body)
