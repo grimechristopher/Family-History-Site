@@ -1409,3 +1409,13 @@ a.pnode-hit:focus-visible .pnode-box { stroke: var(--teal); stroke-width: 3; }
     clip: rect(0 0 0 0); white-space: nowrap; border: 0;
   }
 }
+
+/* A six-digit code read off a screen and typed in: spaced out, in the typed face,
+   and wide enough that it never wraps at the largest text size. */
+.input-code {
+  font-family: var(--typed);
+  font-size: var(--t-lead);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .3em;
+  max-width: 11ch;
+}

@@ -43,6 +43,11 @@ type harness struct {
 	dadQuestion int64
 	momQuestion int64
 	sentEmails  []string
+	// liveCode is the one six-digit code the stubbed Supabase will accept.
+	liveCode string
+	// sendRateLimited makes the stub answer a send with 429, as Supabase does when
+	// the same address asks twice in quick succession.
+	sendRateLimited bool
 }
 
 func newHarness(t *testing.T) *harness {
@@ -71,8 +76,34 @@ func newHarness(t *testing.T) *harness {
 	// Stand in for Supabase so no test ever reaches the network.
 	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
-		var payload struct{ Email string }
+		var payload struct {
+			Email string `json:"email"`
+			Token string `json:"token"`
+		}
 		_ = json.Unmarshal(body, &payload)
+
+		// The code exchange, which answers with a token only for the code the test
+		// says is live. Everything else is a send, recorded and acknowledged.
+		if strings.HasSuffix(r.URL.Path, "/auth/v1/verify") {
+			if h.liveCode == "" || payload.Token != h.liveCode {
+				w.WriteHeader(http.StatusForbidden)
+				io.WriteString(w, `{"error_code":"otp_expired","msg":"Token has expired or is invalid"}`)
+				return
+			}
+			// One use only, as Supabase does it.
+			h.liveCode = ""
+			token := mintToken(t, jwtSecret, payload.Email, "authenticated", time.Now().Add(time.Hour))
+			w.WriteHeader(http.StatusOK)
+			io.WriteString(w, `{"access_token":"`+token+`","token_type":"bearer"}`)
+			return
+		}
+
+		if h.sendRateLimited {
+			w.WriteHeader(http.StatusTooManyRequests)
+			io.WriteString(w, `{"code":429,"error_code":"over_email_send_rate_limit",`+
+				`"msg":"For security purposes, you can only request this after 52 seconds."}`)
+			return
+		}
 		h.sentEmails = append(h.sentEmails, payload.Email)
 		w.WriteHeader(http.StatusOK)
 		io.WriteString(w, "{}")
@@ -209,6 +240,96 @@ func (h *harness) signIn(email string) *http.Cookie {
 }
 
 // --- auth ---------------------------------------------------------------
+
+// Asking twice in a row is the likeliest way for somebody to meet Supabase's send
+// limit, and the first email is already sitting in their inbox. Sending them back
+// to the address form would take away the code field that would let them in.
+func TestAskingTwiceStillOffersTheCodeField(t *testing.T) {
+	h := newHarness(t)
+	h.sendRateLimited = true
+
+	rec := h.post("/login", url.Values{"email": {"mom@example.com"}}, nil)
+	body := rec.Body.String()
+
+	if !strings.Contains(body, `action="/login/code"`) {
+		t.Error("the code field is gone, so a working code in the inbox cannot be used")
+	}
+	if !strings.Contains(body, "already on its way") {
+		t.Errorf("no explanation that an email was already sent. body: %s", body)
+	}
+	if strings.Contains(body, "couldn't send") {
+		t.Error("reported as a failure when an email had in fact just been sent")
+	}
+	// Quietly, since nothing went wrong.
+	if !strings.Contains(body, "banner-quiet") {
+		t.Error("styled as an error when it is only information")
+	}
+}
+
+// The sign-in email offers a six-digit code as well as a link, so the site has to
+// take it. It is also the route that does not depend on the callback URL being in
+// Supabase's redirect allow list, which is what broke sign-in on the LAN.
+func TestSignInWithTheCodeFromTheEmail(t *testing.T) {
+	h := newHarness(t)
+	h.liveCode = "824669"
+
+	// Typed the way somebody reads it off a screen.
+	rec := h.post("/login/code", url.Values{
+		"email": {"mom@example.com"},
+		"code":  {" 824 669 "},
+	}, nil)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("code sign-in = %d, want 303. body: %s", rec.Code, rec.Body.String())
+	}
+	var cookie *http.Cookie
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == auth.SessionCookie && c.Value != "" {
+			cookie = c
+		}
+	}
+	if cookie == nil {
+		t.Fatal("no session cookie issued")
+	}
+	// The session must really be Mom's, not merely present.
+	home := h.get("/", cookie)
+	if !strings.Contains(home.Body.String(), "Mom") {
+		t.Error("signed in, but the page is not Mom's")
+	}
+}
+
+func TestCodeSignInRefusesWhatItShould(t *testing.T) {
+	cases := []struct {
+		name, email, code, live string
+	}{
+		{"wrong code", "mom@example.com", "111111", "824669"},
+		{"no code at all", "mom@example.com", "", "824669"},
+		{"address not on the allowlist", "stranger@example.com", "824669", "824669"},
+		{"code already used", "mom@example.com", "824669", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(t)
+			h.liveCode = tc.live
+
+			rec := h.post("/login/code", url.Values{
+				"email": {tc.email}, "code": {tc.code},
+			}, nil)
+
+			for _, c := range rec.Result().Cookies() {
+				if c.Name == auth.SessionCookie && c.Value != "" {
+					t.Fatalf("a session was issued for %s", tc.name)
+				}
+			}
+			// Sent back to the form with something to act on, not a bare error.
+			if rec.Code != http.StatusOK {
+				t.Errorf("status = %d, want 200 with the form again", rec.Code)
+			}
+			if !strings.Contains(rec.Body.String(), `class="banner"`) {
+				t.Error("no explanation shown")
+			}
+		})
+	}
+}
 
 // The dev login signs in as anybody with no link at all, so the thing worth
 // pinning down is that it does not exist unless DEV_LOGIN was set.

@@ -87,6 +87,9 @@ type pageData struct {
 	Sent    bool
 	Expired bool
 	Error   string
+	// Notice is something worth saying that is not a failure, so it is styled
+	// quietly. Asking for a second link reads as an error otherwise.
+	Notice string
 
 	// home
 	Greeting string
@@ -203,6 +206,7 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("POST /login", http.HandlerFunc(s.handleLoginSubmit))
 	mux.Handle("GET /auth/callback", http.HandlerFunc(s.handleCallback))
 	mux.Handle("POST /auth/session", http.HandlerFunc(s.handleSession))
+	mux.Handle("POST /login/code", http.HandlerFunc(s.handleCodeSubmit))
 	mux.Handle("POST /logout", http.HandlerFunc(s.handleLogout))
 
 	// Signs in as a contributor with no magic link, for checking the site as Mom or

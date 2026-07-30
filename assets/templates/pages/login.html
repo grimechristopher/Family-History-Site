@@ -2,8 +2,28 @@
 <h1>Family History</h1>
 
 {{if .Sent}}
+  {{if .Notice}}<div class="banner banner-quiet">{{.Notice}}</div>{{end}}
+  {{if .Error}}<div class="banner">{{.Error}}</div>{{end}}
+
   <p class="lede">Check your email. There&rsquo;s a link in there &mdash; tap it and you&rsquo;re in.</p>
   <p class="lede">We sent it to <strong>{{.Email}}</strong>. It can take a minute to arrive.</p>
+
+  {{/* The same email also carries a six-digit code, so the site has to take it.
+       It is the sturdier of the two routes: the link only lands back here if this
+       site's address is in Supabase's allow list, whereas the code is typed in and
+       checked on the server. It also works when the email is on the phone and the
+       site is open on the iPad. */}}
+  <form method="post" action="/login/code">
+    <input type="hidden" name="email" value="{{.Email}}">
+    <label for="code">Or type the code from the email</label>
+    <input id="code" name="code" type="text" required
+           inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]*"
+           maxlength="12" placeholder="000000" class="input-code">
+    <div class="btn-row">
+      <button class="btn" type="submit">Sign me in</button>
+    </div>
+  </form>
+
   <div class="btn-row">
     <a class="btn btn-quiet" href="/login">Use a different address</a>
   </div>

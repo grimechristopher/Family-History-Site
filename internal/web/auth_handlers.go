@@ -84,14 +84,23 @@ func (s *Server) handleLoginSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	redirectTo := s.Config.BaseURL + "/auth/callback"
-	if err := s.Supabase.SendMagicLink(r.Context(), email, redirectTo); err != nil {
+	err = s.Supabase.SendMagicLink(r.Context(), email, redirectTo)
+	switch {
+	case errors.Is(err, auth.ErrRateLimited):
+		// Pressing the button twice is the most likely way to get here, and the
+		// first email is already in their inbox. Sending them back to the address
+		// form would hide the code field that would let them straight in, so this
+		// goes on to the same screen a successful send does.
+		s.Log.Info("magic link asked for again too soon", "email", email)
+		data.Sent = true
+		data.Notice = "One is already on its way. Check your email — and if you asked twice, " +
+			"the first one still works."
+	case err != nil:
 		s.Log.Error("could not send magic link", "email", email, "err", err)
 		data.Error = "We couldn't send the email just now. Please try again in a minute."
-		s.render(w, r, "login", data)
-		return
+	default:
+		data.Sent = true
 	}
-
-	data.Sent = true
 	s.render(w, r, "login", data)
 }
 
@@ -102,13 +111,79 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleSession exchanges a verified Supabase token for this site's own session.
+// The token arrives from the callback page, which reads it out of the URL
+// fragment.
 func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 	token := r.FormValue("access_token")
 	if token == "" {
 		http.Error(w, "missing access token", http.StatusBadRequest)
 		return
 	}
+	s.signIn(w, r, token)
+}
 
+// handleCodeSubmit signs someone in with the six-digit code from the email.
+//
+// The email offers the code as an alternative to the link, so the site has to
+// accept it. It is also the more dependable of the two: the link only comes back
+// here if this site's callback URL is in Supabase's allow list, whereas the code
+// is typed in and exchanged server-side, which needs no allow list, no JavaScript
+// and not even the same device.
+func (s *Server) handleCodeSubmit(w http.ResponseWriter, r *http.Request) {
+	email := strings.ToLower(strings.TrimSpace(r.FormValue("email")))
+	// People read the code off a screen and type it with whatever spacing they
+	// see, and iOS likes to paste it with a trailing space.
+	code := strings.Map(func(ch rune) rune {
+		if ch >= '0' && ch <= '9' {
+			return ch
+		}
+		return -1
+	}, r.FormValue("code"))
+
+	data := s.newPageData(r, "Sign in")
+	data.Email = email
+	data.Sent = true
+
+	if email == "" || code == "" {
+		data.Error = "Type the six-digit code from the email."
+		s.render(w, r, "login", data)
+		return
+	}
+
+	// Same allowlist check as the link route, for the same reason: a valid
+	// Supabase login is not by itself permission to be here.
+	if _, err := s.Store.UserByEmail(r.Context(), email); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			s.Log.Warn("code sign-in for unknown address", "email", email)
+			data.Error = "That code did not work. Ask for a new link and try again."
+			s.render(w, r, "login", data)
+			return
+		}
+		s.serverError(w, r, err)
+		return
+	}
+
+	token, err := s.Supabase.VerifyEmailOTP(r.Context(), email, code)
+	if err != nil {
+		if errors.Is(err, auth.ErrBadCode) {
+			// Wrong, used, or expired all read the same and all have one fix.
+			data.Error = "That code did not work. It may have expired, or already been used. " +
+				"Ask for a new link and try again."
+			s.render(w, r, "login", data)
+			return
+		}
+		s.Log.Error("could not verify sign-in code", "email", email, "err", err)
+		data.Error = "We couldn't check that code just now. Please try again in a minute."
+		s.render(w, r, "login", data)
+		return
+	}
+
+	s.signIn(w, r, token)
+}
+
+// signIn is the one place a Supabase token becomes a session on this site,
+// whether it arrived from the link or from the code.
+func (s *Server) signIn(w http.ResponseWriter, r *http.Request, token string) {
 	claims, err := s.verifyToken(r, token)
 	if err != nil {
 		s.Log.Warn("rejected supabase token", "err", err)

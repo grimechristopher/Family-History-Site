@@ -62,7 +62,77 @@ func (s *Supabase) SendMagicLink(ctx context.Context, email, redirectTo string) 
 		return nil
 	}
 	detail, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+	if resp.StatusCode == http.StatusTooManyRequests {
+		return ErrRateLimited
+	}
 	return fmt.Errorf("supabase returned %s: %s", resp.Status, bytes.TrimSpace(detail))
+}
+
+// ErrRateLimited means Supabase declined to send another email to this address so
+// soon. It is reported separately because it almost always means one was just
+// sent: the right response is to point at the inbox, not to show a failure.
+var ErrRateLimited = errors.New("an email was sent to this address very recently")
+
+// ErrBadCode means the six-digit code was wrong, already used, or has expired.
+// Supabase does not distinguish between those, and neither should the message
+// shown: all three are fixed by asking for another one.
+var ErrBadCode = errors.New("that code is not valid")
+
+// VerifyEmailOTP exchanges the code from the sign-in email for an access token.
+//
+// This is the same email the link is in -- Supabase puts both in it -- and the
+// same one-time token behind both, so using either consumes the other. It exists
+// as a second route because the link depends on the redirect URL being in
+// Supabase's allow list, and the code depends on nothing: it is typed into this
+// site and exchanged server-side, so it works from any device, on any host, with
+// no JavaScript.
+func (s *Supabase) VerifyEmailOTP(ctx context.Context, email, code string) (string, error) {
+	body, err := json.Marshal(map[string]any{
+		"type":  "email",
+		"email": email,
+		"token": code,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.BaseURL+"/auth/v1/verify",
+		bytes.NewReader(body))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("apikey", s.AnonKey)
+
+	resp, err := s.Client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("reach supabase: %w", err)
+	}
+	defer resp.Body.Close()
+
+	payload, err := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
+	if err != nil {
+		return "", err
+	}
+
+	if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusBadRequest ||
+		resp.StatusCode == http.StatusUnauthorized {
+		return "", ErrBadCode
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", fmt.Errorf("supabase returned %s: %s", resp.Status, bytes.TrimSpace(payload))
+	}
+
+	var out struct {
+		AccessToken string `json:"access_token"`
+	}
+	if err := json.Unmarshal(payload, &out); err != nil {
+		return "", fmt.Errorf("decode supabase response: %w", err)
+	}
+	if out.AccessToken == "" {
+		return "", ErrBadCode
+	}
+	return out.AccessToken, nil
 }
 
 // UserFromToken asks Supabase to verify an access token and describe its owner.
