@@ -106,8 +106,8 @@ func TestSurnameOnlyHeadingResolvesWhenUnique(t *testing.T) {
 	if len(ambs) != 0 {
 		t.Fatalf("unexpected ambiguities: %v", ambs)
 	}
-	if got.Subject != "clarence-virgil-ward" {
-		t.Errorf("Subject = %q, want clarence-virgil-ward", got.Subject)
+	if got.Subject != "clarence-vernon-ward" {
+		t.Errorf("Subject = %q, want clarence-vernon-ward", got.Subject)
 	}
 }
 
@@ -116,7 +116,7 @@ func TestHonorificSexDisambiguates(t *testing.T) {
 	tree := testTree()
 
 	dad, _ := match(t, tree, "Grandparents", "Grandpa Ward")
-	if dad.Subject != "clarence-virgil-ward" {
+	if dad.Subject != "clarence-vernon-ward" {
 		t.Errorf("Grandpa Ward -> %q", dad.Subject)
 	}
 

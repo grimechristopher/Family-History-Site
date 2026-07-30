@@ -64,7 +64,7 @@ func TestMarriedSurnameUsesTheLastMarriage(t *testing.T) {
 		"Nora Angeline Osgood":      "Nora Angeline (Osgood) Brennan",
 		"Alice May Fletcher":        "Alice May (Fletcher) Brennan",
 		"Margaret Lucille Alderman": "Margaret Lucille (Alderman) Ward",
-		"Anna Lund":              "Anna (Lund) Alderman",
+		"Anna Lund":                 "Anna (Lund) Alderman",
 		"Margaret Mary Fletcher":    "Margaret Mary (Fletcher) Hale",
 	}
 	for recorded, want := range cases {
