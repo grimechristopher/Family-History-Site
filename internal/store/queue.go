@@ -85,11 +85,11 @@ func (s *Store) NextCards(ctx context.Context, u *User, limit int) ([]Card, erro
 func (s *Store) DeferQuestion(ctx context.Context, questionID, userID int64) error {
 	_, err := s.q(ctx).Exec(ctx, `
 		INSERT INTO family.question_deferrals (question_id, user_id, deferred_at, defer_count, family_id)
-		VALUES ($1, $2, now(), 1, $3)
+		VALUES ($1, $2, now(), 1, (SELECT family_id FROM family.questions WHERE id = $1))
 		ON CONFLICT (question_id, user_id) DO UPDATE SET
 		  deferred_at = now(),
 		  defer_count = family.question_deferrals.defer_count + 1`,
-		questionID, userID, FamilyFrom(ctx))
+		questionID, userID)
 	if err != nil {
 		return fmt.Errorf("defer question %d: %w", questionID, err)
 	}

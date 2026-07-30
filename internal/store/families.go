@@ -136,7 +136,7 @@ type Member struct {
 
 // Members lists everybody in this family, in the order they joined, so the page
 // reads as a history of who was added rather than an alphabetical roster.
-func (s *Store) Members(ctx context.Context) ([]Member, error) {
+func (s *Store) Members(ctx context.Context, familyID int64) ([]Member, error) {
 	rows, err := s.q(ctx).Query(ctx, `
 		SELECT u.id, u.display_name, u.email, m.role,
 		       coalesce(trim(p.given_name || ' ' || p.surname), '')
@@ -144,7 +144,7 @@ func (s *Store) Members(ctx context.Context) ([]Member, error) {
 		  JOIN core.users u ON u.id = m.user_id
 		  LEFT JOIN family.people p ON p.id = m.person_id AND p.family_id = m.family_id
 		 WHERE m.family_id = $1
-		 ORDER BY m.created_at`, FamilyFrom(ctx))
+		 ORDER BY m.created_at`, familyID)
 	if err != nil {
 		return nil, fmt.Errorf("members: %w", err)
 	}
@@ -194,16 +194,16 @@ func (s *Store) UnclaimedTreePeople(ctx context.Context) ([]TreePerson, error) {
 // the request's transaction: the membership it updates may have been inserted
 // moments earlier in that same transaction, and a second connection cannot see it
 // yet. Handing this the pool instead updates nothing and reports success.
-func (s *Store) SetMemberPerson(ctx context.Context, userID int64, personID *int64) error {
+func (s *Store) SetMemberPerson(ctx context.Context, familyID, userID int64, personID *int64) error {
 	tag, err := s.q(ctx).Exec(ctx, `
 		UPDATE core.family_members SET person_id = $3
-		 WHERE family_id = $1 AND user_id = $2`, FamilyFrom(ctx), userID, personID)
+		 WHERE family_id = $1 AND user_id = $2`, familyID, userID, personID)
 	if err != nil {
 		return fmt.Errorf("link user %d to person: %w", userID, err)
 	}
 	if tag.RowsAffected() == 0 {
 		return fmt.Errorf("link user %d to person: they are not a member of family %d",
-			userID, FamilyFrom(ctx))
+			userID, familyID)
 	}
 	return nil
 }
@@ -254,4 +254,35 @@ func (s *Store) MemberNames(ctx context.Context, familyID int64) ([]string, erro
 		out = append(out, n)
 	}
 	return out, rows.Err()
+}
+
+// StandingOf is what somebody is across all the families they belong to.
+//
+// A person has a role in each family, and with one combined view there has to be
+// one answer: admin anywhere makes them an admin here, because the only thing the
+// role gates is seeing everybody's questions rather than their own. The queue
+// settings come from whichever membership holds them -- they are kept in step, so
+// the card stack behaves the same wherever it is read.
+type Standing struct {
+	Role                string
+	QueueMode           string
+	QueueSeed           int64
+	QueueFocusSubjectID *int64
+	PersonID            *int64
+}
+
+func (s *Store) StandingOf(ctx context.Context, userID int64) (Standing, error) {
+	var st Standing
+	err := s.q(ctx).QueryRow(ctx, `
+		SELECT CASE WHEN bool_or(role = 'admin') THEN 'admin' ELSE 'contributor' END,
+		       coalesce(min(queue_mode), 'all'),
+		       coalesce(min(queue_seed), 0),
+		       (array_agg(queue_focus_subject_id) FILTER (WHERE queue_focus_subject_id IS NOT NULL))[1],
+		       (array_agg(person_id) FILTER (WHERE person_id IS NOT NULL))[1]
+		  FROM core.family_members WHERE user_id = $1`, userID).
+		Scan(&st.Role, &st.QueueMode, &st.QueueSeed, &st.QueueFocusSubjectID, &st.PersonID)
+	if err != nil {
+		return st, fmt.Errorf("standing of user %d: %w", userID, err)
+	}
+	return st, nil
 }

@@ -18,10 +18,10 @@
   {{/* In the bar rather than on a row of its own: the second row cost 77px of
        every screen before a single question. */}}
   <nav class="tabs" aria-label="Sections">
-    <a class="tab" href="{{fam $.FamilySlug "/cards"}}" {{if eq .Nav "cards"}}aria-current="page"{{end}}>Cards</a>
-    <a class="tab" href="{{fam $.FamilySlug "/questions"}}" {{if eq .Nav "questions"}}aria-current="page"{{end}}>Questions</a>
-    <a class="tab" href="{{fam $.FamilySlug "/tree"}}" {{if eq .Nav "tree"}}aria-current="page"{{end}}>Tree</a>
-    <a class="tab" href="{{fam $.FamilySlug "/people"}}" {{if eq .Nav "people"}}aria-current="page"{{end}}>People</a>
+    <a class="tab" href="/cards" {{if eq .Nav "cards"}}aria-current="page"{{end}}>Cards</a>
+    <a class="tab" href="/questions" {{if eq .Nav "questions"}}aria-current="page"{{end}}>Questions</a>
+    <a class="tab" href="/tree" {{if eq .Nav "tree"}}aria-current="page"{{end}}>Tree</a>
+    <a class="tab" href="/people" {{if eq .Nav "people"}}aria-current="page"{{end}}>People</a>
   </nav>
 
   <div class="bar-tools">

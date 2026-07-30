@@ -229,27 +229,9 @@ func (h *harness) do(req *http.Request) *httptest.ResponseRecorder {
 	return rec
 }
 
-// inFamily prefixes the paths that live under a family, so the existing tests can
-// go on naming "/cards" and mean this harness's family. Anything already absolute
-// about a family, and everything outside one -- login, the callback, the invite
-// pages -- is left alone.
-func (h *harness) inFamily(path string) string {
-	if strings.HasPrefix(path, "/f/") {
-		return path
-	}
-	// "/" means this family's home page. The bare root is a chooser that redirects,
-	// and no test is about that.
-	if path == "/" {
-		return "/f/" + h.familySlug + "/"
-	}
-	for _, p := range []string{"/cards", "/questions", "/entries", "/stories",
-		"/photos", "/tree", "/subjects"} {
-		if path == p || strings.HasPrefix(path, p+"/") || strings.HasPrefix(path, p+"?") {
-			return "/f/" + h.familySlug + path
-		}
-	}
-	return path
-}
+// inFamily is now a no-op: pages are not under a family any more. Kept so the
+// existing calls read unchanged, and so the reason is written down somewhere.
+func (h *harness) inFamily(path string) string { return path }
 
 func (h *harness) post(path string, form url.Values, cookie *http.Cookie) *httptest.ResponseRecorder {
 	path = h.inFamily(path)
@@ -896,10 +878,10 @@ func TestQuestionListDefaultsToTheViewerAndOffersOthers(t *testing.T) {
 	dad := h.signIn("dad@example.com")
 
 	body := h.get("/questions", dad).Body.String()
-	if !strings.Contains(body, `href="/f/home/questions?asked_of=Dad"`) {
+	if !strings.Contains(body, `href="/questions?asked_of=Dad"`) {
 		t.Error("expected Dad in the people list")
 	}
-	if !strings.Contains(body, `href="/f/home/questions?asked_of=Mom"`) {
+	if !strings.Contains(body, `href="/questions?asked_of=Mom"`) {
 		t.Error("expected Mom offered as somewhere else to look")
 	}
 	// Contributors are not offered "everyone"; only an admin is.
@@ -1562,10 +1544,10 @@ func TestNavIsThreeTabsAndMarksTheCurrentOne(t *testing.T) {
 			t.Errorf("nav missing %q", want)
 		}
 	}
-	if strings.Contains(body, `class="tab" href="/f/home/stories"`) {
+	if strings.Contains(body, `class="tab" href="/stories"`) {
 		t.Error("Stories should no longer be a top-level tab")
 	}
-	if !strings.Contains(body, `href="/f/home/cards" aria-current="page"`) {
+	if !strings.Contains(body, `href="/cards" aria-current="page"`) {
 		t.Error("the current tab should be marked for screen readers")
 	}
 }
@@ -1579,8 +1561,8 @@ func TestFocusSubjectSwitchesTheCardStack(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want 303", rec.Code)
 	}
-	if loc := rec.Header().Get("Location"); loc != "/f/home/cards" {
-		t.Errorf("Location = %q, want /f/home/cards", loc)
+	if loc := rec.Header().Get("Location"); loc != "/cards" {
+		t.Errorf("Location = %q, want /cards", loc)
 	}
 
 	m, err := h.store.MembershipOf(h.ctx, h.familyID, h.dadID)
@@ -1621,10 +1603,10 @@ func TestSwitchingPersonDropsTheSubjectFilter(t *testing.T) {
 	dad := h.signIn("dad@example.com")
 
 	body := h.get("/questions?subject=peter-samuel-hale", dad).Body.String()
-	if strings.Contains(body, `href="/f/home/questions?asked_of=Mom&subject=`) {
+	if strings.Contains(body, `href="/questions?asked_of=Mom&subject=`) {
 		t.Error("a person link must not carry the current subject filter")
 	}
-	if !strings.Contains(body, `href="/f/home/questions?asked_of=Mom"`) {
+	if !strings.Contains(body, `href="/questions?asked_of=Mom"`) {
 		t.Error("expected a plain link to Mom's questions")
 	}
 }
@@ -1661,7 +1643,7 @@ func TestEmptyFilterExplainsItselfRatherThanCongratulating(t *testing.T) {
 	if !strings.Contains(body, "No questions match") {
 		t.Error("expected an explanation of why the list is empty")
 	}
-	if !strings.Contains(body, `href="/f/home/questions?asked_of=Dad"`) {
+	if !strings.Contains(body, `href="/questions?asked_of=Dad"`) {
 		t.Error("expected a way back to all of Dad's questions")
 	}
 
@@ -1826,7 +1808,7 @@ func TestAskingAQuestion(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want 303", rec.Code)
 	}
-	if loc := rec.Header().Get("Location"); !strings.HasPrefix(loc, "/f/home/questions/") {
+	if loc := rec.Header().Get("Location"); !strings.HasPrefix(loc, "/questions/") {
 		t.Errorf("Location = %q, want the new question", loc)
 	}
 

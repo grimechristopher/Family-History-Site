@@ -93,8 +93,9 @@ func (s *Store) CreateUserQuestion(ctx context.Context, subjectID, askedOfUserID
 		  (subject_id, asked_of_user_id, topic, body, sort_order, source, created_by_user_id, family_id)
 		VALUES ($1, $2, $3, $4,
 		        coalesce((SELECT max(sort_order) + 1 FROM family.questions), 0),
-		        'user', $5, $6)
-		RETURNING id`, subjectID, askedOfUserID, topic, body, authorID, FamilyFrom(ctx)).Scan(&id)
+		        'user', $5,
+		        (SELECT family_id FROM family.subjects WHERE id = $1))
+		RETURNING id`, subjectID, askedOfUserID, topic, body, authorID).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("create question: %w", err)
 	}

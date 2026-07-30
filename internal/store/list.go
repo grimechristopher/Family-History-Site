@@ -31,6 +31,10 @@ type QuestionListItem struct {
 type QuestionFilter struct {
 	SubjectSlug string
 	AskedOfName string
+	// FamilySlug narrows to one line. Empty means every family the viewer belongs
+	// to, which is what row-level security already limits them to -- this filter
+	// only ever narrows within that, so it cannot widen anybody's access.
+	FamilySlug string
 	// OnlyUnanswered restricts to questions the intended person has not answered.
 	OnlyUnanswered bool
 	// OnlyAnswered is the complement, for the "answered" section.
@@ -57,6 +61,9 @@ func (s *Store) ListQuestions(ctx context.Context, viewerID int64, f QuestionFil
 	where = append(where, "q.archived_at IS NULL")
 	if f.SubjectSlug != "" {
 		add("s.slug = $%d", f.SubjectSlug)
+	}
+	if f.FamilySlug != "" {
+		add("q.family_id = (SELECT id FROM core.families WHERE slug = $%d)", f.FamilySlug)
 	}
 	if f.AskedOfName != "" {
 		add("asked.display_name = $%d", f.AskedOfName)
@@ -171,6 +178,11 @@ func (s *Store) ListCounts(ctx context.Context, f QuestionFilter) (ListCounts, e
 	var args []any
 
 	where = append(where, "q.archived_at IS NULL")
+	if f.FamilySlug != "" {
+		args = append(args, f.FamilySlug)
+		where = append(where,
+			fmt.Sprintf("q.family_id = (SELECT id FROM core.families WHERE slug = $%d)", len(args)))
+	}
 	if f.SubjectSlug != "" {
 		args = append(args, f.SubjectSlug)
 		where = append(where, fmt.Sprintf("s.slug = $%d", len(args)))

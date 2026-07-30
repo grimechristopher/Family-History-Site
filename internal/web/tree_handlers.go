@@ -177,7 +177,6 @@ func (s *Server) handleSubject(w http.ResponseWriter, r *http.Request) {
 	data.Answered = answered
 	for _, st := range stories {
 		data.Stories = append(data.Stories, storyView{
-			FamilySlug:    famSlug(r.Context()),
 			Story:         st,
 			IsMine:        st.AuthorUserID == u.ID,
 			PhotosEnabled: s.Storage.Configured(),
@@ -205,7 +204,7 @@ func (s *Server) handleFocusSubject(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	http.Redirect(w, r, famPath(r.Context(), "/cards"), http.StatusSeeOther)
+	http.Redirect(w, r, "/cards", http.StatusSeeOther)
 }
 
 // pedigreeNode is the shape the browser gets. Deliberately small: names, years,

@@ -112,8 +112,8 @@ func (s *Store) RootPeople(ctx context.Context) ([]int64, error) {
 		SELECT m.person_id
 		  FROM core.family_members m
 		  JOIN core.users u ON u.id = m.user_id
-		 WHERE m.family_id = $1 AND m.person_id IS NOT NULL AND m.role = 'contributor'
-		 ORDER BY u.display_name`, FamilyFrom(ctx))
+		 WHERE m.family_id = ANY($1) AND m.person_id IS NOT NULL AND m.role = 'contributor'
+		 ORDER BY u.display_name`, FamilyIDsFrom(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("root people: %w", err)
 	}

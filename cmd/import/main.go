@@ -239,7 +239,7 @@ func run(cfg importConfig) error {
 	// transaction rolls back and nothing is written.
 	errSentinel := fmt.Errorf("dry run: rolling back")
 	err = s.InTx(ctx, func(db store.DBTX) error {
-		if _, err := db.Exec(ctx, "SELECT set_config('app.family_id', $1, true)",
+		if _, err := db.Exec(ctx, "SELECT set_config('app.family_ids', $1, true)",
 			strconv.FormatInt(fam.ID, 10)); err != nil {
 			return fmt.Errorf("scope the import to family %d: %w", fam.ID, err)
 		}

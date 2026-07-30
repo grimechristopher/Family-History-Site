@@ -29,12 +29,16 @@ type Story struct {
 	ReplyCount   int
 }
 
-func (s *Store) CreateStory(ctx context.Context, authorUserID int64, title, body string, subjectID *int64, isDraft bool) (int64, error) {
+// familyID is used when the story is about nobody in particular. A story attached
+// to a subject takes that subject's family instead, which is the only value the
+// composite foreign key would accept anyway.
+func (s *Store) CreateStory(ctx context.Context, authorUserID int64, title, body string, subjectID *int64, isDraft bool, familyID int64) (int64, error) {
 	var id int64
 	err := s.q(ctx).QueryRow(ctx, `
 		INSERT INTO family.entries (question_id, author_user_id, title, body, subject_id, is_draft, family_id)
-		VALUES (NULL, $1, $2, $3, $4, $5, $6)
-		RETURNING id`, authorUserID, title, body, subjectID, isDraft, FamilyFrom(ctx)).Scan(&id)
+		VALUES (NULL, $1, $2, $3, $4, $5,
+		        coalesce((SELECT family_id FROM family.subjects WHERE id = $4), $6))
+		RETURNING id`, authorUserID, title, body, subjectID, isDraft, familyID).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("create story: %w", err)
 	}

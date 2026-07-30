@@ -2,7 +2,7 @@
      person's page, so it lives in partials rather than in either page. */}}
 {{define "qrow"}}
 <li class="qrow{{if .Answered}} qrow-done{{end}}">
-  <a class="qrow-body" href="/f/{{$.FamilySlug}}/questions/{{.ID}}">{{.Body}}</a>
+  <a class="qrow-body" href="/questions/{{.ID}}">{{.Body}}</a>
   <p class="qrow-meta">
     {{/* "Tony Lucero · asked of Tony Lucero" reads as a mistake. When somebody is
          asked about themselves the subject adds nothing, so only the person is

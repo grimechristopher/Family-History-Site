@@ -19,7 +19,7 @@
 {{if and .PhotosEnabled .IsMine}}
   <details class="photo-form">
     <summary>Add a photo</summary>
-    <form method="post" action="/f/{{$.FamilySlug}}/entries/{{.ID}}/photos" enctype="multipart/form-data">
+    <form method="post" action="/entries/{{.ID}}/photos" enctype="multipart/form-data">
       <input type="hidden" name="return_to" value="{{.ReturnTo}}">
       <label for="photo-{{.ID}}">Choose a picture</label>
       <input id="photo-{{.ID}}" name="photo" type="file" accept="image/*" required>

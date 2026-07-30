@@ -109,7 +109,7 @@ func TestOneFamilySeesNothingOfAnother(t *testing.T) {
 	// Her own family first. Without this the checks below would pass just as well
 	// on a page that was broken, empty, or a 500 -- which is the way an isolation
 	// test quietly stops testing anything.
-	own := get("/f/home/questions")
+	own := get("/questions")
 	if own.Code != http.StatusOK {
 		t.Fatalf("her own questions page = %d, want 200", own.Code)
 	}
@@ -119,7 +119,7 @@ func TestOneFamilySeesNothingOfAnother(t *testing.T) {
 	}
 
 	for _, path := range []string{
-		"/f/home/questions", "/f/home/cards", "/f/home/subjects", "/f/home/tree",
+		"/questions", "/cards", "/subjects", "/tree",
 	} {
 		rec := get(path)
 		if rec.Code != http.StatusOK {
@@ -136,46 +136,36 @@ func TestOneFamilySeesNothingOfAnother(t *testing.T) {
 	}
 
 	// By id, inside her own family's URL: the row exists, but not for her.
-	rec := get(fmt.Sprintf("/f/home/questions/%d", otherQuestion))
+	rec := get(fmt.Sprintf("/questions/%d", otherQuestion))
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("fetching another family's question by id = %d, want 404", rec.Code)
 	}
 }
 
-// Somebody who is not a member must not be able to tell that a family exists, so
-// this is 404 and not 403.
-func TestNonMemberGetsNotFoundNotForbidden(t *testing.T) {
+// A non-member cannot reach another family's content, and cannot summon it by
+// naming that family in the query string. The filter only ever narrows what
+// row-level security already allows, because the allowed set is built from
+// core.family_members and never from the request.
+func TestFilteringCannotWidenWhatYouSee(t *testing.T) {
 	h := newHarness(t)
 	seedOtherFamily(t, h)
 
 	handler, _ := appServer(t, h)
-	cookie := h.signIn("mom@example.com")
+	cookie := h.signIn("mom@example.com") // a member of "home" only
 
-	for _, path := range []string{"/f/other/questions", "/f/other/", "/f/other/tree"} {
+	for _, path := range []string{"/questions?family=other", "/questions", "/subjects"} {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		req.AddCookie(cookie)
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
 
-		if rec.Code != http.StatusNotFound {
-			t.Errorf("GET %s as a non-member = %d, want 404", path, rec.Code)
+		if rec.Code != http.StatusOK {
+			t.Errorf("GET %s = %d, want 200", path, rec.Code)
+			continue
 		}
-	}
-}
-
-// A family that does not exist is indistinguishable from one you are not in.
-func TestUnknownFamilyIsAlsoNotFound(t *testing.T) {
-	h := newHarness(t)
-	handler, _ := appServer(t, h)
-	cookie := h.signIn("mom@example.com")
-
-	req := httptest.NewRequest(http.MethodGet, "/f/no-such-family/questions", nil)
-	req.AddCookie(cookie)
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusNotFound {
-		t.Errorf("GET an unknown family = %d, want 404", rec.Code)
+		if strings.Contains(rec.Body.String(), "A QUESTION IN THE OTHER FAMILY") {
+			t.Errorf("%s showed a family she does not belong to", path)
+		}
 	}
 }
 
@@ -227,8 +217,11 @@ func TestAddingSomeoneLinksThemToTheTree(t *testing.T) {
 		"display_name": {"Aunt Jane"},
 		"email":        {"jane@example.com"},
 		"person_id":    {strconv.FormatInt(personID, 10)},
+		// Which line she is joining: a person may be in several, so the form has
+		// to say.
+		"family": {"home"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/f/home/people",
+	req := httptest.NewRequest(http.MethodPost, "/people",
 		strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(cookie)

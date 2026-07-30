@@ -28,6 +28,7 @@ func (s *Server) handleQuestions(w http.ResponseWriter, r *http.Request) {
 	filter := store.QuestionFilter{
 		SubjectSlug: r.URL.Query().Get("subject"),
 		AskedOfName: askedOf,
+		FamilySlug:  r.URL.Query().Get("family"),
 	}
 
 	// One section at a time. With 151 waiting, stacking both meant scrolling past
@@ -75,6 +76,7 @@ func (s *Server) handleQuestions(w http.ResponseWriter, r *http.Request) {
 	data.FilterSubject = filter.SubjectSlug
 	data.FilterAskedOf = filter.AskedOfName
 	data.SubjectGroups = groupSubjects(data.SubjectProgress)
+	data.FilterFamily = filter.FamilySlug
 	data.ViewerIsAdmin = u.Role == store.RoleAdmin
 	data.NothingMatches = counts.Unanswered == 0 && counts.Answered == 0
 
@@ -112,11 +114,9 @@ type answerView struct {
 	IsMine  bool
 	// IsPrimary marks the answer from the person the question was asked of.
 	IsPrimary bool
-	// FamilySlug, PhotosEnabled and ReturnTo are carried on the view so the shared
-	// partials need no template helpers to reach page-level state -- a partial
-	// receives only the view, so $ inside it is the view and not the page.
-	FamilySlug string
-	// PhotosEnabled and ReturnTo are carried for the same reason.
+	// PhotosEnabled and ReturnTo are carried on the view so the shared partials
+	// need no template helpers to reach page-level state: a partial receives only
+	// the view, so $ inside it is the view and not the page.
 	PhotosEnabled bool
 	ReturnTo      string
 }
@@ -155,7 +155,6 @@ func (s *Server) questionData(r *http.Request, id int64) (pageData, error) {
 	// primary / Others split fall out naturally.
 	for _, e := range entries {
 		view := answerView{
-			FamilySlug:    famSlug(r.Context()),
 			Entry:         e,
 			Replies:       replies[e.ID],
 			Photos:        photos[e.ID],
@@ -261,7 +260,7 @@ func (s *Server) handleReply(w http.ResponseWriter, r *http.Request) {
 
 	// Replies can hang off a story as well as an answer, so return to whichever
 	// page the reply came from, landing on the entry rather than the top.
-	back := returnTo(r, famPath(r.Context(), "/stories"))
+	back := returnTo(r, "/stories")
 	http.Redirect(w, r, back+"#entry-"+strconv.FormatInt(entryID, 10), http.StatusSeeOther)
 }
 
@@ -340,5 +339,5 @@ func (s *Server) handleAskQuestion(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	http.Redirect(w, r, famPath(r.Context(), "/questions/"+strconv.FormatInt(id, 10)), http.StatusSeeOther)
+	http.Redirect(w, r, "/questions/"+strconv.FormatInt(id, 10), http.StatusSeeOther)
 }

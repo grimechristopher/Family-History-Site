@@ -74,15 +74,16 @@ func (s *Store) UserByDisplayName(ctx context.Context, name string) (*User, erro
 // questions" leads to an empty page.
 func (s *Store) Contributors(ctx context.Context) ([]*User, error) {
 	rows, err := s.q(ctx).Query(ctx, `
-		SELECT `+prefixed(userColumns, "u.")+`
+		SELECT DISTINCT `+prefixed(userColumns, "u.")+`
 		  FROM core.users u
 		  JOIN core.family_members m ON m.user_id = u.id
-		 WHERE m.family_id = $1 AND m.role = 'contributor'
+		 WHERE m.family_id = ANY($1) AND m.role = 'contributor'
 		   AND EXISTS (SELECT 1 FROM family.questions q
 		                WHERE q.asked_of_user_id = u.id
 		                  AND q.family_id = m.family_id
 		                  AND q.archived_at IS NULL)
-		 ORDER BY u.display_name`, FamilyFrom(ctx))
+		 GROUP BY u.id, u.email, u.supabase_user_id, u.display_name
+		 ORDER BY u.display_name`, FamilyIDsFrom(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -162,7 +163,7 @@ func (s *Store) BackfillSupabaseUserID(ctx context.Context, userID int64, supaba
 func (s *Store) SetQueueMode(ctx context.Context, userID int64, mode string, focusSubjectID *int64) error {
 	_, err := s.q(ctx).Exec(ctx,
 		`UPDATE core.family_members SET queue_mode = $3, queue_focus_subject_id = $4
-		  WHERE family_id = $1 AND user_id = $2`,
-		FamilyFrom(ctx), userID, mode, focusSubjectID)
+		  WHERE family_id = ANY($1) AND user_id = $2`,
+		FamilyIDsFrom(ctx), userID, mode, focusSubjectID)
 	return err
 }

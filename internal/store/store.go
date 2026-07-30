@@ -34,6 +34,7 @@ func New(pool *pgxpool.Pool) *Store {
 
 type txKey struct{}
 type familyKey struct{}
+type familiesKey struct{}
 
 // WithTx puts the request's transaction in the context. Every store method called
 // with that context runs inside it, which is what makes SET LOCAL app.family_id
@@ -52,6 +53,24 @@ func WithTx(ctx context.Context, db DBTX) context.Context {
 // the query remembered to.
 func WithFamily(ctx context.Context, familyID int64) context.Context {
 	return context.WithValue(ctx, familyKey{}, familyID)
+}
+
+// WithFamilies records every family this request may see. A web request spans all
+// of somebody's memberships; the importer sets exactly one.
+func WithFamilies(ctx context.Context, ids []int64) context.Context {
+	return context.WithValue(ctx, familiesKey{}, ids)
+}
+
+// FamilyIDsFrom returns the families in scope. Queries against core, which has no
+// row-level security of its own, name it explicitly.
+func FamilyIDsFrom(ctx context.Context) []int64 {
+	if ids, ok := ctx.Value(familiesKey{}).([]int64); ok {
+		return ids
+	}
+	if id := FamilyFrom(ctx); id != 0 {
+		return []int64{id}
+	}
+	return nil
 }
 
 // FamilyFrom returns the request's family, or 0 outside a family-scoped request.

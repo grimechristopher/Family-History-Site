@@ -31,12 +31,12 @@ func (s *Store) SaveAnswer(ctx context.Context, questionID, authorUserID int64, 
 	var id int64
 	err := s.q(ctx).QueryRow(ctx, `
 		INSERT INTO family.entries (question_id, author_user_id, body, is_draft, family_id)
-		VALUES ($1, $2, $3, $4, $5)
+		VALUES ($1, $2, $3, $4, (SELECT family_id FROM family.questions WHERE id = $1))
 		ON CONFLICT (question_id, author_user_id) DO UPDATE SET
 		  body       = EXCLUDED.body,
 		  is_draft   = EXCLUDED.is_draft,
 		  updated_at = now()
-		RETURNING id`, questionID, authorUserID, body, isDraft, FamilyFrom(ctx)).Scan(&id)
+		RETURNING id`, questionID, authorUserID, body, isDraft).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("save answer to question %d: %w", questionID, err)
 	}

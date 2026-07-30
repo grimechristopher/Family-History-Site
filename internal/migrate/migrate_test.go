@@ -284,7 +284,9 @@ func seedMember(t *testing.T, pool *pgxpool.Pool, slug, email, name string) (fam
 }
 
 // The point of row-level security is that a query which forgets to scope itself
-// returns nothing rather than everything. This is also the test that catches
+// returns nothing rather than everything. The setting lists the families somebody
+// belongs to, so one person may legitimately see several -- but never one they are
+// not a member of. This is also the test that catches
 // connecting as a superuser, or FORCE having been left off: either disables every
 // policy while leaving all the code looking correct.
 func TestUnscopedReadsReturnNothing(t *testing.T) {
@@ -324,7 +326,7 @@ func TestUnscopedReadsReturnNothing(t *testing.T) {
 		t.Fatalf("begin: %v", err)
 	}
 	defer tx.Rollback(ctx)
-	if _, err := tx.Exec(ctx, "SELECT set_config('app.family_id', $1, true)",
+	if _, err := tx.Exec(ctx, "SELECT set_config('app.family_ids', $1, true)",
 		strconv.FormatInt(fam, 10)); err != nil {
 		t.Fatalf("set family: %v", err)
 	}

@@ -23,8 +23,8 @@ func (s *Store) CreateReply(ctx context.Context, entryID, authorUserID int64, bo
 	var id int64
 	err := s.q(ctx).QueryRow(ctx, `
 		INSERT INTO family.replies (entry_id, author_user_id, body, family_id)
-		VALUES ($1, $2, $3, $4) RETURNING id`,
-		entryID, authorUserID, body, FamilyFrom(ctx)).Scan(&id)
+		VALUES ($1, $2, $3, (SELECT family_id FROM family.entries WHERE id = $1))
+		RETURNING id`, entryID, authorUserID, body).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("create reply on entry %d: %w", entryID, err)
 	}

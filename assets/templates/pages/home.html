@@ -10,7 +10,7 @@
 {{end}}
 
 <div class="btn-row">
-  <a class="btn" href="{{fam $.FamilySlug "/cards"}}">{{if .Progress}}{{if gt .Progress.Answered 0}}Keep going{{else}}Start answering{{end}}{{else}}Start answering{{end}}</a>
+  <a class="btn" href="/cards">{{if .Progress}}{{if gt .Progress.Answered 0}}Keep going{{else}}Start answering{{end}}{{else}}Start answering{{end}}</a>
 </div>
 
 {{/*

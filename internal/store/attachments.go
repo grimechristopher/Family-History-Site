@@ -36,10 +36,11 @@ func (s *Store) CreateAttachment(ctx context.Context, a Attachment) (int64, erro
 		INSERT INTO family.attachments
 		  (entry_id, kind, storage_path, caption, mime_type, size_bytes, uploaded_by_user_id, sort_order, family_id)
 		VALUES ($1, $2, $3, $4, $5, $6, $7,
-		        coalesce((SELECT max(sort_order) + 1 FROM family.attachments WHERE entry_id = $1), 0), $8)
+		        coalesce((SELECT max(sort_order) + 1 FROM family.attachments WHERE entry_id = $1), 0),
+		        (SELECT family_id FROM family.entries WHERE id = $1))
 		RETURNING id`,
-		a.EntryID, a.Kind, a.StoragePath, a.Caption, a.MimeType, a.SizeBytes, a.UploadedBy,
-		FamilyFrom(ctx)).Scan(&id)
+		a.EntryID, a.Kind, a.StoragePath, a.Caption, a.MimeType, a.SizeBytes,
+		a.UploadedBy).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("create attachment on entry %d: %w", a.EntryID, err)
 	}

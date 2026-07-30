@@ -30,7 +30,11 @@ func (s *Server) handlePeople(w http.ResponseWriter, r *http.Request) {
 // handleAddPerson puts somebody in this family: an identity, a membership, and a
 // Supabase account so the first magic link they ask for actually arrives.
 func (s *Server) handleAddPerson(w http.ResponseWriter, r *http.Request) {
-	fam := FamilyOf(r.Context())
+	fam, err := s.familyFromForm(r)
+	if err != nil {
+		http.Error(w, "Pick which family to add them to.", http.StatusBadRequest)
+		return
+	}
 	email := strings.ToLower(strings.TrimSpace(r.FormValue("email")))
 	name := strings.TrimSpace(r.FormValue("display_name"))
 
@@ -92,7 +96,7 @@ func (s *Server) handleAddPerson(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if personID != nil {
-		if err := s.Store.SetMemberPerson(r.Context(), userID, personID); err != nil {
+		if err := s.Store.SetMemberPerson(r.Context(), fam.ID, userID, personID); err != nil {
 			s.serverError(w, r, err)
 			return
 		}
@@ -119,14 +123,30 @@ func (s *Server) handleAddPerson(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.Log.Info("added to family", "family", fam.Slug, "email", email, "by", auth.User(r.Context()).DisplayName)
-	http.Redirect(w, r, famPath(r.Context(), "/people")+"?added="+name, http.StatusSeeOther)
+	http.Redirect(w, r, "/people"+"?added="+name, http.StatusSeeOther)
 }
 
 func (s *Server) peoplePageData(r *http.Request, title string) (pageData, error) {
 	data := s.newPageData(r, title)
 	data.Nav = "people"
 
-	members, err := s.Store.Members(r.Context())
+	// The page is about one family: whichever is named, or the first they belong
+	// to. Adding somebody has to say which line they are joining.
+	families := FamiliesOf(r.Context())
+	if len(families) == 0 {
+		return data, nil
+	}
+	shown := families[0]
+	if slug := r.URL.Query().Get("family"); slug != "" {
+		for _, f := range families {
+			if f.Slug == slug {
+				shown = f
+			}
+		}
+	}
+	data.ShownFamily = shown.Slug
+
+	members, err := s.Store.Members(r.Context(), shown.ID)
 	if err != nil {
 		return data, err
 	}
@@ -141,4 +161,17 @@ func (s *Server) peoplePageData(r *http.Request, title string) (pageData, error)
 	data.TreePeople = people
 	data.Added = r.URL.Query().Get("added")
 	return data, nil
+}
+
+// familyFromForm resolves the family a form names, and refuses one the person is
+// not a member of. The list in the context comes from their memberships, so this
+// cannot be widened by editing the form.
+func (s *Server) familyFromForm(r *http.Request) (*store.Family, error) {
+	slug := r.FormValue("family")
+	for _, f := range FamiliesOf(r.Context()) {
+		if f.Slug == slug {
+			return &f, nil
+		}
+	}
+	return nil, errors.New("not a family you belong to")
 }

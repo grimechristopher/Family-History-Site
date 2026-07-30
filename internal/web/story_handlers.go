@@ -45,7 +45,6 @@ func (s *Server) handleStories(w http.ResponseWriter, r *http.Request) {
 	data.Subjects = subjects
 	for _, st := range stories {
 		data.Stories = append(data.Stories, storyView{
-			FamilySlug:    famSlug(r.Context()),
 			Story:         st,
 			Replies:       replies[st.ID],
 			Photos:        photos[st.ID],
@@ -64,8 +63,6 @@ type storyView struct {
 	IsMine        bool
 	PhotosEnabled bool
 	ReturnTo      string
-	// Same reason as answerView: the shared partials see only this view.
-	FamilySlug string
 }
 
 func (s *Server) handleCreateStory(w http.ResponseWriter, r *http.Request) {
@@ -94,14 +91,28 @@ func (s *Server) handleCreateStory(w http.ResponseWriter, r *http.Request) {
 		subjectID = &sub.ID
 	}
 
-	id, err := s.Store.CreateStory(r.Context(), u.ID, title, body, subjectID, false)
+	// A story about nobody in particular still belongs to a line. The one named on
+	// the form, or the first they belong to.
+	var familyID int64
+	if fams := FamiliesOf(r.Context()); len(fams) > 0 {
+		familyID = fams[0].ID
+		if slug := r.FormValue("family"); slug != "" {
+			for _, f := range fams {
+				if f.Slug == slug {
+					familyID = f.ID
+				}
+			}
+		}
+	}
+
+	id, err := s.Store.CreateStory(r.Context(), u.ID, title, body, subjectID, false, familyID)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
 	}
 	// Anchored on the new story, so it is the first thing seen rather than the
 	// top of the page it was written from.
-	back := returnTo(r, famPath(r.Context(), "/stories"))
+	back := returnTo(r, "/stories")
 	http.Redirect(w, r, back+"#entry-"+strconv.FormatInt(id, 10), http.StatusSeeOther)
 }
 
@@ -131,5 +142,5 @@ func (s *Server) handleDeleteStory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Nothing to anchor to any more, so the page it came from is right.
-	http.Redirect(w, r, returnTo(r, famPath(r.Context(), "/stories")), http.StatusSeeOther)
+	http.Redirect(w, r, returnTo(r, "/stories"), http.StatusSeeOther)
 }
