@@ -1,7 +1,7 @@
 GEDCOM ?= $(HOME)/Documents/Github/genealogy-export/Brennan-Hale Tree.ged
 PROMPTS ?= $(HOME)/Documents/Obsidian/General Notebook/General Notebook/Areas/Ancestry Book/Prompts 3.md
 
-.PHONY: help build test test-unit test-db test-real fmt vet check testdb-start testdb-stop import import-dry run
+.PHONY: help build test test-unit test-db test-real fmt vet check testdb-start testdb-stop import import-dry run set-email
 
 help:
 	@grep -hE '^[a-z-]+:.*?##' $(MAKEFILE_LIST) | sed 's/:.*##/\t/' | expand -t22
@@ -47,6 +47,12 @@ import: ## Seed the development database
 	eval "$$(./scripts/testdb.sh start)" && DATABASE_URL="$$DEV_DATABASE_URL" go run ./cmd/import \
 	  -gedcom "$(GEDCOM)" -prompts "$(PROMPTS)" \
 	  -dad-email "$(DAD_EMAIL)" -mom-email "$(MOM_EMAIL)" -admin-email "$(ADMIN_EMAIL)"
+
+# Both places have to agree: this site's allowlist and Supabase's own auth.users.
+# make set-email NAME=Dad EMAIL=dad@theirdomain.com
+set-email: ## Set the address a person signs in with, and create their Supabase account
+	eval "$$(./scripts/testdb.sh start)" && DATABASE_URL="$${DATABASE_URL:-$$DEV_DATABASE_URL}" \
+	  go run ./cmd/user -name "$(NAME)" -email "$(EMAIL)" -create-supabase
 
 run: ## Run the server against the development database
 	eval "$$(./scripts/testdb.sh start)" && DATABASE_URL="$$DEV_DATABASE_URL" go run ./cmd/server

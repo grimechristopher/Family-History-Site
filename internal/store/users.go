@@ -100,6 +100,24 @@ func UpsertUser(ctx context.Context, db DBTX, email, displayName, role string) (
 	return id, nil
 }
 
+// SetUserEmail moves a person's sign-in address, keeping the row they already
+// have -- and with it every question asked of them. Upserting by email would
+// insert a second person instead.
+//
+// The stored Supabase identity is cleared at the same time. It belongs to the old
+// address, and leaving it would have the next sign-in arrive with a different
+// subject than the one on file.
+func (s *Store) SetUserEmail(ctx context.Context, userID int64, email string) error {
+	_, err := s.Pool.Exec(ctx, `
+		UPDATE family.users
+		   SET email = lower($2), supabase_user_id = NULL
+		 WHERE id = $1`, userID, email)
+	if err != nil {
+		return fmt.Errorf("set email for user %d: %w", userID, err)
+	}
+	return nil
+}
+
 func LinkUserToPerson(ctx context.Context, db DBTX, userID, personID int64) error {
 	_, err := db.Exec(ctx,
 		`UPDATE family.users SET person_id = $2 WHERE id = $1`, userID, personID)
