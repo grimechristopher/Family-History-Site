@@ -19,7 +19,8 @@ func testPool(t *testing.T) *pgxpool.Pool {
 		t.Fatalf("pgxpool.New: %v", err)
 	}
 	t.Cleanup(pool.Close)
-	if _, err := pool.Exec(context.Background(), "DROP SCHEMA IF EXISTS family CASCADE"); err != nil {
+	if _, err := pool.Exec(context.Background(),
+		"DROP SCHEMA IF EXISTS family CASCADE; DROP SCHEMA IF EXISTS core CASCADE"); err != nil {
 		t.Fatalf("drop schema: %v", err)
 	}
 	return pool
@@ -55,19 +56,23 @@ func TestRunAppliesMigrationsAndIsIdempotent(t *testing.T) {
 		t.Errorf("recorded migrations went %d -> %d; re-running must not duplicate", applied, again)
 	}
 
-	for _, table := range []string{
-		"people", "subjects", "subject_members", "users", "questions",
-		"question_deferrals", "entries", "replies", "attachments", "sessions",
+	// Family data stays in family; identity moved to core in 0003.
+	for schema, tables := range map[string][]string{
+		"family": {"people", "subjects", "subject_members", "questions",
+			"question_deferrals", "entries", "replies", "attachments"},
+		"core": {"users", "sessions", "families", "family_members", "invites"},
 	} {
-		var exists bool
-		err := pool.QueryRow(ctx,
-			`SELECT EXISTS (SELECT 1 FROM information_schema.tables
-			                WHERE table_schema='family' AND table_name=$1)`, table).Scan(&exists)
-		if err != nil {
-			t.Fatalf("check %s: %v", table, err)
-		}
-		if !exists {
-			t.Errorf("table family.%s was not created", table)
+		for _, table := range tables {
+			var exists bool
+			err := pool.QueryRow(ctx,
+				`SELECT EXISTS (SELECT 1 FROM information_schema.tables
+				                WHERE table_schema=$1 AND table_name=$2)`, schema, table).Scan(&exists)
+			if err != nil {
+				t.Fatalf("check %s.%s: %v", schema, table, err)
+			}
+			if !exists {
+				t.Errorf("table %s.%s was not created", schema, table)
+			}
 		}
 	}
 }
@@ -83,8 +88,8 @@ func TestEntriesUniqueConstraintAllowsManyStories(t *testing.T) {
 
 	var userID int64
 	err := pool.QueryRow(ctx, `
-		INSERT INTO family.users (email, display_name, role)
-		VALUES ('dad@example.com', 'Dad', 'contributor') RETURNING id`).Scan(&userID)
+		INSERT INTO core.users (email, display_name)
+		VALUES ('dad@example.com', 'Dad') RETURNING id`).Scan(&userID)
 	if err != nil {
 		t.Fatalf("insert user: %v", err)
 	}
@@ -138,8 +143,8 @@ func TestEntriesRequiresExplicitDraftFlag(t *testing.T) {
 
 	var userID int64
 	err := pool.QueryRow(ctx, `
-		INSERT INTO family.users (email, display_name, role)
-		VALUES ('mom@example.com', 'Mom', 'contributor') RETURNING id`).Scan(&userID)
+		INSERT INTO core.users (email, display_name)
+		VALUES ('mom@example.com', 'Mom') RETURNING id`).Scan(&userID)
 	if err != nil {
 		t.Fatalf("insert user: %v", err)
 	}
@@ -148,5 +153,44 @@ func TestEntriesRequiresExplicitDraftFlag(t *testing.T) {
 		INSERT INTO family.entries (author_user_id, body) VALUES ($1, 'No flag given.')`, userID)
 	if err == nil {
 		t.Error("inserting an entry without is_draft must fail")
+	}
+}
+
+// Identity is shared across families, so it moves into its own schema. The
+// per-family columns move onto membership: somebody is an admin in one family and
+// a contributor in another, and their place in the card stack differs per family.
+func TestCoreSchemaHoldsIdentity(t *testing.T) {
+	ctx := context.Background()
+	pool := testPool(t)
+	if err := Run(ctx, pool); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	for _, table := range []string{"users", "sessions", "families", "family_members", "invites"} {
+		var exists bool
+		err := pool.QueryRow(ctx, `
+			SELECT EXISTS (SELECT 1 FROM information_schema.tables
+			                WHERE table_schema = 'core' AND table_name = $1)`, table).Scan(&exists)
+		if err != nil {
+			t.Fatalf("check core.%s: %v", table, err)
+		}
+		if !exists {
+			t.Errorf("core.%s does not exist", table)
+		}
+	}
+
+	// Anything true of a person only within one family must have left users.
+	for _, column := range []string{"role", "person_id", "queue_mode", "queue_seed", "digest_enabled"} {
+		var onUsers bool
+		err := pool.QueryRow(ctx, `
+			SELECT EXISTS (SELECT 1 FROM information_schema.columns
+			                WHERE table_schema='core' AND table_name='users' AND column_name=$1)`,
+			column).Scan(&onUsers)
+		if err != nil {
+			t.Fatalf("check users.%s: %v", column, err)
+		}
+		if onUsers {
+			t.Errorf("core.users still has %s; it belongs on family_members", column)
+		}
 	}
 }
