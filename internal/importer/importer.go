@@ -40,8 +40,17 @@ type Options struct {
 	Overrides    subjects.Overrides
 }
 
+// RoutedQuestion is a further-back question moved onto a named couple.
+type RoutedQuestion struct {
+	Subject string
+	Body    string
+}
+
 // Result reports what the import did, for printing to the operator.
 type Result struct {
+	// Routed lists the questions moved out of the further-back bucket, so the
+	// decisions are visible rather than silent.
+	Routed    []RoutedQuestion
 	People    int
 	Subjects  int
 	Users     int
@@ -181,18 +190,34 @@ func Run(ctx context.Context, db store.DBTX, ged *gedcom.File, qs []prompts.Ques
 	}
 
 	keys := make([]string, 0, len(qs))
-	// Ordinals count within a subject and topic rather than within a heading, so
-	// that renaming a heading leaves every question's identity untouched.
-	ordinals := map[string]int{}
+	// Counts the same words asked twice about the same person. Nothing else about
+	// position matters: the key is a hash of the question.
+	occurrences := map[string]int{}
 
 	for i, q := range qs {
 		m, ok := matchByHeading[q.Heading()]
 		if !ok {
 			return nil, fmt.Errorf("no match for heading %s", q.Heading())
 		}
-		subjectID, ok := subjectIDs[m.Subject]
+		subject := m.Subject
+
+		// A question that landed in the further-back bucket may still name one
+		// couple outright — "the Aldermans were immigrants from Sweden" — in which
+		// case it belongs on their page. Only unambiguous ones move; every
+		// decision is recorded so it can be reviewed rather than trusted.
+		if subject == subjects.FurtherBackSlug {
+			if routed := tree.RouteToCouple(q.Body); routed.Subject != "" {
+				subject = routed.Subject
+				res.Routed = append(res.Routed, RoutedQuestion{
+					Subject: routed.Subject,
+					Body:    q.Body,
+				})
+			}
+		}
+
+		subjectID, ok := subjectIDs[subject]
 		if !ok {
-			return nil, fmt.Errorf("heading %s resolved to unknown subject %q", q.Heading(), m.Subject)
+			return nil, fmt.Errorf("heading %s resolved to unknown subject %q", q.Heading(), subject)
 		}
 		userID, ok := userIDs[q.Person]
 		if !ok {
@@ -202,9 +227,11 @@ func Run(ctx context.Context, db store.DBTX, ged *gedcom.File, qs []prompts.Ques
 			continue
 		}
 
-		group := q.Person + "|" + m.Subject + "|" + m.Topic
-		ordinals[group]++
-		key := prompts.ImportKey(q.Person, m.Subject, m.Topic, ordinals[group])
+		// m.Subject, not the routed subject: routing a question onto a couple's
+		// page must not change what it is, or the move would archive its answers.
+		identity := q.Person + "|" + m.Subject + "|" + q.Body
+		occurrences[identity]++
+		key := prompts.ImportKey(q.Person, m.Subject, q.Body, occurrences[identity])
 		if _, err := store.UpsertImportedQuestion(ctx, db, store.ImportedQuestion{
 			SubjectID:     subjectID,
 			AskedOfUserID: userID,
@@ -239,7 +266,7 @@ func Run(ctx context.Context, db store.DBTX, ged *gedcom.File, qs []prompts.Ques
 				continue
 			}
 			for i, body := range GenericQuestions {
-				key := prompts.ImportKey(c.Label, sub.Slug, "generic", i+1)
+				key := prompts.ImportKey(c.Label, sub.Slug, body, 1)
 				if _, err := store.UpsertImportedQuestion(ctx, db, store.ImportedQuestion{
 					SubjectID:     subjectID,
 					AskedOfUserID: userIDs[c.Label],

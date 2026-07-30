@@ -7,6 +7,8 @@ package prompts
 
 import (
 	"bufio"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"strings"
@@ -41,17 +43,42 @@ func (h Heading) String() string {
 
 // ImportKey builds the stable identity of a question across re-imports.
 //
-// It deliberately excludes the heading text. An earlier version keyed on
-// (person, section, subsection, ordinal), which meant renaming
-// "### Alice May Osgood" to "### Alice May Osgood (Brennan)" gave all
-// seventeen of her questions new identities — the old rows archived, and any
-// answers written against them archived with them. Keying on the subject the
-// question resolves to means headings can be rewritten freely.
+// It is content-addressed: who is being asked, who the question is about, and a
+// hash of the question itself. Nothing about position is involved, so questions
+// can be added, removed or reordered in the prompts file freely.
 //
-// subject and topic come from matching, so the importer supplies them; ordinal
-// counts position within that subject and topic, in file order.
-func ImportKey(person, subject, topic string, ordinal int) string {
-	return fmt.Sprintf("%s|%s|%s|%d", person, subject, topic, ordinal)
+// Two positional schemes were tried first and both corrupted data. Keying on the
+// heading text meant renaming "### Alice May Osgood" gave all seventeen of her
+// questions new identities and archived their answers. Keying on position within
+// the subject meant that routing a question onto a different subject shifted
+// every ordinal after it, so the next import wrote one question's text into
+// another question's row through ON CONFLICT DO UPDATE -- ten questions silently
+// lost their wording that way.
+//
+// subject is the one the heading resolves to, before any routing. Routing must
+// not change a question's identity, or moving it would archive its answers. It is
+// in the hash rather than left out because the prompts file asks four questions in
+// identical words of different people -- "What was her personality like?" -- and
+// without the subject those would be told apart only by which came first in the
+// file, so inserting a question above them could quietly swap their answers over.
+//
+// occurrence separates the same words asked twice about the same person, which is
+// the only case left where order decides, and a harmless one: the two rows are
+// indistinguishable anyway.
+//
+// Content addressing has one real cost. Rewording a question creates a new row and
+// archives the old one, taking its answers into the archive rather than carrying
+// them forward. That is the safer failure: an answer stays attached to the words it
+// was actually answering, and nothing is ever overwritten.
+func ImportKey(person, subject, body string, occurrence int) string {
+	sum := sha256.Sum256([]byte(subject + "\n" + normaliseBody(body)))
+	return fmt.Sprintf("%s|%s|%d", person, hex.EncodeToString(sum[:8]), occurrence)
+}
+
+// normaliseBody collapses whitespace so that reflowing a line in Obsidian, or
+// changing trailing spaces, is not treated as a different question.
+func normaliseBody(body string) string {
+	return strings.Join(strings.Fields(strings.ToLower(body)), " ")
 }
 
 func Parse(r io.Reader) ([]Question, error) {

@@ -50,31 +50,39 @@ func TestParseOrdinalResetsPerHeading(t *testing.T) {
 	}
 }
 
-// The key must not contain the heading text: renaming a heading has to leave a
-// question's identity, and therefore its answers, alone.
-func TestImportKeyIgnoresHeadingText(t *testing.T) {
-	before := ImportKey("Dad", "alice-may-fletcher", "", 1)
-	after := ImportKey("Dad", "alice-may-fletcher", "", 1)
-	if before != after {
-		t.Fatalf("same inputs gave %q then %q", before, after)
+// The key must depend on the question, not on where it sits. Two positional
+// schemes corrupted data before this one: see ImportKey's comment.
+func TestImportKeyIsContentAddressed(t *testing.T) {
+	const subject, body = "alice-may-fletcher", "What kind of cars did he have?"
+
+	if ImportKey("Dad", subject, body, 1) != ImportKey("Dad", subject, body, 1) {
+		t.Fatal("the same inputs must give the same key")
 	}
-	if strings.Contains(before, "Parents") || strings.Contains(before, "Alice May") {
-		t.Errorf("key %q still carries heading text", before)
+	// Reflowing or re-spacing a line is not a different question.
+	if ImportKey("Dad", subject, body, 1) !=
+		ImportKey("Dad", subject, "  What  kind of cars\n  did he have? ", 1) {
+		t.Error("whitespace should not change identity")
+	}
+	// Neither the heading nor the question is recoverable from the key, and no
+	// part of it counts position within the file.
+	key := ImportKey("Dad", subject, body, 1)
+	if strings.Contains(key, "cars") || strings.Contains(key, "alice") {
+		t.Errorf("key %q should carry neither heading nor body text", key)
 	}
 
-	// Different subjects, topics, people and positions stay distinct.
-	keys := map[string]bool{}
-	for _, k := range []string{
-		ImportKey("Dad", "a", "", 1),
-		ImportKey("Dad", "a", "", 2),
-		ImportKey("Dad", "a", "Childhood", 1),
-		ImportKey("Dad", "b", "", 1),
-		ImportKey("Mom", "a", "", 1),
+	// Everything that genuinely distinguishes two questions must reach the key.
+	seen := map[string]string{}
+	for what, k := range map[string]string{
+		"baseline":              ImportKey("Dad", subject, body, 1),
+		"second occurrence":     ImportKey("Dad", subject, body, 2),
+		"asked of someone else": ImportKey("Mom", subject, body, 1),
+		"about someone else":    ImportKey("Dad", "louis-hale", body, 1),
+		"different question":    ImportKey("Dad", subject, "A different question?", 1),
 	} {
-		if keys[k] {
-			t.Errorf("duplicate key %q", k)
+		if prev, dup := seen[k]; dup {
+			t.Errorf("%s collides with %s", what, prev)
 		}
-		keys[k] = true
+		seen[k] = what
 	}
 }
 

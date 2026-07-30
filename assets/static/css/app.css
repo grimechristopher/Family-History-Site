@@ -1255,3 +1255,36 @@ a.pnode-hit:focus-visible .pnode-box { stroke: var(--teal); stroke-width: 3; }
 @media (max-width: 30rem) {
   .section-head .btn { width: 100%; }
 }
+
+/* ---------- The note on the home page -------------------------------- */
+
+.note { margin-top: var(--s7); background: var(--sheet-warm); }
+
+.note-head {
+  font-family: var(--wordmark);
+  font-size: var(--t-h3);
+  font-weight: 600;
+  margin: 0 0 var(--s3);
+  padding: 0;
+  border: 0;
+  display: block;
+}
+
+.note h3.note-head { margin-top: var(--s6); }
+
+.note p { max-width: var(--measure); }
+
+.note-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--s4);
+  max-width: var(--measure);
+}
+
+.note-list li {
+  padding-left: var(--s4);
+  border-left: 3px solid var(--apricot);
+  line-height: 1.65;
+}

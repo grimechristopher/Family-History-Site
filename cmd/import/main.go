@@ -146,6 +146,17 @@ func run(gedPath, promptsPath, databaseURL, dadEmail, momEmail, adminEmail strin
 	for _, label := range sortedKeys(res.PerPerson) {
 		fmt.Printf("  %-6s %d\n", label, res.PerPerson[label])
 	}
+	if len(res.Routed) > 0 {
+		fmt.Printf("\nmoved out of \"Further Back\" onto a named couple:\n")
+		for _, r := range res.Routed {
+			body := r.Body
+			if len(body) > 62 {
+				body = body[:62] + "..."
+			}
+			fmt.Printf("  %-46s %s\n", r.Subject, body)
+		}
+		fmt.Println()
+	}
 	if res.Archived > 0 {
 		fmt.Printf("archived:  %d question(s) no longer in the markdown\n", res.Archived)
 	}
