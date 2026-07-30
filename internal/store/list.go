@@ -19,6 +19,17 @@ type QuestionListItem struct {
 	AskedOfUserID int64
 	IsProposed    bool
 
+	// SharedWith names everybody this same question is asked of, when that is more
+	// than one person. Robert, Frank, Tony and Inez are asked the same ten
+	// questions about their parents; each still writes his or her own answer, but
+	// the list has no business showing the question four times.
+	SharedWith []string
+	// SharedAnswered is how many of them have answered.
+	SharedAnswered int
+	// sharedKey identifies the question rather than the row. Not exported: it is
+	// an implementation detail of collapsing the copies.
+	sharedKey string
+
 	// Answered means the person the question was asked of has answered it. This
 	// is what "unanswered" means throughout the site.
 	Answered bool
@@ -105,7 +116,13 @@ func (s *Store) ListQuestions(ctx context.Context, viewerID int64, f QuestionFil
 		       (owner_answer.id IS NOT NULL) AS answered,
 		       coalesce(counts.other_answers, 0),
 		       coalesce(counts.replies, 0),
-		       (viewer_answer.id IS NOT NULL) AS viewer_answered
+		       (viewer_answer.id IS NOT NULL) AS viewer_answered,
+		       -- Everybody this same question is asked of, and how many have
+		       -- answered. A subquery rather than a window, so it describes the
+		       -- question rather than whichever of its rows survived the filter:
+		       -- under "still waiting" a window would report that a question was
+		       -- asked only of the people who have not answered it.
+		       shared.names, coalesce(shared.answered, 0), q.shared_key
 		FROM family.questions q
 		JOIN family.subjects s   ON s.id = q.subject_id
 		JOIN core.users asked  ON asked.id = q.asked_of_user_id
@@ -129,6 +146,19 @@ func (s *Store) ListQuestions(ctx context.Context, viewerID int64, f QuestionFil
 		    WHERE e.is_draft = false
 		    GROUP BY e.question_id
 		) counts ON counts.question_id = q.id
+		LEFT JOIN LATERAL (
+		    SELECT array_agg(sib.display_name ORDER BY sib.display_name) AS names,
+		           count(sib_answer.id) AS answered
+		    FROM family.questions sq
+		    JOIN core.users sib ON sib.id = sq.asked_of_user_id
+		    LEFT JOIN family.entries sib_answer
+		           ON sib_answer.question_id = sq.id
+		          AND sib_answer.author_user_id = sq.asked_of_user_id
+		          AND sib_answer.is_draft = false
+		    WHERE sq.family_id = q.family_id
+		      AND sq.shared_key = q.shared_key
+		      AND sq.archived_at IS NULL
+		) shared ON true
 		WHERE ` + strings.Join(where, " AND ") + `
 		ORDER BY answered ASC, q.sort_order, q.id
 		LIMIT $` + fmt.Sprint(limitPos) + ` OFFSET $` + fmt.Sprint(offsetPos)
@@ -139,13 +169,30 @@ func (s *Store) ListQuestions(ctx context.Context, viewerID int64, f QuestionFil
 	}
 	defer rows.Close()
 
+	// Looking at everybody's questions at once, a question asked of four people is
+	// one question, not four rows of identical text. Looking at one person's, it is
+	// theirs and the collapsing would be wrong -- so this only applies when nobody
+	// is chosen.
+	collapse := f.AskedOfName == ""
+	seen := map[string]bool{}
+
 	var out []QuestionListItem
 	for rows.Next() {
 		var q QuestionListItem
 		if err := rows.Scan(&q.ID, &q.Body, &q.Topic, &q.SubjectName, &q.SubjectSlug,
 			&q.AskedOfName, &q.AskedOfUserID, &q.IsProposed, &q.AboutAskedOf,
-			&q.Answered, &q.OtherAnswers, &q.ReplyCount, &q.ViewerAnswered); err != nil {
+			&q.Answered, &q.OtherAnswers, &q.ReplyCount, &q.ViewerAnswered,
+			&q.SharedWith, &q.SharedAnswered, &q.sharedKey); err != nil {
 			return nil, err
+		}
+		if len(q.SharedWith) < 2 {
+			// One person: nothing to say about who else was asked.
+			q.SharedWith = nil
+		} else if collapse {
+			if seen[q.sharedKey] {
+				continue
+			}
+			seen[q.sharedKey] = true
 		}
 		out = append(out, q)
 	}
@@ -207,10 +254,18 @@ func (s *Store) ListCounts(ctx context.Context, f QuestionFilter) (ListCounts, e
 		where = append(where, fmt.Sprintf("asked.display_name = $%d", len(args)))
 	}
 
+	// Counted per question rather than per row when nobody is chosen, to agree
+	// with the list underneath: the Lucero line has 104 rows and 74 questions, and
+	// a heading saying 104 above 74 rows is just wrong.
+	counted := "count(*)"
+	if f.AskedOfName == "" {
+		counted = "count(DISTINCT q.shared_key)"
+	}
+
 	var c ListCounts
 	err := s.q(ctx).QueryRow(ctx, `
-		SELECT count(*) FILTER (WHERE owner_answer.id IS NULL),
-		       count(*) FILTER (WHERE owner_answer.id IS NOT NULL)
+		SELECT `+counted+` FILTER (WHERE owner_answer.id IS NULL),
+		       `+counted+` FILTER (WHERE owner_answer.id IS NOT NULL)
 		FROM family.questions q
 		JOIN family.subjects s  ON s.id = q.subject_id
 		JOIN core.users asked ON asked.id = q.asked_of_user_id
@@ -294,4 +349,19 @@ func (s *Store) SubjectsWithProgress(ctx context.Context, askedOf, familySlug st
 		out = append(out, p)
 	}
 	return out, rows.Err()
+}
+
+// SharedWithSentence names everybody a question is asked of, the way a person
+// would say it: "Robert, Frank, Tony and Inez".
+func (q QuestionListItem) SharedWithSentence() string {
+	switch n := len(q.SharedWith); n {
+	case 0:
+		return q.AskedOfName
+	case 1:
+		return q.SharedWith[0]
+	case 2:
+		return q.SharedWith[0] + " and " + q.SharedWith[1]
+	default:
+		return strings.Join(q.SharedWith[:n-1], ", ") + " and " + q.SharedWith[n-1]
+	}
 }

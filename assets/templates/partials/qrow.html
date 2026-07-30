@@ -9,8 +9,17 @@
          person is named. Decided by who they are in the tree, not by comparing the
          names: the same person is written differently in each. */}}
     {{if not .AboutAskedOf}}<span class="qrow-subject">{{.SubjectName}} &middot;</span>{{end}}
-    asked of {{.AskedOfName}}
-    {{if .Answered}}&middot; <strong>answered</strong>{{end}}
+    {{/* A question put to several people is one question in several hands: the
+         four Lucero siblings are asked the same ten about their parents. They each
+         write their own answer, so the rows stay separate underneath; the list
+         says so once instead of repeating the question four times. */}}
+    {{if .SharedWith}}
+      asked of {{.SharedWithSentence}}
+      &middot; <strong>{{.SharedAnswered}} of {{len .SharedWith}}</strong> answered
+    {{else}}
+      asked of {{.AskedOfName}}
+      {{if .Answered}}&middot; <strong>answered</strong>{{end}}
+    {{end}}
     {{if .OtherAnswers}}&middot; {{.OtherAnswers}} from others{{end}}
     {{if .ReplyCount}}&middot; {{.ReplyCount}} {{if eq .ReplyCount 1}}reply{{else}}replies{{end}}{{end}}
     {{if .ViewerAnswered}}&middot; you answered{{end}}
