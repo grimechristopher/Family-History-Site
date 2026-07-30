@@ -81,8 +81,12 @@ func UpsertSubject(ctx context.Context, db DBTX, s Subject) (int64, error) {
 // SetSubjectMembers replaces the membership of a subject wholesale, so a
 // re-import cannot leave a stale member behind.
 func SetSubjectMembers(ctx context.Context, db DBTX, subjectID int64, personIDs []int64) error {
+	// subject_id already belongs to exactly one family, so this is safe either way.
+	// Named anyway, so that every broad statement in this package reads the same and
+	// none of them depends on row-level security being in force.
 	if _, err := db.Exec(ctx,
-		`DELETE FROM family.subject_members WHERE subject_id = $1`, subjectID); err != nil {
+		`DELETE FROM family.subject_members WHERE subject_id = $1 AND family_id = $2`,
+		subjectID, FamilyFrom(ctx)); err != nil {
 		return fmt.Errorf("clear members of subject %d: %w", subjectID, err)
 	}
 	for _, personID := range personIDs {

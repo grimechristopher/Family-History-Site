@@ -46,12 +46,19 @@ func UpsertImportedQuestion(ctx context.Context, db DBTX, q ImportedQuestion) (i
 // longer appears in the markdown. They are archived rather than deleted, because
 // an answer may already hang off one and deleting it would destroy writing.
 func ArchiveImportedQuestionsNotIn(ctx context.Context, db DBTX, keys []string) (int64, error) {
+	// family_id is named explicitly rather than left to row-level security. This
+	// statement archives everything it does not recognise, so if it ever runs with
+	// the family unset -- or as a role that is exempt from the policies, which a
+	// superuser is -- it would archive every other family's questions. It did
+	// exactly that once: importing a second family retired all 350 questions
+	// belonging to the first.
 	tag, err := db.Exec(ctx, `
 		UPDATE family.questions
 		SET archived_at = now()
 		WHERE source = 'import'
 		  AND archived_at IS NULL
-		  AND NOT (import_key = ANY($1::text[]))`, keys)
+		  AND family_id = $2
+		  AND NOT (import_key = ANY($1::text[]))`, keys, FamilyFrom(ctx))
 	if err != nil {
 		return 0, fmt.Errorf("archive removed questions: %w", err)
 	}

@@ -398,3 +398,77 @@ func same(a, b []int64) bool {
 	}
 	return true
 }
+
+// Importing one family must not touch another's questions. The archive step
+// retires everything it does not recognise, so without an explicit family_id it
+// archived all 350 questions belonging to the other family the first time a second
+// family was imported. Row-level security did not catch it because the importer
+// connects as a superuser, which is exempt.
+func TestArchivingIsConfinedToOneFamily(t *testing.T) {
+	s := testStore(t)
+	ctx := testCtx(t, s)
+
+	otherID, err := s.CreateFamily(context.Background(), "other", "Another family")
+	if err != nil {
+		t.Fatalf("create other family: %v", err)
+	}
+	other := WithFamily(context.Background(), otherID)
+
+	seed := func(c context.Context, key string) int64 {
+		t.Helper()
+		var id int64
+		err := s.InTx(c, func(db DBTX) error {
+			uid, err := UpsertUser(c, db, key+"@example.com", key)
+			if err != nil {
+				return err
+			}
+			if err := AddMemberTx(c, db, FamilyFrom(c), uid, RoleContributor); err != nil {
+				return err
+			}
+			sub, err := UpsertSubject(c, db, Subject{
+				Slug: key, Kind: "individual", DisplayName: key, SortOrder: 1,
+			})
+			if err != nil {
+				return err
+			}
+			id, err = UpsertImportedQuestion(c, db, ImportedQuestion{
+				SubjectID: sub, AskedOfUserID: uid,
+				Body: "A question for " + key, SortOrder: 1, ImportKey: key + "-1",
+			})
+			return err
+		})
+		if err != nil {
+			t.Fatalf("seed %s: %v", key, err)
+		}
+		return id
+	}
+
+	mine := seed(ctx, "mine")
+	theirs := seed(other, "theirs")
+
+	// Re-import my family with none of its previous keys: mine should be archived,
+	// theirs must not be.
+	if err := s.InTx(ctx, func(db DBTX) error {
+		_, err := ArchiveImportedQuestionsNotIn(ctx, db, []string{"something-else"})
+		return err
+	}); err != nil {
+		t.Fatalf("archive: %v", err)
+	}
+
+	archived := func(id int64) bool {
+		t.Helper()
+		var at *string
+		if err := s.Pool.QueryRow(context.Background(),
+			`SELECT archived_at::text FROM family.questions WHERE id = $1`, id).Scan(&at); err != nil {
+			t.Fatalf("read question %d: %v", id, err)
+		}
+		return at != nil
+	}
+
+	if !archived(mine) {
+		t.Error("my own question should have been archived")
+	}
+	if archived(theirs) {
+		t.Fatal("importing one family archived another family's questions")
+	}
+}
