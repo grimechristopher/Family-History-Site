@@ -1367,7 +1367,7 @@ func TestBuildTreeWalksParents(t *testing.T) {
 		{ID: 4, Given: "Louis Raymond", Surname: "Hale", BirthYear: years(1894)},
 	}
 
-	roots := buildTree(people, []int64{1}, 4)
+	roots := buildTree(people, []store.TreeRoot{{PersonID: 1, FamilyName: "The Hale line"}}, 4)
 	if len(roots) != 1 {
 		t.Fatalf("roots = %d, want 1", len(roots))
 	}
@@ -1397,7 +1397,7 @@ func TestBuildTreeSurvivesCyclesAndDepthLimits(t *testing.T) {
 		{ID: 1, Given: "A", FatherID: id(2)},
 		{ID: 2, Given: "B", FatherID: id(1)}, // B's father is A: a loop
 	}
-	roots := buildTree(cyclic, []int64{1}, 10)
+	roots := buildTree(cyclic, []store.TreeRoot{{PersonID: 1, FamilyName: "A loop"}}, 10)
 	if len(roots) != 1 {
 		t.Fatalf("roots = %d", len(roots))
 	}
@@ -1419,7 +1419,7 @@ func TestBuildTreeSurvivesCyclesAndDepthLimits(t *testing.T) {
 		}
 		chain = append(chain, p)
 	}
-	roots = buildTree(chain, []int64{1}, 2)
+	roots = buildTree(chain, []store.TreeRoot{{PersonID: 1, FamilyName: "A line"}}, 2)
 	depth = 0
 	for n := roots[0]; len(n.Parents) > 0; n = n.Parents[0] {
 		depth++
@@ -1430,7 +1430,7 @@ func TestBuildTreeSurvivesCyclesAndDepthLimits(t *testing.T) {
 }
 
 func TestBuildTreeIgnoresUnknownRoots(t *testing.T) {
-	if got := buildTree(nil, []int64{99}, 3); len(got) != 0 {
+	if got := buildTree(nil, []store.TreeRoot{{PersonID: 99, FamilyName: "A line"}}, 3); len(got) != 0 {
 		t.Errorf("got %d roots, want none", len(got))
 	}
 }

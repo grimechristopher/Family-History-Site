@@ -241,7 +241,9 @@
       var button = document.createElement('button');
       button.type = 'button';
       button.className = 'line-button';
-      button.textContent = f.label + '\u2019s family';
+      // The label already names the line -- "The Grime line" -- so the possessive
+      // that read well against a person's name now reads as a stutter.
+      button.textContent = f.label;
       button.addEventListener('click', function () { show(i); });
       picker.appendChild(button);
     });

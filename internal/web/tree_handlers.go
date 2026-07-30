@@ -14,12 +14,14 @@ type treeNode struct {
 	Person     *store.TreePerson
 	Generation int
 	Parents    []*treeNode
+	// FamilyName names the line, for the switcher above the chart.
+	FamilyName string
 }
 
 // buildTree assembles pedigrees rooted at each contributor. Depth is bounded so
 // unexpected data — a person recorded as their own ancestor — cannot recurse
 // forever and take the page with it.
-func buildTree(people []*store.TreePerson, rootIDs []int64, maxDepth int) []*treeNode {
+func buildTree(people []*store.TreePerson, roots []store.TreeRoot, maxDepth int) []*treeNode {
 	byID := make(map[int64]*store.TreePerson, len(people))
 	for _, p := range people {
 		byID[p.ID] = p
@@ -51,13 +53,14 @@ func buildTree(people []*store.TreePerson, rootIDs []int64, maxDepth int) []*tre
 		return node
 	}
 
-	var roots []*treeNode
-	for _, id := range rootIDs {
-		if node := build(id, 0, map[int64]bool{}); node != nil {
-			roots = append(roots, node)
+	var out []*treeNode
+	for _, r := range roots {
+		if node := build(r.PersonID, 0, map[int64]bool{}); node != nil {
+			node.FamilyName = r.FamilyName
+			out = append(out, node)
 		}
 	}
-	return roots
+	return out
 }
 
 func (s *Server) handleTree(w http.ResponseWriter, r *http.Request) {
@@ -249,18 +252,14 @@ func (s *Server) handleTreeJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// A couple is worth opening whether or not questions have been written for
-	// them yet, so this ignores the count that link() checks.
-	coupleSlug := func(p *store.TreePerson) string {
-		if p.SubjectSlug != nil {
-			return *p.SubjectSlug
-		}
-		return ""
-	}
-
 	link := func(p *store.TreePerson) string {
-		// Linked only where there is something to read, matching the list view.
-		if p.SubjectSlug != nil && p.QuestionCount > 0 {
+		// Everybody with a page is clickable, whether or not anything has been asked
+		// about them yet. Somebody with no questions is exactly who you most want to
+		// reach: their page is where a story goes, and where a question about them
+		// gets added. Requiring a question first meant a great-grandmother nobody had
+		// written a prompt for was a dead box on the chart, reachable only by typing
+		// her address.
+		if p.SubjectSlug != nil {
 			return *p.SubjectSlug
 		}
 		return ""
@@ -296,7 +295,7 @@ func (s *Server) handleTreeJSON(w http.ResponseWriter, r *http.Request) {
 				// opening even before any question has been asked -- and these
 				// pairs currently have none, since the great-grandparent
 				// questions all sit under "Further Back".
-				Slug: coupleSlug(a),
+				Slug: link(a),
 				Members: []pedigreeMember{
 					{Name: a.FullName(), Years: a.Lifespan()},
 					{Name: b.FullName(), Years: b.Lifespan()},
@@ -315,25 +314,11 @@ func (s *Server) handleTreeJSON(w http.ResponseWriter, r *http.Request) {
 		return out
 	}
 
-	// Whose line each root is, so the switcher can say "Dad" rather than repeating
-	// the full name.
-	contributors, err := s.Store.Contributors(r.Context())
-	if err != nil {
-		s.serverError(w, r, err)
-		return
-	}
-	labelFor := map[int64]string{}
-	for _, c := range contributors {
-		if c.PersonID != nil {
-			labelFor[*c.PersonID] = c.DisplayName
-		}
-	}
-
 	roots := buildTree(people, rootIDs, 4)
 	out := make([]*pedigreeNode, 0, len(roots))
 	for _, root := range roots {
 		node := convert(root)
-		node.Label = labelFor[root.Person.ID]
+		node.Label = root.FamilyName
 		out = append(out, node)
 	}
 

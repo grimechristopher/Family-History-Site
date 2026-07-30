@@ -107,25 +107,44 @@ func (s *Store) TreePeople(ctx context.Context) ([]*TreePerson, error) {
 
 // RootPeople returns the people the contributors correspond to — Mom and Dad —
 // which are the roots the pedigree grows from.
-func (s *Store) RootPeople(ctx context.Context) ([]int64, error) {
+// TreeRoot is the person a line is drawn from, and the line's name.
+type TreeRoot struct {
+	PersonID   int64
+	FamilyName string
+}
+
+// RootPeople returns one root per family: the contributor whose ancestors that
+// line actually is.
+//
+// One per family matters because somebody may be a member of several. Lori is in
+// her husband's line as his wife and in her own as its root, and drawing a chart
+// from each membership showed her twice -- once properly, once as a lone box with
+// no ancestors above it. Preferring the person who has a parent recorded picks the
+// line's own root; the fallback keeps a family with no recorded parents drawable.
+func (s *Store) RootPeople(ctx context.Context) ([]TreeRoot, error) {
 	rows, err := s.q(ctx).Query(ctx, `
-		SELECT m.person_id
+		SELECT DISTINCT ON (m.family_id) m.person_id, f.display_name
 		  FROM core.family_members m
-		  JOIN core.users u ON u.id = m.user_id
-		 WHERE m.family_id = ANY($1) AND m.person_id IS NOT NULL AND m.role = 'contributor'
-		 ORDER BY u.display_name`, FamilyIDsFrom(ctx))
+		  JOIN core.families f ON f.id = m.family_id
+		  JOIN family.people p ON p.id = m.person_id
+		 WHERE m.family_id = ANY($1)
+		   AND m.role = 'contributor'
+		   AND m.person_id IS NOT NULL
+		 ORDER BY m.family_id,
+		          (p.father_id IS NOT NULL OR p.mother_id IS NOT NULL) DESC,
+		          p.id`, FamilyIDsFrom(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("root people: %w", err)
 	}
 	defer rows.Close()
 
-	var out []int64
+	var out []TreeRoot
 	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
+		var r TreeRoot
+		if err := rows.Scan(&r.PersonID, &r.FamilyName); err != nil {
 			return nil, err
 		}
-		out = append(out, id)
+		out = append(out, r)
 	}
 	return out, rows.Err()
 }
