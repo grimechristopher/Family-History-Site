@@ -31,13 +31,15 @@ const (
 	QueueOneSubject = "one_subject"
 )
 
-const userColumns = `id, email, supabase_user_id, display_name, person_id, role,
-	queue_mode, queue_seed, queue_focus_subject_id, digest_enabled`
+// userColumns is identity only. Role, person and the queue settings are not
+// properties of a person -- somebody is an admin in one family and a contributor in
+// another -- so they live on core.family_members and are merged onto the User once
+// the request's family is known. Before that they are zero.
+const userColumns = `id, email, supabase_user_id, display_name`
 
 func scanUser(row pgx.Row) (*User, error) {
 	var u User
-	err := row.Scan(&u.ID, &u.Email, &u.SupabaseUserID, &u.DisplayName, &u.PersonID,
-		&u.Role, &u.QueueMode, &u.QueueSeed, &u.QueueFocusSubjectID, &u.DigestEnabled)
+	err := row.Scan(&u.ID, &u.Email, &u.SupabaseUserID, &u.DisplayName)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -50,24 +52,30 @@ func scanUser(row pgx.Row) (*User, error) {
 // UserByEmail is the allowlist check. A verified Supabase login with no row here
 // gets no access, which is what keeps portfolio signups out of the family history.
 func (s *Store) UserByEmail(ctx context.Context, email string) (*User, error) {
-	return scanUser(s.Pool.QueryRow(ctx,
-		`SELECT `+userColumns+` FROM family.users WHERE lower(email) = lower($1)`, email))
+	return scanUser(s.q(ctx).QueryRow(ctx,
+		`SELECT `+userColumns+` FROM core.users WHERE lower(email) = lower($1)`, email))
 }
 
 func (s *Store) UserByID(ctx context.Context, id int64) (*User, error) {
-	return scanUser(s.Pool.QueryRow(ctx,
-		`SELECT `+userColumns+` FROM family.users WHERE id = $1`, id))
+	return scanUser(s.q(ctx).QueryRow(ctx,
+		`SELECT `+userColumns+` FROM core.users WHERE id = $1`, id))
 }
 
 func (s *Store) UserByDisplayName(ctx context.Context, name string) (*User, error) {
-	return scanUser(s.Pool.QueryRow(ctx,
-		`SELECT `+userColumns+` FROM family.users WHERE display_name = $1`, name))
+	return scanUser(s.q(ctx).QueryRow(ctx,
+		`SELECT `+userColumns+` FROM core.users WHERE display_name = $1`, name))
 }
 
-// Contributors are the people questions get asked of, in display-name order.
+// Contributors are the people questions get asked of in this family, in
+// display-name order. Membership decides it: the same person may be a contributor
+// here and only an admin elsewhere.
 func (s *Store) Contributors(ctx context.Context) ([]*User, error) {
-	rows, err := s.Pool.Query(ctx,
-		`SELECT `+userColumns+` FROM family.users WHERE role = 'contributor' ORDER BY display_name`)
+	rows, err := s.q(ctx).Query(ctx, `
+		SELECT `+prefixed(userColumns, "u.")+`
+		  FROM core.users u
+		  JOIN core.family_members m ON m.user_id = u.id
+		 WHERE m.family_id = $1 AND m.role = 'contributor'
+		 ORDER BY u.display_name`, FamilyFrom(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -86,14 +94,15 @@ func (s *Store) Contributors(ctx context.Context) ([]*User, error) {
 
 // UpsertUser seeds or updates an allowlist entry. Called by the import command,
 // never from a request handler.
-func UpsertUser(ctx context.Context, db DBTX, email, displayName, role string) (int64, error) {
+// UpsertUser seeds or updates an identity. It says nothing about families: use
+// AddMember for that, so the role is recorded where it is true.
+func UpsertUser(ctx context.Context, db DBTX, email, displayName string) (int64, error) {
 	var id int64
 	err := db.QueryRow(ctx, `
-		INSERT INTO family.users (email, display_name, role, queue_seed)
-		VALUES (lower($1), $2, $3, floor(random() * 1e9)::bigint)
-		ON CONFLICT (email) DO UPDATE
-		  SET display_name = EXCLUDED.display_name, role = EXCLUDED.role
-		RETURNING id`, email, displayName, role).Scan(&id)
+		INSERT INTO core.users (email, display_name)
+		VALUES (lower($1), $2)
+		ON CONFLICT (email) DO UPDATE SET display_name = EXCLUDED.display_name
+		RETURNING id`, email, displayName).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("upsert user %s: %w", email, err)
 	}
@@ -108,8 +117,8 @@ func UpsertUser(ctx context.Context, db DBTX, email, displayName, role string) (
 // address, and leaving it would have the next sign-in arrive with a different
 // subject than the one on file.
 func (s *Store) SetUserEmail(ctx context.Context, userID int64, email string) error {
-	_, err := s.Pool.Exec(ctx, `
-		UPDATE family.users
+	_, err := s.q(ctx).Exec(ctx, `
+		UPDATE core.users
 		   SET email = lower($2), supabase_user_id = NULL
 		 WHERE id = $1`, userID, email)
 	if err != nil {
@@ -120,7 +129,8 @@ func (s *Store) SetUserEmail(ctx context.Context, userID int64, email string) er
 
 func LinkUserToPerson(ctx context.Context, db DBTX, userID, personID int64) error {
 	_, err := db.Exec(ctx,
-		`UPDATE family.users SET person_id = $2 WHERE id = $1`, userID, personID)
+		`UPDATE core.family_members SET person_id = $3
+		  WHERE family_id = $1 AND user_id = $2`, FamilyFrom(ctx), userID, personID)
 	return err
 }
 
@@ -132,8 +142,8 @@ var ErrIdentityClaimed = errors.New("supabase identity already claimed by anothe
 // BackfillSupabaseUserID records the Supabase identity on first login, since rows
 // are seeded by email before anyone has ever logged in.
 func (s *Store) BackfillSupabaseUserID(ctx context.Context, userID int64, supabaseID string) error {
-	_, err := s.Pool.Exec(ctx,
-		`UPDATE family.users SET supabase_user_id = $2 WHERE id = $1`, userID, supabaseID)
+	_, err := s.q(ctx).Exec(ctx,
+		`UPDATE core.users SET supabase_user_id = $2 WHERE id = $1`, userID, supabaseID)
 
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
@@ -143,8 +153,9 @@ func (s *Store) BackfillSupabaseUserID(ctx context.Context, userID int64, supaba
 }
 
 func (s *Store) SetQueueMode(ctx context.Context, userID int64, mode string, focusSubjectID *int64) error {
-	_, err := s.Pool.Exec(ctx,
-		`UPDATE family.users SET queue_mode = $2, queue_focus_subject_id = $3 WHERE id = $1`,
-		userID, mode, focusSubjectID)
+	_, err := s.q(ctx).Exec(ctx,
+		`UPDATE core.family_members SET queue_mode = $3, queue_focus_subject_id = $4
+		  WHERE family_id = $1 AND user_id = $2`,
+		FamilyFrom(ctx), userID, mode, focusSubjectID)
 	return err
 }

@@ -23,8 +23,8 @@ func (s *Store) CreateSession(ctx context.Context, userID int64, ttl time.Durati
 	}
 	token := base64.RawURLEncoding.EncodeToString(raw)
 
-	_, err := s.Pool.Exec(ctx, `
-		INSERT INTO family.sessions (token_hash, user_id, expires_at, user_agent)
+	_, err := s.q(ctx).Exec(ctx, `
+		INSERT INTO core.sessions (token_hash, user_id, expires_at, user_agent)
 		VALUES ($1, $2, now() + make_interval(secs => $3), $4)`,
 		hashToken(token), userID, ttl.Seconds(), userAgent)
 	if err != nil {
@@ -41,34 +41,34 @@ func (s *Store) UserBySessionToken(ctx context.Context, token string) (*User, er
 	}
 	hash := hashToken(token)
 
-	u, err := scanUser(s.Pool.QueryRow(ctx, `
+	u, err := scanUser(s.q(ctx).QueryRow(ctx, `
 		SELECT `+prefixed(userColumns, "u.")+`
-		FROM family.sessions s
-		JOIN family.users u ON u.id = s.user_id
+		FROM core.sessions s
+		JOIN core.users u ON u.id = s.user_id
 		WHERE s.token_hash = $1 AND s.expires_at > now()`, hash))
 	if err != nil {
 		return nil, err
 	}
 
-	if _, err := s.Pool.Exec(ctx,
-		`UPDATE family.sessions SET last_used_at = now() WHERE token_hash = $1`, hash); err != nil {
+	if _, err := s.q(ctx).Exec(ctx,
+		`UPDATE core.sessions SET last_used_at = now() WHERE token_hash = $1`, hash); err != nil {
 		return nil, err
 	}
-	if _, err := s.Pool.Exec(ctx,
-		`UPDATE family.users SET last_seen_at = now() WHERE id = $1`, u.ID); err != nil {
+	if _, err := s.q(ctx).Exec(ctx,
+		`UPDATE core.users SET last_seen_at = now() WHERE id = $1`, u.ID); err != nil {
 		return nil, err
 	}
 	return u, nil
 }
 
 func (s *Store) DeleteSession(ctx context.Context, token string) error {
-	_, err := s.Pool.Exec(ctx,
-		`DELETE FROM family.sessions WHERE token_hash = $1`, hashToken(token))
+	_, err := s.q(ctx).Exec(ctx,
+		`DELETE FROM core.sessions WHERE token_hash = $1`, hashToken(token))
 	return err
 }
 
 func (s *Store) DeleteExpiredSessions(ctx context.Context) (int64, error) {
-	tag, err := s.Pool.Exec(ctx, `DELETE FROM family.sessions WHERE expires_at < now()`)
+	tag, err := s.q(ctx).Exec(ctx, `DELETE FROM core.sessions WHERE expires_at < now()`)
 	if err != nil {
 		return 0, err
 	}

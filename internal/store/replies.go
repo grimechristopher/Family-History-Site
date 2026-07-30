@@ -21,9 +21,10 @@ type Reply struct {
 
 func (s *Store) CreateReply(ctx context.Context, entryID, authorUserID int64, body string) (int64, error) {
 	var id int64
-	err := s.Pool.QueryRow(ctx, `
-		INSERT INTO family.replies (entry_id, author_user_id, body)
-		VALUES ($1, $2, $3) RETURNING id`, entryID, authorUserID, body).Scan(&id)
+	err := s.q(ctx).QueryRow(ctx, `
+		INSERT INTO family.replies (entry_id, author_user_id, body, family_id)
+		VALUES ($1, $2, $3, $4) RETURNING id`,
+		entryID, authorUserID, body, FamilyFrom(ctx)).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("create reply on entry %d: %w", entryID, err)
 	}
@@ -38,11 +39,11 @@ func (s *Store) RepliesForEntries(ctx context.Context, entryIDs []int64) (map[in
 		return out, nil
 	}
 
-	rows, err := s.Pool.Query(ctx, `
+	rows, err := s.q(ctx).Query(ctx, `
 		SELECT r.id, r.entry_id, r.author_user_id, u.display_name, r.body,
 		       r.created_at, r.updated_at
 		FROM family.replies r
-		JOIN family.users u ON u.id = r.author_user_id
+		JOIN core.users u ON u.id = r.author_user_id
 		WHERE r.entry_id = ANY($1::bigint[])
 		ORDER BY r.created_at`, entryIDs)
 	if err != nil {
@@ -64,7 +65,7 @@ func (s *Store) RepliesForEntries(ctx context.Context, entryIDs []int64) (map[in
 // ReplyAuthor is used to check that somebody is only editing their own words.
 func (s *Store) ReplyAuthor(ctx context.Context, replyID int64) (int64, error) {
 	var authorID int64
-	err := s.Pool.QueryRow(ctx,
+	err := s.q(ctx).QueryRow(ctx,
 		`SELECT author_user_id FROM family.replies WHERE id = $1`, replyID).Scan(&authorID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return 0, ErrNotFound
@@ -73,14 +74,14 @@ func (s *Store) ReplyAuthor(ctx context.Context, replyID int64) (int64, error) {
 }
 
 func (s *Store) DeleteReply(ctx context.Context, replyID int64) error {
-	_, err := s.Pool.Exec(ctx, `DELETE FROM family.replies WHERE id = $1`, replyID)
+	_, err := s.q(ctx).Exec(ctx, `DELETE FROM family.replies WHERE id = $1`, replyID)
 	return err
 }
 
 // EntryExists guards reply creation against a vanished entry.
 func (s *Store) EntryExists(ctx context.Context, entryID int64) (bool, error) {
 	var exists bool
-	err := s.Pool.QueryRow(ctx,
+	err := s.q(ctx).QueryRow(ctx,
 		`SELECT EXISTS (SELECT 1 FROM family.entries WHERE id = $1)`, entryID).Scan(&exists)
 	return exists, err
 }
@@ -90,7 +91,7 @@ func (s *Store) EntryExists(ctx context.Context, entryID int64) (bool, error) {
 // throwing the reader back to the top.
 func (s *Store) EntryQuestion(ctx context.Context, entryID int64) (*int64, error) {
 	var questionID *int64
-	err := s.Pool.QueryRow(ctx,
+	err := s.q(ctx).QueryRow(ctx,
 		`SELECT question_id FROM family.entries WHERE id = $1`, entryID).Scan(&questionID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound

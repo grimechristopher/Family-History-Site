@@ -31,10 +31,10 @@ type Story struct {
 
 func (s *Store) CreateStory(ctx context.Context, authorUserID int64, title, body string, subjectID *int64, isDraft bool) (int64, error) {
 	var id int64
-	err := s.Pool.QueryRow(ctx, `
-		INSERT INTO family.entries (question_id, author_user_id, title, body, subject_id, is_draft)
-		VALUES (NULL, $1, $2, $3, $4, $5)
-		RETURNING id`, authorUserID, title, body, subjectID, isDraft).Scan(&id)
+	err := s.q(ctx).QueryRow(ctx, `
+		INSERT INTO family.entries (question_id, author_user_id, title, body, subject_id, is_draft, family_id)
+		VALUES (NULL, $1, $2, $3, $4, $5, $6)
+		RETURNING id`, authorUserID, title, body, subjectID, isDraft, FamilyFrom(ctx)).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("create story: %w", err)
 	}
@@ -42,7 +42,7 @@ func (s *Store) CreateStory(ctx context.Context, authorUserID int64, title, body
 }
 
 func (s *Store) UpdateStory(ctx context.Context, storyID int64, title, body string, subjectID *int64, isDraft bool) error {
-	_, err := s.Pool.Exec(ctx, `
+	_, err := s.q(ctx).Exec(ctx, `
 		UPDATE family.entries
 		SET title = $2, body = $3, subject_id = $4, is_draft = $5, updated_at = now()
 		WHERE id = $1 AND question_id IS NULL`, storyID, title, body, subjectID, isDraft)
@@ -73,7 +73,7 @@ func scanStory(row pgx.Row) (*Story, error) {
 
 const storyJoins = `
 	FROM family.entries e
-	JOIN family.users u ON u.id = e.author_user_id
+	JOIN core.users u ON u.id = e.author_user_id
 	LEFT JOIN family.subjects s ON s.id = e.subject_id
 	LEFT JOIN (SELECT entry_id, count(*) AS n FROM family.replies GROUP BY entry_id) r
 	       ON r.entry_id = e.id
@@ -82,7 +82,7 @@ const storyJoins = `
 // ListStories returns published stories, newest first. A viewer's own drafts are
 // included so an unfinished story is never lost from view.
 func (s *Store) ListStories(ctx context.Context, viewerID int64) ([]Story, error) {
-	rows, err := s.Pool.Query(ctx, `
+	rows, err := s.q(ctx).Query(ctx, `
 		SELECT `+storyColumns+storyJoins+`
 		  AND (e.is_draft = false OR e.author_user_id = $1)
 		ORDER BY e.created_at DESC`, viewerID)
@@ -103,12 +103,12 @@ func (s *Store) ListStories(ctx context.Context, viewerID int64) ([]Story, error
 }
 
 func (s *Store) Story(ctx context.Context, storyID int64) (*Story, error) {
-	return scanStory(s.Pool.QueryRow(ctx,
+	return scanStory(s.q(ctx).QueryRow(ctx,
 		`SELECT `+storyColumns+storyJoins+` AND e.id = $1`, storyID))
 }
 
 func (s *Store) DeleteStory(ctx context.Context, storyID int64) error {
-	_, err := s.Pool.Exec(ctx,
+	_, err := s.q(ctx).Exec(ctx,
 		`DELETE FROM family.entries WHERE id = $1 AND question_id IS NULL`, storyID)
 	return err
 }

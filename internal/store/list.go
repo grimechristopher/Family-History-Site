@@ -86,7 +86,7 @@ func (s *Store) ListQuestions(ctx context.Context, viewerID int64, f QuestionFil
 		       (viewer_answer.id IS NOT NULL) AS viewer_answered
 		FROM family.questions q
 		JOIN family.subjects s   ON s.id = q.subject_id
-		JOIN family.users asked  ON asked.id = q.asked_of_user_id
+		JOIN core.users asked  ON asked.id = q.asked_of_user_id
 		LEFT JOIN family.entries owner_answer
 		       ON owner_answer.question_id = q.id
 		      AND owner_answer.author_user_id = q.asked_of_user_id
@@ -111,7 +111,7 @@ func (s *Store) ListQuestions(ctx context.Context, viewerID int64, f QuestionFil
 		ORDER BY answered ASC, q.sort_order, q.id
 		LIMIT $` + fmt.Sprint(limitPos) + ` OFFSET $` + fmt.Sprint(offsetPos)
 
-	rows, err := s.Pool.Query(ctx, query, args...)
+	rows, err := s.q(ctx).Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list questions: %w", err)
 	}
@@ -181,12 +181,12 @@ func (s *Store) ListCounts(ctx context.Context, f QuestionFilter) (ListCounts, e
 	}
 
 	var c ListCounts
-	err := s.Pool.QueryRow(ctx, `
+	err := s.q(ctx).QueryRow(ctx, `
 		SELECT count(*) FILTER (WHERE owner_answer.id IS NULL),
 		       count(*) FILTER (WHERE owner_answer.id IS NOT NULL)
 		FROM family.questions q
 		JOIN family.subjects s  ON s.id = q.subject_id
-		JOIN family.users asked ON asked.id = q.asked_of_user_id
+		JOIN core.users asked ON asked.id = q.asked_of_user_id
 		LEFT JOIN family.entries owner_answer
 		       ON owner_answer.question_id = q.id
 		      AND owner_answer.author_user_id = q.asked_of_user_id
@@ -211,12 +211,12 @@ type SubjectProgress struct {
 // the people Dad has questions about — offering a person with nothing to answer
 // is a dead end.
 func (s *Store) SubjectsWithProgress(ctx context.Context, askedOf string) ([]SubjectProgress, error) {
-	rows, err := s.Pool.Query(ctx, `
+	rows, err := s.q(ctx).Query(ctx, `
 		SELECT s.id, s.slug, s.kind, s.display_name, s.sort_order,
 		       count(q.id),
 		       count(owner_answer.id)
 		FROM family.subjects s
-		LEFT JOIN family.users asked
+		LEFT JOIN core.users asked
 		       ON $1 <> '' AND asked.display_name = $1
 		LEFT JOIN family.questions q
 		       ON q.subject_id = s.id

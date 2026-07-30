@@ -63,7 +63,7 @@ func newHarness(t *testing.T) *harness {
 		t.Fatalf("pgxpool.New: %v", err)
 	}
 	t.Cleanup(pool.Close)
-	if _, err := pool.Exec(ctx, "DROP SCHEMA IF EXISTS family CASCADE"); err != nil {
+	if _, err := pool.Exec(ctx, "DROP SCHEMA IF EXISTS family CASCADE; DROP SCHEMA IF EXISTS core CASCADE"); err != nil {
 		t.Fatalf("drop schema: %v", err)
 	}
 	if err := migrate.Run(ctx, pool); err != nil {

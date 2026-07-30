@@ -41,6 +41,7 @@ func main() {
 	email := flag.String("email", "", "the address they will sign in with")
 	role := flag.String("role", "contributor", "contributor or admin, used only when creating a new person")
 	databaseURL := flag.String("database-url", os.Getenv("DATABASE_URL"), "postgres connection string")
+	familySlug := flag.String("family", "home", "slug of the family they belong to")
 	createSupabase := flag.Bool("create-supabase", false,
 		"also create the Supabase account, pre-confirmed, so magic links work immediately")
 	flag.Parse()
@@ -70,11 +71,18 @@ func main() {
 	existing, err := s.UserByDisplayName(ctx, *name)
 	switch {
 	case errors.Is(err, store.ErrNotFound):
-		id, err := store.UpsertUser(ctx, pool, addr, *name, *role)
+		id, err := store.UpsertUser(ctx, pool, addr, *name)
 		if err != nil {
 			log.Fatalf("create %s: %v", *name, err)
 		}
-		fmt.Printf("created %s (%s) as %s, id %d\n", *name, addr, *role, id)
+		fam, err := s.FamilyBySlug(ctx, *familySlug)
+		if err != nil {
+			log.Fatalf("family %q: %v", *familySlug, err)
+		}
+		if err := store.AddMemberTx(ctx, pool, fam.ID, id, *role); err != nil {
+			log.Fatalf("add %s to %s: %v", *name, *familySlug, err)
+		}
+		fmt.Printf("created %s (%s) as %s in %s, id %d\n", *name, addr, *role, *familySlug, id)
 	case err != nil:
 		log.Fatalf("look up %s: %v", *name, err)
 	default:

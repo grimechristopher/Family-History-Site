@@ -145,8 +145,11 @@ func Run(ctx context.Context, db store.DBTX, ged *gedcom.File, qs []prompts.Ques
 	userIDs := map[string]int64{}
 	rootLabels := map[string]string{}
 	for _, c := range opts.Contributors {
-		uid, err := store.UpsertUser(ctx, db, c.Email, c.Label, store.RoleContributor)
+		uid, err := store.UpsertUser(ctx, db, c.Email, c.Label)
 		if err != nil {
+			return nil, err
+		}
+		if err := store.AddMemberTx(ctx, db, store.FamilyFrom(ctx), uid, store.RoleContributor); err != nil {
 			return nil, err
 		}
 		userIDs[c.Label] = uid
@@ -165,7 +168,11 @@ func Run(ctx context.Context, db store.DBTX, ged *gedcom.File, qs []prompts.Ques
 		}
 	}
 	for _, a := range opts.Admins {
-		if _, err := store.UpsertUser(ctx, db, a.Email, a.Label, store.RoleAdmin); err != nil {
+		uid, err := store.UpsertUser(ctx, db, a.Email, a.Label)
+		if err != nil {
+			return nil, err
+		}
+		if err := store.AddMemberTx(ctx, db, store.FamilyFrom(ctx), uid, store.RoleAdmin); err != nil {
 			return nil, err
 		}
 	}

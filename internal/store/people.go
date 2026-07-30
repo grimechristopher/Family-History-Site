@@ -35,9 +35,9 @@ func UpsertPerson(ctx context.Context, db DBTX, p Person) (int64, error) {
 	var id int64
 	err := db.QueryRow(ctx, `
 		INSERT INTO family.people
-		  (gedcom_id, given_name, surname, married_surname, sex, birth_year, death_year)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-		ON CONFLICT (gedcom_id) DO UPDATE SET
+		  (gedcom_id, given_name, surname, married_surname, sex, birth_year, death_year, family_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		ON CONFLICT (family_id, gedcom_id) DO UPDATE SET
 		  given_name      = EXCLUDED.given_name,
 		  surname         = EXCLUDED.surname,
 		  married_surname = EXCLUDED.married_surname,
@@ -45,7 +45,7 @@ func UpsertPerson(ctx context.Context, db DBTX, p Person) (int64, error) {
 		  birth_year      = EXCLUDED.birth_year,
 		  death_year      = EXCLUDED.death_year
 		RETURNING id`,
-		p.GedcomID, p.Given, p.Surname, p.MarriedSurname, p.Sex, p.BirthYear, p.DeathYear).Scan(&id)
+		p.GedcomID, p.Given, p.Surname, p.MarriedSurname, p.Sex, p.BirthYear, p.DeathYear, FamilyFrom(ctx)).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("upsert person %s: %w", p.GedcomID, err)
 	}
@@ -65,13 +65,13 @@ func SetParents(ctx context.Context, db DBTX, personID int64, fatherID, motherID
 func UpsertSubject(ctx context.Context, db DBTX, s Subject) (int64, error) {
 	var id int64
 	err := db.QueryRow(ctx, `
-		INSERT INTO family.subjects (slug, kind, display_name, sort_order)
-		VALUES ($1, $2, $3, $4)
-		ON CONFLICT (slug) DO UPDATE SET
+		INSERT INTO family.subjects (slug, kind, display_name, sort_order, family_id)
+		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (family_id, slug) DO UPDATE SET
 		  kind         = EXCLUDED.kind,
 		  display_name = EXCLUDED.display_name,
 		  sort_order   = EXCLUDED.sort_order
-		RETURNING id`, s.Slug, s.Kind, s.DisplayName, s.SortOrder).Scan(&id)
+		RETURNING id`, s.Slug, s.Kind, s.DisplayName, s.SortOrder, FamilyFrom(ctx)).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("upsert subject %s: %w", s.Slug, err)
 	}
@@ -87,8 +87,9 @@ func SetSubjectMembers(ctx context.Context, db DBTX, subjectID int64, personIDs 
 	}
 	for _, personID := range personIDs {
 		_, err := db.Exec(ctx, `
-			INSERT INTO family.subject_members (subject_id, person_id) VALUES ($1, $2)
-			ON CONFLICT DO NOTHING`, subjectID, personID)
+			INSERT INTO family.subject_members (subject_id, person_id, family_id)
+			VALUES ($1, $2, $3)
+			ON CONFLICT DO NOTHING`, subjectID, personID, FamilyFrom(ctx))
 		if err != nil {
 			return fmt.Errorf("add person %d to subject %d: %w", personID, subjectID, err)
 		}
@@ -98,7 +99,7 @@ func SetSubjectMembers(ctx context.Context, db DBTX, subjectID int64, personIDs 
 
 func (s *Store) SubjectBySlug(ctx context.Context, slug string) (*Subject, error) {
 	var sub Subject
-	err := s.Pool.QueryRow(ctx,
+	err := s.q(ctx).QueryRow(ctx,
 		`SELECT id, slug, kind, display_name, sort_order FROM family.subjects WHERE slug = $1`,
 		slug).Scan(&sub.ID, &sub.Slug, &sub.Kind, &sub.DisplayName, &sub.SortOrder)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -111,7 +112,7 @@ func (s *Store) SubjectBySlug(ctx context.Context, slug string) (*Subject, error
 }
 
 func (s *Store) Subjects(ctx context.Context) ([]Subject, error) {
-	rows, err := s.Pool.Query(ctx,
+	rows, err := s.q(ctx).Query(ctx,
 		`SELECT id, slug, kind, display_name, sort_order
 		 FROM family.subjects ORDER BY sort_order, slug`)
 	if err != nil {
@@ -132,6 +133,6 @@ func (s *Store) Subjects(ctx context.Context) ([]Subject, error) {
 
 func (s *Store) CountPeople(ctx context.Context) (int, error) {
 	var n int
-	err := s.Pool.QueryRow(ctx, `SELECT count(*) FROM family.people`).Scan(&n)
+	err := s.q(ctx).QueryRow(ctx, `SELECT count(*) FROM family.people`).Scan(&n)
 	return n, err
 }

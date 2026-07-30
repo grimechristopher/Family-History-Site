@@ -66,7 +66,7 @@ func (p TreePerson) HasStories() bool { return p.AnsweredCount > 0 }
 
 // TreePeople returns every imported person with their subject and progress.
 func (s *Store) TreePeople(ctx context.Context) ([]*TreePerson, error) {
-	rows, err := s.Pool.Query(ctx, `
+	rows, err := s.q(ctx).Query(ctx, `
 		SELECT p.id, p.gedcom_id, p.given_name, p.surname, p.married_surname, p.sex,
 		       p.birth_year, p.death_year, p.father_id, p.mother_id,
 		       sub.slug, sub.display_name,
@@ -108,10 +108,12 @@ func (s *Store) TreePeople(ctx context.Context) ([]*TreePerson, error) {
 // RootPeople returns the people the contributors correspond to — Mom and Dad —
 // which are the roots the pedigree grows from.
 func (s *Store) RootPeople(ctx context.Context) ([]int64, error) {
-	rows, err := s.Pool.Query(ctx, `
-		SELECT person_id FROM family.users
-		WHERE person_id IS NOT NULL AND role = 'contributor'
-		ORDER BY display_name`)
+	rows, err := s.q(ctx).Query(ctx, `
+		SELECT m.person_id
+		  FROM core.family_members m
+		  JOIN core.users u ON u.id = m.user_id
+		 WHERE m.family_id = $1 AND m.person_id IS NOT NULL AND m.role = 'contributor'
+		 ORDER BY u.display_name`, FamilyFrom(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("root people: %w", err)
 	}
@@ -131,7 +133,7 @@ func (s *Store) RootPeople(ctx context.Context) ([]int64, error) {
 // SubjectMembers returns the people a subject is about, so a couple's page can
 // name both of them.
 func (s *Store) SubjectMembers(ctx context.Context, subjectID int64) ([]TreePerson, error) {
-	rows, err := s.Pool.Query(ctx, `
+	rows, err := s.q(ctx).Query(ctx, `
 		SELECT p.id, p.gedcom_id, p.given_name, p.surname, p.married_surname, p.sex,
 		       p.birth_year, p.death_year, p.father_id, p.mother_id
 		FROM family.subject_members sm
@@ -158,7 +160,7 @@ func (s *Store) SubjectMembers(ctx context.Context, subjectID int64) ([]TreePers
 // StoriesAboutSubject returns stories explicitly tied to a subject, so a person's
 // page gathers everything said about them in one place.
 func (s *Store) StoriesAboutSubject(ctx context.Context, subjectID, viewerID int64) ([]Story, error) {
-	rows, err := s.Pool.Query(ctx, `
+	rows, err := s.q(ctx).Query(ctx, `
 		SELECT `+storyColumns+storyJoins+`
 		  AND e.subject_id = $1
 		  AND (e.is_draft = false OR e.author_user_id = $2)
@@ -182,7 +184,7 @@ func (s *Store) StoriesAboutSubject(ctx context.Context, subjectID, viewerID int
 // SubjectProgressBySlug is the header for a subject page.
 func (s *Store) SubjectProgressBySlug(ctx context.Context, slug string) (*SubjectProgress, error) {
 	var p SubjectProgress
-	err := s.Pool.QueryRow(ctx, `
+	err := s.q(ctx).QueryRow(ctx, `
 		SELECT s.id, s.slug, s.kind, s.display_name, s.sort_order,
 		       count(q.id), count(owner.id)
 		FROM family.subjects s

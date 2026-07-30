@@ -23,7 +23,7 @@ func testStore(t *testing.T) *Store {
 		t.Fatalf("pgxpool.New: %v", err)
 	}
 	t.Cleanup(pool.Close)
-	if _, err := pool.Exec(ctx, "DROP SCHEMA IF EXISTS family CASCADE"); err != nil {
+	if _, err := pool.Exec(ctx, "DROP SCHEMA IF EXISTS family CASCADE; DROP SCHEMA IF EXISTS core CASCADE"); err != nil {
 		t.Fatalf("drop schema: %v", err)
 	}
 	if err := migrate.Run(ctx, pool); err != nil {
@@ -32,17 +32,39 @@ func testStore(t *testing.T) *Store {
 	return New(pool)
 }
 
+// testCtx carries the family every fixture writes into. Inserts need it because
+// family_id is NOT NULL; reads do not, because these tests connect as the owner
+// and see everything. Isolation is proved in internal/web, by a connection that
+// does not.
+func testCtx(t *testing.T, s *Store) context.Context {
+	t.Helper()
+	ctx := context.Background()
+	id, err := s.CreateFamily(ctx, "home", "Our family")
+	if err != nil {
+		// 0003 already seeds a family called home; reuse it.
+		f, lookupErr := s.FamilyBySlug(ctx, "home")
+		if lookupErr != nil {
+			t.Fatalf("family for fixtures: %v / %v", err, lookupErr)
+		}
+		id = f.ID
+	}
+	return WithFamily(ctx, id)
+}
+
 // seedQueue creates one contributor and n questions in markdown order.
 func seedQueue(t *testing.T, s *Store, n int) (*User, []int64) {
 	t.Helper()
-	ctx := context.Background()
+	ctx := testCtx(t, s)
 
 	var userID int64
 	var subjectID int64
 	err := s.InTx(ctx, func(db DBTX) error {
 		var err error
-		userID, err = UpsertUser(ctx, db, "dad@example.com", "Dad", RoleContributor)
+		userID, err = UpsertUser(ctx, db, "dad@example.com", "Dad")
 		if err != nil {
+			return err
+		}
+		if err := AddMemberTx(ctx, db, FamilyFrom(ctx), userID, RoleContributor); err != nil {
 			return err
 		}
 		subjectID, err = UpsertSubject(ctx, db, Subject{
@@ -91,8 +113,8 @@ func cardIDs(cards []Card) []int64 {
 }
 
 func TestNextCardsFollowsMarkdownOrder(t *testing.T) {
-	ctx := context.Background()
 	s := testStore(t)
+	ctx := testCtx(t, s)
 	u, ids := seedQueue(t, s, 5)
 
 	cards, err := s.NextCards(ctx, u, 10)
@@ -115,8 +137,8 @@ func TestNextCardsFollowsMarkdownOrder(t *testing.T) {
 // Swiping a card away must send it behind everything, and swiping again must
 // send it further back still.
 func TestDeferSendsCardToTheBack(t *testing.T) {
-	ctx := context.Background()
 	s := testStore(t)
+	ctx := testCtx(t, s)
 	u, ids := seedQueue(t, s, 4)
 
 	if err := s.DeferQuestion(ctx, ids[0], u.ID); err != nil {
@@ -152,8 +174,8 @@ func TestDeferSendsCardToTheBack(t *testing.T) {
 }
 
 func TestDeferCountAccumulates(t *testing.T) {
-	ctx := context.Background()
 	s := testStore(t)
+	ctx := testCtx(t, s)
 	u, ids := seedQueue(t, s, 2)
 
 	for i := 0; i < 3; i++ {
@@ -172,8 +194,8 @@ func TestDeferCountAccumulates(t *testing.T) {
 // A published answer removes a card. A draft must not, or an unfinished thought
 // would silently vanish from the stack.
 func TestPublishedAnswerRemovesCardButDraftDoesNot(t *testing.T) {
-	ctx := context.Background()
 	s := testStore(t)
+	ctx := testCtx(t, s)
 	u, ids := seedQueue(t, s, 3)
 
 	if _, err := s.SaveAnswer(ctx, ids[0], u.ID, "half a thought", true); err != nil {
@@ -203,8 +225,8 @@ func TestPublishedAnswerRemovesCardButDraftDoesNot(t *testing.T) {
 
 // Refreshing mid-stack must not reshuffle the deck under someone.
 func TestShuffleIsStableForTheSameSeed(t *testing.T) {
-	ctx := context.Background()
 	s := testStore(t)
+	ctx := testCtx(t, s)
 	u, _ := seedQueue(t, s, 8)
 
 	u.QueueMode = QueueShuffle
@@ -232,8 +254,8 @@ func TestShuffleIsStableForTheSameSeed(t *testing.T) {
 }
 
 func TestShuffleStillPutsDeferredCardsLast(t *testing.T) {
-	ctx := context.Background()
 	s := testStore(t)
+	ctx := testCtx(t, s)
 	u, ids := seedQueue(t, s, 6)
 	u.QueueMode = QueueShuffle
 	u.QueueSeed = 4242
@@ -250,8 +272,8 @@ func TestShuffleStillPutsDeferredCardsLast(t *testing.T) {
 }
 
 func TestOneSubjectModeFiltersToTheFocusSubject(t *testing.T) {
-	ctx := context.Background()
 	s := testStore(t)
+	ctx := testCtx(t, s)
 	u, ids := seedQueue(t, s, 3)
 
 	// A second subject with one question of its own.
@@ -294,8 +316,8 @@ func TestOneSubjectModeFiltersToTheFocusSubject(t *testing.T) {
 }
 
 func TestProgressCountsPublishedAnswersOnly(t *testing.T) {
-	ctx := context.Background()
 	s := testStore(t)
+	ctx := testCtx(t, s)
 	u, ids := seedQueue(t, s, 5)
 
 	p, err := s.Progress(ctx, u.ID)
@@ -323,8 +345,8 @@ func TestProgressCountsPublishedAnswersOnly(t *testing.T) {
 }
 
 func TestSaveAnswerReplacesRatherThanDuplicating(t *testing.T) {
-	ctx := context.Background()
 	s := testStore(t)
+	ctx := testCtx(t, s)
 	u, ids := seedQueue(t, s, 1)
 
 	first, err := s.SaveAnswer(ctx, ids[0], u.ID, "draft text", true)
@@ -349,8 +371,8 @@ func TestSaveAnswerReplacesRatherThanDuplicating(t *testing.T) {
 }
 
 func TestQuestionOwner(t *testing.T) {
-	ctx := context.Background()
 	s := testStore(t)
+	ctx := testCtx(t, s)
 	u, ids := seedQueue(t, s, 1)
 
 	owner, err := s.QuestionOwner(ctx, ids[0])

@@ -36,7 +36,7 @@ func (s *Store) NextCards(ctx context.Context, u *User, limit int) ([]Card, erro
 		focus = u.QueueFocusSubjectID
 	}
 
-	rows, err := s.Pool.Query(ctx, `
+	rows, err := s.q(ctx).Query(ctx, `
 		SELECT q.id, q.body, s.display_name, s.slug, q.topic, q.is_proposed,
 		       coalesce(d.defer_count, 0),
 		       coalesce(draft.body, '')
@@ -83,13 +83,13 @@ func (s *Store) NextCards(ctx context.Context, u *User, limit int) ([]Card, erro
 // returns to the queue however many times it is swiped away, by explicit
 // decision.
 func (s *Store) DeferQuestion(ctx context.Context, questionID, userID int64) error {
-	_, err := s.Pool.Exec(ctx, `
-		INSERT INTO family.question_deferrals (question_id, user_id, deferred_at, defer_count)
-		VALUES ($1, $2, now(), 1)
+	_, err := s.q(ctx).Exec(ctx, `
+		INSERT INTO family.question_deferrals (question_id, user_id, deferred_at, defer_count, family_id)
+		VALUES ($1, $2, now(), 1, $3)
 		ON CONFLICT (question_id, user_id) DO UPDATE SET
 		  deferred_at = now(),
 		  defer_count = family.question_deferrals.defer_count + 1`,
-		questionID, userID)
+		questionID, userID, FamilyFrom(ctx))
 	if err != nil {
 		return fmt.Errorf("defer question %d: %w", questionID, err)
 	}
@@ -105,7 +105,7 @@ type Progress struct {
 
 func (s *Store) Progress(ctx context.Context, userID int64) (Progress, error) {
 	var p Progress
-	err := s.Pool.QueryRow(ctx, `
+	err := s.q(ctx).QueryRow(ctx, `
 		SELECT
 		  (SELECT count(*) FROM family.entries e
 		    JOIN family.questions q ON q.id = e.question_id
@@ -123,7 +123,7 @@ func (s *Store) Progress(ctx context.Context, userID int64) (Progress, error) {
 // defer or answer aimed at somebody else's queue.
 func (s *Store) QuestionOwner(ctx context.Context, questionID int64) (int64, error) {
 	var userID int64
-	err := s.Pool.QueryRow(ctx,
+	err := s.q(ctx).QueryRow(ctx,
 		`SELECT asked_of_user_id FROM family.questions WHERE id = $1 AND archived_at IS NULL`,
 		questionID).Scan(&userID)
 	if err != nil {

@@ -29,14 +29,14 @@ type Entry struct {
 // silently uncounted.
 func (s *Store) SaveAnswer(ctx context.Context, questionID, authorUserID int64, body string, isDraft bool) (int64, error) {
 	var id int64
-	err := s.Pool.QueryRow(ctx, `
-		INSERT INTO family.entries (question_id, author_user_id, body, is_draft)
-		VALUES ($1, $2, $3, $4)
+	err := s.q(ctx).QueryRow(ctx, `
+		INSERT INTO family.entries (question_id, author_user_id, body, is_draft, family_id)
+		VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (question_id, author_user_id) DO UPDATE SET
 		  body       = EXCLUDED.body,
 		  is_draft   = EXCLUDED.is_draft,
 		  updated_at = now()
-		RETURNING id`, questionID, authorUserID, body, isDraft).Scan(&id)
+		RETURNING id`, questionID, authorUserID, body, isDraft, FamilyFrom(ctx)).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("save answer to question %d: %w", questionID, err)
 	}
@@ -45,7 +45,7 @@ func (s *Store) SaveAnswer(ctx context.Context, questionID, authorUserID int64, 
 
 func (s *Store) AnswerFor(ctx context.Context, questionID, authorUserID int64) (*Entry, error) {
 	var e Entry
-	err := s.Pool.QueryRow(ctx, `
+	err := s.q(ctx).QueryRow(ctx, `
 		SELECT id, question_id, subject_id, author_user_id, title, body, is_draft,
 		       created_at, updated_at
 		FROM family.entries
@@ -64,11 +64,11 @@ func (s *Store) AnswerFor(ctx context.Context, questionID, authorUserID int64) (
 // AnswersTo returns every published answer to a question, the intended person's
 // first so the template can render the primary answer above the "Others" section.
 func (s *Store) AnswersTo(ctx context.Context, questionID int64) ([]Entry, error) {
-	rows, err := s.Pool.Query(ctx, `
+	rows, err := s.q(ctx).Query(ctx, `
 		SELECT e.id, e.question_id, e.subject_id, e.author_user_id, u.display_name,
 		       e.title, e.body, e.is_draft, e.created_at, e.updated_at
 		FROM family.entries e
-		JOIN family.users u ON u.id = e.author_user_id
+		JOIN core.users u ON u.id = e.author_user_id
 		JOIN family.questions q ON q.id = e.question_id
 		WHERE e.question_id = $1 AND e.is_draft = false
 		ORDER BY (e.author_user_id = q.asked_of_user_id) DESC, e.created_at`,
@@ -103,11 +103,11 @@ type QuestionDetail struct {
 
 func (s *Store) Question(ctx context.Context, questionID int64) (*QuestionDetail, error) {
 	var q QuestionDetail
-	err := s.Pool.QueryRow(ctx, `
+	err := s.q(ctx).QueryRow(ctx, `
 		SELECT q.id, q.body, q.topic, s.display_name, s.slug, q.asked_of_user_id, u.display_name
 		FROM family.questions q
 		JOIN family.subjects s ON s.id = q.subject_id
-		JOIN family.users u ON u.id = q.asked_of_user_id
+		JOIN core.users u ON u.id = q.asked_of_user_id
 		WHERE q.id = $1 AND q.archived_at IS NULL`, questionID).
 		Scan(&q.ID, &q.Body, &q.Topic, &q.SubjectName, &q.SubjectSlug, &q.AskedOfUserID, &q.AskedOfName)
 	if errors.Is(err, pgx.ErrNoRows) {
