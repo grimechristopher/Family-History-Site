@@ -100,16 +100,17 @@ type pageData struct {
 	Focused   bool
 
 	// questions list
-	Unanswered       []store.QuestionListItem
-	Answered         []store.QuestionListItem
-	UnansweredGroups []store.QuestionGroup
-	AnsweredGroups   []store.QuestionGroup
-	Counts           *store.ListCounts
-	SubjectProgress  []store.SubjectProgress
-	Contributors     []*store.User
-	FilterSubject    string
-	FilterAskedOf    string
-	ViewerIsAdmin    bool
+	Unanswered []store.QuestionListItem
+	Answered   []store.QuestionListItem
+	// Groups is the section currently being shown, and Show says which.
+	Groups          []store.QuestionGroup
+	Show            string
+	Counts          *store.ListCounts
+	SubjectProgress []store.SubjectProgress
+	Contributors    []*store.User
+	FilterSubject   string
+	FilterAskedOf   string
+	ViewerIsAdmin   bool
 	// NothingMatches distinguishes an empty filter from having answered
 	// everything. Congratulating somebody for an empty result is misleading.
 	NothingMatches bool

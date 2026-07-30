@@ -30,23 +30,24 @@ func (s *Server) handleQuestions(w http.ResponseWriter, r *http.Request) {
 		AskedOfName: askedOf,
 	}
 
+	// One section at a time. With 151 waiting, stacking both meant scrolling past
+	// all of them to reach the single answered one.
+	show := r.URL.Query().Get("show")
+	if show != "answered" {
+		show = "waiting"
+	}
+
 	counts, err := s.Store.ListCounts(r.Context(), filter)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
 	}
 
-	unanswered := filter
-	unanswered.OnlyUnanswered = true
-	unansweredItems, err := s.Store.ListQuestions(r.Context(), u.ID, unanswered)
-	if err != nil {
-		s.serverError(w, r, err)
-		return
-	}
-
-	answered := filter
-	answered.OnlyAnswered = true
-	answeredItems, err := s.Store.ListQuestions(r.Context(), u.ID, answered)
+	// Only the section being shown is fetched.
+	wanted := filter
+	wanted.OnlyUnanswered = show == "waiting"
+	wanted.OnlyAnswered = show == "answered"
+	items, err := s.Store.ListQuestions(r.Context(), u.ID, wanted)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
@@ -66,10 +67,8 @@ func (s *Server) handleQuestions(w http.ResponseWriter, r *http.Request) {
 
 	data := s.newPageData(r, "All questions")
 	data.Nav = "questions"
-	data.Unanswered = unansweredItems
-	data.Answered = answeredItems
-	data.UnansweredGroups = store.GroupQuestions(unansweredItems)
-	data.AnsweredGroups = store.GroupQuestions(answeredItems)
+	data.Show = show
+	data.Groups = store.GroupQuestions(items)
 	data.Counts = &counts
 	data.SubjectProgress = subjects
 	data.Contributors = contributors

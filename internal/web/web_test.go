@@ -16,6 +16,7 @@ import (
 	"net/textproto"
 	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -610,30 +611,62 @@ func TestEveryTemplateParses(t *testing.T) {
 
 // --- phase 2: list, others, replies, stories ----------------------------
 
-func TestQuestionListSeparatesUnansweredFromAnswered(t *testing.T) {
+// counts reads the numbers off the waiting/answered toggle.
+func segmentCounts(body string) (waiting, answered string) {
+	re := regexp.MustCompile(`(?s)show=waiting.*?segment-count">(\d+)<`)
+	if m := re.FindStringSubmatch(body); m != nil {
+		waiting = m[1]
+	}
+	re = regexp.MustCompile(`(?s)show=answered.*?segment-count">(\d+)<`)
+	if m := re.FindStringSubmatch(body); m != nil {
+		answered = m[1]
+	}
+	return
+}
+
+// The page shows one section at a time. Stacking a hundred and fifty waiting
+// questions above the handful that were answered meant nobody ever reached them.
+func TestWaitingAndAnsweredAreSeparateViews(t *testing.T) {
 	h := newHarness(t)
 	cookie := h.signIn("dad@example.com")
 
-	// The page opens on your own questions, not everybody's: Dad has two of the
-	// three seeded questions, and Mom's is not his to answer.
+	// Defaults to what is still waiting: Dad has two of the three seeded.
 	body := h.get("/questions", cookie).Body.String()
-	if !strings.Contains(body, "2 still waiting") {
-		t.Errorf("expected Dad's own two waiting, got: %s", firstLede(body))
+	waiting, answered := segmentCounts(body)
+	if waiting != "2" || answered != "0" {
+		t.Errorf("toggle showed %s waiting / %s answered, want 2 / 0", waiting, answered)
+	}
+	if !strings.Contains(body, `show=waiting" aria-pressed="true"`) &&
+		!strings.Contains(body, `aria-pressed="true"`) {
+		t.Error("the waiting segment should be the selected one by default")
 	}
 	if strings.Contains(body, "How did they meet?") {
-		t.Error("Mom's question should not appear on Dad's default list")
+		t.Error("Mom's question should not appear on Dad's list")
 	}
 
 	h.post("/questions/"+strconv.FormatInt(h.dadQuestion, 10)+"/answer",
 		url.Values{"body": {"A Studebaker."}}, cookie)
 
+	// The counts move, and the answered one is no longer in the waiting view.
 	body = h.get("/questions", cookie).Body.String()
-	if !strings.Contains(body, "1 still waiting") || !strings.Contains(body, "1 answered") {
-		t.Errorf("counts did not move, got: %s", firstLede(body))
+	waiting, answered = segmentCounts(body)
+	if waiting != "1" || answered != "1" {
+		t.Errorf("after answering: %s waiting / %s answered, want 1 / 1", waiting, answered)
 	}
-	// The answered one stays visible rather than disappearing.
+	if strings.Contains(body, "What kind of cars did he have?") {
+		t.Error("an answered question should not be in the waiting view")
+	}
+
+	// It is in the answered view, marked done.
+	body = h.get("/questions?show=answered", cookie).Body.String()
+	if !strings.Contains(body, "What kind of cars did he have?") {
+		t.Error("the answered question should be in the answered view")
+	}
 	if !strings.Contains(body, "qrow-done") {
-		t.Error("answered questions should still be listed, marked done")
+		t.Error("answered rows should still be marked done")
+	}
+	if strings.Contains(body, "What were his favorite meals?") {
+		t.Error("an unanswered question should not be in the answered view")
 	}
 }
 
@@ -811,18 +844,6 @@ func TestStoryAndReplyRejectEmptyBodies(t *testing.T) {
 	if rec := h.post("/entries/999999/replies", url.Values{"body": {"hi"}}, dad); rec.Code != http.StatusNotFound {
 		t.Errorf("reply to missing entry: status = %d, want 404", rec.Code)
 	}
-}
-
-func firstLede(body string) string {
-	i := strings.Index(body, `class="lede">`)
-	if i < 0 {
-		return "(no lede)"
-	}
-	rest := body[i+13:]
-	if j := strings.Index(rest, "<"); j >= 0 {
-		return rest[:j]
-	}
-	return rest
 }
 
 // --- phase 3: photos ----------------------------------------------------
@@ -1425,14 +1446,13 @@ func TestEmptyFilterExplainsItselfRatherThanCongratulating(t *testing.T) {
 		t.Error("expected a way back to all of Dad's questions")
 	}
 
-	// Answering everything genuinely should still read as an achievement.
-	for _, id := range []int64{h.dadQuestion} {
-		h.post("/questions/"+strconv.FormatInt(id, 10)+"/answer",
-			url.Values{"body": {"done"}}, dad)
-	}
+	// A filter that does match still shows its questions.
 	body = h.get("/questions?asked_of=Dad&subject=peter-samuel-hale", dad).Body.String()
-	if !strings.Contains(body, "still waiting") {
-		t.Error("expected the normal list while questions remain")
+	if strings.Contains(body, "No questions match") {
+		t.Error("a filter with questions should not report an empty result")
+	}
+	if !strings.Contains(body, "What kind of cars did he have?") {
+		t.Error("expected the matching questions to be listed")
 	}
 }
 

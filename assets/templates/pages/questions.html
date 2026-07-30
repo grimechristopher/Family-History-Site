@@ -1,7 +1,19 @@
 {{define "content"}}
 <h1>Questions</h1>
+
+{{/* One section at a time, with the totals on the buttons rather than repeated
+     in a line above them. */}}
 {{if .Counts}}
-  <p class="lede">{{.Counts.Unanswered}} still waiting &middot; {{.Counts.Answered}} answered</p>
+  <p class="segmented" role="group" aria-label="Which questions to show">
+    <a class="segment" aria-pressed="{{eq .Show "waiting"}}"
+       href="/questions?show=waiting{{if .FilterAskedOf}}&asked_of={{.FilterAskedOf}}{{end}}{{if .FilterSubject}}&subject={{.FilterSubject}}{{end}}">
+      Still waiting <span class="segment-count">{{.Counts.Unanswered}}</span>
+    </a>
+    <a class="segment" aria-pressed="{{eq .Show "answered"}}"
+       href="/questions?show=answered{{if .FilterAskedOf}}&asked_of={{.FilterAskedOf}}{{end}}{{if .FilterSubject}}&subject={{.FilterSubject}}{{end}}">
+      Answered <span class="segment-count">{{.Counts.Answered}}</span>
+    </a>
+  </p>
 {{end}}
 
 <div class="with-side">
@@ -56,9 +68,8 @@
   </details>
 
   <div class="with-side-main">
-    <h2>Still waiting{{if .Counts}} <span class="count">{{.Counts.Unanswered}}</span>{{end}}</h2>
-    {{if .UnansweredGroups}}
-      {{range .UnansweredGroups}}
+    {{if .Groups}}
+      {{range .Groups}}
         <section class="qgroup">
           <h3 class="qgroup-head">{{.Label}} <span class="count">{{len .Items}}</span></h3>
           <ul class="qlist">{{range .Items}}{{template "qrow" .}}{{end}}</ul>
@@ -72,22 +83,12 @@
             {{if .FilterAskedOf}}of {{.FilterAskedOf}}&rsquo;s{{end}} questions</a>
         </div>
       </div>
+    {{else if eq .Show "answered"}}
+      <div class="panel panel-empty"><p class="lede">Nothing answered here yet.</p></div>
     {{else}}
       <div class="panel panel-empty">
         <p class="lede">Every one of these has an answer. That&rsquo;s a real achievement.</p>
       </div>
-    {{end}}
-
-    <h2>Answered{{if .Counts}} <span class="count">{{.Counts.Answered}}</span>{{end}}</h2>
-    {{if .AnsweredGroups}}
-      {{range .AnsweredGroups}}
-        <section class="qgroup">
-          <h3 class="qgroup-head">{{.Label}} <span class="count">{{len .Items}}</span></h3>
-          <ul class="qlist">{{range .Items}}{{template "qrow" .}}{{end}}</ul>
-        </section>
-      {{end}}
-    {{else if not .NothingMatches}}
-      <div class="panel panel-empty"><p class="lede">Nothing answered here yet.</p></div>
     {{end}}
   </div>
 </div>
