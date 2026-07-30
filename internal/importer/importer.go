@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/grimechristopher/family-history-site/internal/gedcom"
 	"github.com/grimechristopher/family-history-site/internal/prompts"
@@ -145,7 +146,27 @@ func Run(ctx context.Context, db store.DBTX, ged *gedcom.File, qs []prompts.Ques
 	userIDs := map[string]int64{}
 	rootLabels := map[string]string{}
 	for _, c := range opts.Contributors {
-		uid, err := store.UpsertUser(ctx, db, c.Email, c.Label)
+		gid, err := ged.FindByName(c.GedcomName)
+		if err != nil {
+			return nil, fmt.Errorf("contributor %s: %w", c.Label, err)
+		}
+		pid, ok := personIDs[gid]
+		if !ok {
+			return nil, fmt.Errorf("contributor %s (%s) is not inside the imported tree", c.Label, c.GedcomName)
+		}
+
+		// Shown under their own name rather than "Dad" or "Mom". Those are only
+		// meaningful to whoever wrote the prompts file: with more than one family
+		// on the site, every family has a Dad, and an answer signed "Dad" says
+		// nothing about whose father it was. The heading in the markdown stays
+		// "Dad" -- that is the writer's word for them -- and only the name shown
+		// on screen changes.
+		display := c.Label
+		if p := tree.People[gid]; p != nil {
+			display = personDisplayName(p)
+		}
+
+		uid, err := store.UpsertUser(ctx, db, c.Email, display)
 		if err != nil {
 			return nil, err
 		}
@@ -155,14 +176,6 @@ func Run(ctx context.Context, db store.DBTX, ged *gedcom.File, qs []prompts.Ques
 		userIDs[c.Label] = uid
 		rootLabels[c.Label] = c.GedcomName
 
-		gid, err := ged.FindByName(c.GedcomName)
-		if err != nil {
-			return nil, fmt.Errorf("contributor %s: %w", c.Label, err)
-		}
-		pid, ok := personIDs[gid]
-		if !ok {
-			return nil, fmt.Errorf("contributor %s (%s) is not inside the imported tree", c.Label, c.GedcomName)
-		}
 		if err := store.LinkUserToPerson(ctx, db, uid, pid); err != nil {
 			return nil, err
 		}
@@ -326,4 +339,24 @@ func optionalInt(i int) *int {
 		return nil
 	}
 	return &i
+}
+
+// personDisplayName is how somebody is named on screen: their first given name and
+// the surname they are known by. "James Andrew" and "Grime" become "James Grime",
+// and a woman recorded under her maiden name is shown under her married one, which
+// is what her family calls her.
+//
+// Short on purpose. It appears in "Hello ...", against every answer, and in the
+// list of who a question was asked of, so the full four-part name would crowd all
+// three.
+func personDisplayName(p *subjects.Person) string {
+	given := p.Given
+	if i := strings.IndexByte(given, ' '); i > 0 {
+		given = given[:i]
+	}
+	surname := p.Surname
+	if p.MarriedSurname != "" {
+		surname = p.MarriedSurname
+	}
+	return strings.TrimSpace(given + " " + surname)
 }

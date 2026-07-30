@@ -384,9 +384,9 @@ func TestCodeSignInRefusesWhatItShould(t *testing.T) {
 func TestDevLoginExistsOnlyWhenConfigured(t *testing.T) {
 	h := newHarness(t)
 
-	rec := h.get("/dev/login/Mom", nil)
+	rec := h.get("/dev/login/home/Mom", nil)
 	if rec.Code != http.StatusNotFound {
-		t.Fatalf("with DEV_LOGIN unset, GET /dev/login/Mom = %d, want 404", rec.Code)
+		t.Fatalf("with DEV_LOGIN unset, GET /dev/login/home/Mom = %d, want 404", rec.Code)
 	}
 
 	// Same server, same store, the flag on.
@@ -399,9 +399,9 @@ func TestDevLoginExistsOnlyWhenConfigured(t *testing.T) {
 	dev := srv.Routes()
 
 	rec = httptest.NewRecorder()
-	dev.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/dev/login/Mom", nil))
+	dev.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/dev/login/home/Mom", nil))
 	if rec.Code != http.StatusSeeOther {
-		t.Fatalf("with DEV_LOGIN on, GET /dev/login/Mom = %d, want 303", rec.Code)
+		t.Fatalf("with DEV_LOGIN on, GET /dev/login/home/Mom = %d, want 303", rec.Code)
 	}
 	var signedIn bool
 	for _, c := range rec.Result().Cookies() {
@@ -415,9 +415,9 @@ func TestDevLoginExistsOnlyWhenConfigured(t *testing.T) {
 
 	// A name that is not a contributor must not mint a session.
 	rec = httptest.NewRecorder()
-	dev.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/dev/login/Nobody", nil))
+	dev.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/dev/login/home/Nobody", nil))
 	if rec.Code != http.StatusNotFound {
-		t.Errorf("GET /dev/login/Nobody = %d, want 404", rec.Code)
+		t.Errorf("GET /dev/login/home/Nobody = %d, want 404", rec.Code)
 	}
 	for _, c := range rec.Result().Cookies() {
 		if c.Name == auth.SessionCookie && c.Value != "" {

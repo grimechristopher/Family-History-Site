@@ -14,22 +14,33 @@ import (
 // Mom or Dad from a link. Registered only when DEV_LOGIN=1; see config.DevLogin.
 func (s *Server) handleDevLogin(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
+	slug := r.PathValue("family")
+	if slug == "" {
+		http.Error(w, "use /dev/login/{family}/{name}: a name alone no longer says "+
+			"which family you mean, because every family has a Dad", http.StatusNotFound)
+		return
+	}
 
-	u, err := s.Store.UserByDisplayName(r.Context(), name)
+	fam, err := s.Store.FamilyBySlug(r.Context(), slug)
 	if errors.Is(err, store.ErrNotFound) {
-		// Names the alternatives rather than a bare 404, since the whole point is
-		// to be typed by hand.
-		contributors, cErr := s.Store.Contributors(r.Context())
-		if cErr != nil {
-			s.serverError(w, r, cErr)
+		http.Error(w, "No family called "+slug, http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+
+	// Scoped to the family: display names are only unique inside one.
+	u, err := s.Store.MemberByDisplayName(r.Context(), fam.ID, name)
+	if errors.Is(err, store.ErrNotFound) {
+		names, nErr := s.Store.MemberNames(r.Context(), fam.ID)
+		if nErr != nil {
+			s.serverError(w, r, nErr)
 			return
 		}
-		var names []string
-		for _, c := range contributors {
-			names = append(names, c.DisplayName)
-		}
-		http.Error(w, "No contributor called "+name+". Try one of: "+strings.Join(names, ", "),
-			http.StatusNotFound)
+		http.Error(w, "Nobody called "+name+" in "+slug+". Try one of: "+
+			strings.Join(names, ", "), http.StatusNotFound)
 		return
 	}
 	if err != nil {
@@ -41,14 +52,8 @@ func (s *Server) handleDevLogin(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	s.Log.Warn("dev login used", "as", u.DisplayName, "user", u.ID)
-	// /dev/login/{family}/{name} lands straight in that family; without one the
-	// root sends you to your only family, or to the chooser.
-	if fam := r.PathValue("family"); fam != "" {
-		http.Redirect(w, r, "/f/"+fam+"/", http.StatusSeeOther)
-		return
-	}
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	s.Log.Warn("dev login used", "as", u.DisplayName, "family", slug, "user", u.ID)
+	http.Redirect(w, r, "/f/"+slug+"/", http.StatusSeeOther)
 }
 
 func (s *Server) handleLoginForm(w http.ResponseWriter, r *http.Request) {

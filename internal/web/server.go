@@ -242,7 +242,6 @@ func (s *Server) Routes() http.Handler {
 	// exist at all rather than existing and refusing.
 	if s.Config.DevLogin {
 		s.Log.Warn("DEV_LOGIN is on: /dev/login/{name} will sign in as any contributor without a link")
-		mux.Handle("GET /dev/login/{name}", http.HandlerFunc(s.handleDevLogin))
 		mux.Handle("GET /dev/login/{family}/{name}", http.HandlerFunc(s.handleDevLogin))
 	}
 

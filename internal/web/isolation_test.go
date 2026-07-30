@@ -14,6 +14,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/grimechristopher/family-history-site/internal/auth"
 	"github.com/grimechristopher/family-history-site/internal/store"
 )
 
@@ -258,5 +259,68 @@ func TestAddingSomeoneLinksThemToTheTree(t *testing.T) {
 	}
 	if *gotPerson != personID {
 		t.Errorf("linked to person %d, want %d", *gotPerson, personID)
+	}
+}
+
+// Every family has a "Dad". Looking one up by name alone returns whichever row
+// Postgres yields first, which is undefined -- so the dev login has to resolve the
+// name inside the family named in the path.
+func TestDevLoginResolvesTheNameInsideItsFamily(t *testing.T) {
+	h := newHarness(t)
+	cfg := h.server.Config
+	cfg.DevLogin = true
+	srv, err := New(cfg, h.store, slog.New(slog.NewTextHandler(os.Stderr, nil)), "test")
+	if err != nil {
+		t.Fatalf("web.New: %v", err)
+	}
+	dev := srv.Routes()
+
+	// A second family whose Dad is a different person entirely.
+	otherID, err := h.store.CreateFamily(context.Background(), "other", "Another family")
+	if err != nil {
+		t.Fatalf("create other family: %v", err)
+	}
+	other := store.WithFamily(context.Background(), otherID)
+	if err := h.store.InTx(other, func(db store.DBTX) error {
+		uid, err := store.UpsertUser(other, db, "otherdad@example.com", "Dad")
+		if err != nil {
+			return err
+		}
+		return store.AddMemberTx(other, db, otherID, uid, store.RoleContributor)
+	}); err != nil {
+		t.Fatalf("seed the other Dad: %v", err)
+	}
+
+	signedInAs := func(path string) string {
+		rec := httptest.NewRecorder()
+		dev.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("GET %s = %d, want 303. body: %s", path, rec.Code, rec.Body.String())
+		}
+		var cookie *http.Cookie
+		for _, c := range rec.Result().Cookies() {
+			if c.Name == auth.SessionCookie && c.Value != "" {
+				cookie = c
+			}
+		}
+		if cookie == nil {
+			t.Fatalf("GET %s issued no session", path)
+		}
+		var email string
+		err := h.store.Pool.QueryRow(context.Background(), `
+			SELECT u.email FROM core.sessions s
+			  JOIN core.users u ON u.id = s.user_id
+			 WHERE s.token_hash = digest($1, 'sha256')`, cookie.Value).Scan(&email)
+		if err != nil {
+			t.Fatalf("resolve the session for %s: %v", path, err)
+		}
+		return email
+	}
+
+	if got := signedInAs("/dev/login/home/Dad"); got != "dad@example.com" {
+		t.Errorf("/dev/login/home/Dad signed in as %s, want the home family's Dad", got)
+	}
+	if got := signedInAs("/dev/login/other/Dad"); got != "otherdad@example.com" {
+		t.Errorf("/dev/login/other/Dad signed in as %s, want the other family's Dad", got)
 	}
 }

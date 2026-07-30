@@ -212,3 +212,46 @@ func (s *Store) SetMemberPerson(ctx context.Context, userID int64, personID *int
 func (s *Store) UpsertUserIn(ctx context.Context, email, displayName string) (int64, error) {
 	return UpsertUser(ctx, s.q(ctx), email, displayName)
 }
+
+// MemberByDisplayName finds somebody by the name they are shown under, within one
+// family. Names are only unique inside a family -- every family has a "Dad" -- so
+// looking one up without saying which family returns whichever row Postgres
+// happens to yield first.
+func (s *Store) MemberByDisplayName(ctx context.Context, familyID int64, name string) (*User, error) {
+	var u User
+	err := s.q(ctx).QueryRow(ctx, `
+		SELECT u.id, u.email, u.supabase_user_id, u.display_name
+		  FROM core.users u
+		  JOIN core.family_members m ON m.user_id = u.id
+		 WHERE m.family_id = $1 AND u.display_name = $2`, familyID, name).
+		Scan(&u.ID, &u.Email, &u.SupabaseUserID, &u.DisplayName)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("member %q of family %d: %w", name, familyID, err)
+	}
+	return &u, nil
+}
+
+// MemberNames lists who is in a family, for error messages that offer the
+// alternatives rather than a bare failure.
+func (s *Store) MemberNames(ctx context.Context, familyID int64) ([]string, error) {
+	rows, err := s.q(ctx).Query(ctx, `
+		SELECT u.display_name FROM core.users u
+		  JOIN core.family_members m ON m.user_id = u.id
+		 WHERE m.family_id = $1 ORDER BY u.display_name`, familyID)
+	if err != nil {
+		return nil, fmt.Errorf("member names: %w", err)
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			return nil, err
+		}
+		out = append(out, n)
+	}
+	return out, rows.Err()
+}
