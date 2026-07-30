@@ -71,14 +71,22 @@
 <details class="new-story">
   <summary>Write a question</summary>
   <form method="post" action="/subjects/{{.Subject.Slug}}/questions">
-    <label for="asked-of">Who should answer it?</label>
-    <select id="asked-of" name="asked_of">
+    <input type="hidden" name="family" value="{{.Subject.FamilySlug}}">
+
+    {{/* Several people, because one question is often for all of them: the four
+         Lucero siblings remember their parents differently and all four should be
+         asked. Checkboxes rather than a multiple-select, which on a phone is a
+         tiny scrolling box that needs a modifier key nobody has. */}}
+    <fieldset class="askees">
+      <legend>Who should answer it?</legend>
       {{range .Contributors}}
-        <option value="{{.DisplayName}}" {{if eq $.User.DisplayName .DisplayName}}selected{{end}}>
-          {{.DisplayName}}{{if eq $.User.DisplayName .DisplayName}} (you){{end}}
-        </option>
+        <label class="askee">
+          <input type="checkbox" name="asked_of" value="{{.DisplayName}}"
+                 {{if eq $.User.DisplayName .DisplayName}}checked{{end}}>
+          <span>{{.DisplayName}}{{if eq $.User.DisplayName .DisplayName}} (you){{end}}</span>
+        </label>
       {{end}}
-    </select>
+    </fieldset>
 
     <label for="question-body">The question</label>
     <textarea id="question-body" name="body" rows="4"

@@ -81,7 +81,9 @@ func (s *Store) TreePeople(ctx context.Context) ([]*TreePerson, error) {
 		    FROM family.questions q
 		    LEFT JOIN family.entries owner
 		           ON owner.question_id = q.id
-		          AND owner.author_user_id = q.asked_of_user_id
+		          AND EXISTS (SELECT 1 FROM family.question_askees oa
+		                       WHERE oa.question_id = q.id
+		                         AND oa.user_id = owner.author_user_id)
 		          AND owner.is_draft = false
 		    WHERE q.archived_at IS NULL
 		    GROUP BY q.subject_id
@@ -220,7 +222,9 @@ func (s *Store) SubjectProgressBySlug(ctx context.Context, slug, familySlug stri
 		       ON q.subject_id = s.id AND q.archived_at IS NULL
 		LEFT JOIN family.entries owner
 		       ON owner.question_id = q.id
-		      AND owner.author_user_id = q.asked_of_user_id
+		      AND EXISTS (SELECT 1 FROM family.question_askees oa
+		                   WHERE oa.question_id = q.id
+		                     AND oa.user_id = owner.author_user_id)
 		      AND owner.is_draft = false
 		WHERE s.slug = $1 AND ($2 = '' OR f.slug = $2)
 		GROUP BY s.id, s.slug, s.kind, s.display_name, s.sort_order,

@@ -130,3 +130,54 @@ func TestTreePickerOffersOnlyTheLiving(t *testing.T) {
 		}
 	}
 }
+
+// One question is often for several people: the four Lucero siblings remember
+// their parents differently and all four should be asked. The form takes as many
+// as you tick, and every one of them gets it in their own card stack.
+func TestAskingSeveralPeopleAtOnce(t *testing.T) {
+	h := newHarness(t)
+	chris := h.signIn("chris@example.com")
+
+	body := h.get("/subjects/peter-samuel-hale", chris).Body.String()
+	if !strings.Contains(body, `type="checkbox" name="asked_of"`) {
+		t.Error("the form should let you tick more than one person")
+	}
+
+	rec := h.post("/subjects/peter-samuel-hale/questions", url.Values{
+		"asked_of": {"Dad", "Mom"},
+		"body":     {"What did the two of you make of him at first?"},
+	}, chris)
+	if rec.Code != 303 {
+		t.Fatalf("asking: status %d, body %s", rec.Code, rec.Body.String())
+	}
+
+	// It is one question, and it is in both stacks.
+	ctx := context.Background()
+	for _, who := range []string{"dad@example.com", "mom@example.com"} {
+		u, err := h.store.UserByEmail(ctx, who)
+		if err != nil {
+			t.Fatalf("UserByEmail %s: %v", who, err)
+		}
+		items, err := h.store.ListQuestions(ctx, u.ID, store.QuestionFilter{AskedOfName: u.DisplayName})
+		if err != nil {
+			t.Fatalf("ListQuestions: %v", err)
+		}
+		var found bool
+		for _, q := range items {
+			if strings.HasPrefix(q.Body, "What did the two of you make") {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%s was ticked but the question is not in their list", u.DisplayName)
+		}
+	}
+
+	// Nobody ticked is a mistake worth saying so about, not an unasked question.
+	rec = h.post("/subjects/peter-samuel-hale/questions", url.Values{
+		"body": {"A question for nobody."},
+	}, chris)
+	if rec.Code != 400 {
+		t.Errorf("a question with nobody to answer it: status %d, want 400", rec.Code)
+	}
+}

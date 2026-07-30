@@ -256,6 +256,9 @@ func Run(ctx context.Context, db store.DBTX, ged *gedcom.File, qs []prompts.Ques
 	}
 
 	keys := make([]string, 0, len(qs))
+	// Every (question, person) pair this import produces, so anybody dropped from
+	// the prompts file can be detached afterwards.
+	askees := make([]store.Askee, 0, len(qs))
 	// Counts the same words asked twice about the same person. Nothing else about
 	// position matters: the key is a hash of the question.
 	occurrences := map[string]int{}
@@ -295,10 +298,13 @@ func Run(ctx context.Context, db store.DBTX, ged *gedcom.File, qs []prompts.Ques
 
 		// m.Subject, not the routed subject: routing a question onto a couple's
 		// page must not change what it is, or the move would archive its answers.
+		// Counted per person, keyed without them: two people given the same
+		// prompt each reach occurrence 1 and so land on the same question, while
+		// somebody asked the same thing twice in their own section still gets two.
 		identity := q.Person + "|" + m.Subject + "|" + q.Body
 		occurrences[identity]++
-		key := prompts.ImportKey(q.Person, m.Subject, q.Body, occurrences[identity])
-		if _, err := store.UpsertImportedQuestion(ctx, db, store.ImportedQuestion{
+		key := prompts.ImportKey(m.Subject, q.Body, occurrences[identity])
+		questionID, err := store.UpsertImportedQuestion(ctx, db, store.ImportedQuestion{
 			SubjectID:     subjectID,
 			AskedOfUserID: userID,
 			Topic:         optionalString(m.Topic),
@@ -306,9 +312,11 @@ func Run(ctx context.Context, db store.DBTX, ged *gedcom.File, qs []prompts.Ques
 			SortOrder:     i,
 			IsProposed:    q.IsProposed,
 			ImportKey:     key,
-		}); err != nil {
+		})
+		if err != nil {
 			return nil, err
 		}
+		askees = append(askees, store.Askee{QuestionID: questionID, UserID: userID})
 		keys = append(keys, key)
 		res.Questions++
 		res.PerPerson[q.Person]++
@@ -338,22 +346,31 @@ func Run(ctx context.Context, db store.DBTX, ged *gedcom.File, qs []prompts.Ques
 				continue
 			}
 			for i, body := range GenericQuestions {
-				key := prompts.ImportKey(c.Label, sub.Slug, body, 1)
-				if _, err := store.UpsertImportedQuestion(ctx, db, store.ImportedQuestion{
+				key := prompts.ImportKey(sub.Slug, body, 1)
+				questionID, err := store.UpsertImportedQuestion(ctx, db, store.ImportedQuestion{
 					SubjectID:     subjectID,
 					AskedOfUserID: userIDs[c.Label],
 					Body:          body,
 					SortOrder:     10000 + i, // after everything from the markdown
 					ImportKey:     key,
-				}); err != nil {
+				})
+				if err != nil {
 					return nil, err
 				}
+				askees = append(askees, store.Askee{QuestionID: questionID, UserID: userIDs[c.Label]})
 				keys = append(keys, key)
 				res.Questions++
 				res.Generic++
 				res.PerPerson[c.Label]++
 			}
 		}
+	}
+
+	// Somebody dropped from the prompts file stops being asked. Without this,
+	// removing Tony from the config left him attached to ten questions that no
+	// longer mentioned him, still in his card stack.
+	if _, err := store.PruneAskeesNotIn(ctx, db, askees); err != nil {
+		return nil, err
 	}
 
 	// Anything the derivation no longer produces goes, so a re-import after a

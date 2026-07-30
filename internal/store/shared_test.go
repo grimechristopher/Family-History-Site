@@ -42,11 +42,12 @@ func TestOneQuestionAskedOfSeveralPeople(t *testing.T) {
 			if i == 0 {
 				viewerID = uid
 			}
-			// The same question, and one of his own.
+			// The same question -- same import key, because the key is content and
+			// carries no person -- and one of his own.
 			if _, err := UpsertImportedQuestion(fctx, db, ImportedQuestion{
 				SubjectID: subjectID, AskedOfUserID: uid,
 				Body: "What do you remember most about him?", SortOrder: 1,
-				ImportKey: name + "-shared",
+				ImportKey: "shared",
 			}); err != nil {
 				return err
 			}

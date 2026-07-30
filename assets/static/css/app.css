@@ -1565,3 +1565,32 @@ a.pnode-hit:focus-visible .pnode-box { stroke: var(--teal); stroke-width: 3; }
 @media (min-width: 62rem) {
   body:has(.with-side) > .footer { flex: none; }
 }
+
+/* ---------- Who should answer it ------------------------------------
+   Checkboxes rather than a multiple-select: on a phone that control is a small
+   scrolling box, and choosing more than one in it needs a modifier key that a
+   touchscreen does not have.
+   ------------------------------------------------------------------ */
+
+.askees {
+  margin: 0 0 var(--s4);
+  padding: var(--s3) var(--s4) var(--s4);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+}
+
+.askees legend {
+  padding: 0 var(--s2);
+  font: 700 var(--t-small)/1.3 var(--sans);
+  color: var(--ink);
+}
+
+.askee {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-height: var(--tap);
+  cursor: pointer;
+}
+
+.askee input { width: 1.4rem; height: 1.4rem; accent-color: var(--teal); }

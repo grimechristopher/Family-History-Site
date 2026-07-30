@@ -26,9 +26,6 @@ type QuestionListItem struct {
 	SharedWith []string
 	// SharedAnswered is how many of them have answered.
 	SharedAnswered int
-	// sharedKey identifies the question rather than the row. Not exported: it is
-	// an implementation detail of collapsing the copies.
-	sharedKey string
 
 	// Answered means the person the question was asked of has answered it. This
 	// is what "unanswered" means throughout the site.
@@ -64,7 +61,9 @@ type QuestionFilter struct {
 // only decides the ViewerAnswered flag.
 func (s *Store) ListQuestions(ctx context.Context, viewerID int64, f QuestionFilter) ([]QuestionListItem, error) {
 	var where []string
-	args := []any{viewerID}
+	// $1 is the viewer, $2 the person the page is filtered to. The second is always
+	// bound, empty or not, so the join below has a fixed position to refer to.
+	args := []any{viewerID, f.AskedOfName}
 
 	add := func(clause string, value any) {
 		args = append(args, value)
@@ -79,13 +78,21 @@ func (s *Store) ListQuestions(ctx context.Context, viewerID int64, f QuestionFil
 		add("q.family_id = (SELECT id FROM core.families WHERE slug = $%d)", f.FamilySlug)
 	}
 	if f.AskedOfName != "" {
-		add("asked.display_name = $%d", f.AskedOfName)
+		add(`EXISTS (SELECT 1 FROM family.question_askees qa
+		              JOIN core.users qau ON qau.id = qa.user_id
+		             WHERE qa.question_id = q.id AND qau.display_name = $%d)`, f.AskedOfName)
+	}
+	// "Answered" depends on who is reading. Filtered to one person it is whether
+	// that person has answered; across everybody it is whether anybody asked has.
+	answeredBy := "owner_answer.id IS NOT NULL"
+	if f.AskedOfName != "" {
+		answeredBy = "chosen_answer.id IS NOT NULL"
 	}
 	if f.OnlyUnanswered {
-		where = append(where, "owner_answer.id IS NULL")
+		where = append(where, "NOT ("+answeredBy+")")
 	}
 	if f.OnlyAnswered {
-		where = append(where, "owner_answer.id IS NOT NULL")
+		where = append(where, answeredBy)
 	}
 
 	limit := f.Limit
@@ -122,21 +129,32 @@ func (s *Store) ListQuestions(ctx context.Context, viewerID int64, f QuestionFil
 		       -- question rather than whichever of its rows survived the filter:
 		       -- under "still waiting" a window would report that a question was
 		       -- asked only of the people who have not answered it.
-		       shared.names, coalesce(shared.answered, 0), q.shared_key
+		       shared.names, coalesce(shared.answered, 0)
 		FROM family.questions q
 		JOIN family.subjects s   ON s.id = q.subject_id
 		JOIN core.users asked  ON asked.id = q.asked_of_user_id
 		LEFT JOIN family.entries owner_answer
 		       ON owner_answer.question_id = q.id
-		      AND owner_answer.author_user_id = q.asked_of_user_id
 		      AND owner_answer.is_draft = false
+		      AND EXISTS (SELECT 1 FROM family.question_askees oa
+		                   WHERE oa.question_id = q.id
+		                     AND oa.user_id = owner_answer.author_user_id)
+		LEFT JOIN family.entries chosen_answer
+		       ON chosen_answer.question_id = q.id
+		      AND chosen_answer.is_draft = false
+		      AND chosen_answer.author_user_id =
+		          (SELECT id FROM core.users WHERE display_name = $2 LIMIT 1)
 		LEFT JOIN family.entries viewer_answer
 		       ON viewer_answer.question_id = q.id
 		      AND viewer_answer.author_user_id = $1
 		      AND viewer_answer.is_draft = false
 		LEFT JOIN (
 		    SELECT e.question_id,
-		           count(*) FILTER (WHERE e.author_user_id <> q2.asked_of_user_id) AS other_answers,
+		           count(*) FILTER (
+		               WHERE NOT EXISTS (SELECT 1 FROM family.question_askees oa
+		                                  WHERE oa.question_id = e.question_id
+		                                    AND oa.user_id = e.author_user_id)
+		           ) AS other_answers,
 		           coalesce(sum(r.n), 0) AS replies
 		    FROM family.entries e
 		    JOIN family.questions q2 ON q2.id = e.question_id
@@ -149,15 +167,13 @@ func (s *Store) ListQuestions(ctx context.Context, viewerID int64, f QuestionFil
 		LEFT JOIN LATERAL (
 		    SELECT array_agg(sib.display_name ORDER BY sib.display_name) AS names,
 		           count(sib_answer.id) AS answered
-		    FROM family.questions sq
-		    JOIN core.users sib ON sib.id = sq.asked_of_user_id
+		    FROM family.question_askees sa
+		    JOIN core.users sib ON sib.id = sa.user_id
 		    LEFT JOIN family.entries sib_answer
-		           ON sib_answer.question_id = sq.id
-		          AND sib_answer.author_user_id = sq.asked_of_user_id
+		           ON sib_answer.question_id = sa.question_id
+		          AND sib_answer.author_user_id = sa.user_id
 		          AND sib_answer.is_draft = false
-		    WHERE sq.family_id = q.family_id
-		      AND sq.shared_key = q.shared_key
-		      AND sq.archived_at IS NULL
+		    WHERE sa.question_id = q.id
 		) shared ON true
 		WHERE ` + strings.Join(where, " AND ") + `
 		ORDER BY answered ASC, q.sort_order, q.id
@@ -169,30 +185,18 @@ func (s *Store) ListQuestions(ctx context.Context, viewerID int64, f QuestionFil
 	}
 	defer rows.Close()
 
-	// Looking at everybody's questions at once, a question asked of four people is
-	// one question, not four rows of identical text. Looking at one person's, it is
-	// theirs and the collapsing would be wrong -- so this only applies when nobody
-	// is chosen.
-	collapse := f.AskedOfName == ""
-	seen := map[string]bool{}
-
 	var out []QuestionListItem
 	for rows.Next() {
 		var q QuestionListItem
 		if err := rows.Scan(&q.ID, &q.Body, &q.Topic, &q.SubjectName, &q.SubjectSlug,
 			&q.AskedOfName, &q.AskedOfUserID, &q.IsProposed, &q.AboutAskedOf,
 			&q.Answered, &q.OtherAnswers, &q.ReplyCount, &q.ViewerAnswered,
-			&q.SharedWith, &q.SharedAnswered, &q.sharedKey); err != nil {
+			&q.SharedWith, &q.SharedAnswered); err != nil {
 			return nil, err
 		}
 		if len(q.SharedWith) < 2 {
-			// One person: nothing to say about who else was asked.
+			// One person asked: nothing to say about who else.
 			q.SharedWith = nil
-		} else if collapse {
-			if seen[q.sharedKey] {
-				continue
-			}
-			seen[q.sharedKey] = true
 		}
 		out = append(out, q)
 	}
@@ -251,28 +255,40 @@ func (s *Store) ListCounts(ctx context.Context, f QuestionFilter) (ListCounts, e
 	}
 	if f.AskedOfName != "" {
 		args = append(args, f.AskedOfName)
-		where = append(where, fmt.Sprintf("asked.display_name = $%d", len(args)))
+		where = append(where, fmt.Sprintf(`EXISTS (
+		    SELECT 1 FROM family.question_askees qa
+		      JOIN core.users qau ON qau.id = qa.user_id
+		     WHERE qa.question_id = q.id AND qau.display_name = $%d)`, len(args)))
 	}
 
 	// Counted per question rather than per row when nobody is chosen, to agree
 	// with the list underneath: the Lucero line has 104 rows and 74 questions, and
 	// a heading saying 104 above 74 rows is just wrong.
+	// One row per question now, so nothing needs collapsing. The count is of
+	// questions either way; what changes with a person chosen is whose answer
+	// decides "answered".
 	counted := "count(*)"
-	if f.AskedOfName == "" {
-		counted = "count(DISTINCT q.shared_key)"
+	answered := "owner_answer.id IS NOT NULL"
+	if f.AskedOfName != "" {
+		args = append(args, f.AskedOfName)
+		answered = fmt.Sprintf(`EXISTS (
+		    SELECT 1 FROM family.entries ce JOIN core.users cu ON cu.id = ce.author_user_id
+		     WHERE ce.question_id = q.id AND ce.is_draft = false AND cu.display_name = $%d)`, len(args))
 	}
 
 	var c ListCounts
 	err := s.q(ctx).QueryRow(ctx, `
-		SELECT `+counted+` FILTER (WHERE owner_answer.id IS NULL),
-		       `+counted+` FILTER (WHERE owner_answer.id IS NOT NULL)
+		SELECT `+counted+` FILTER (WHERE NOT (`+answered+`)),
+		       `+counted+` FILTER (WHERE `+answered+`)
 		FROM family.questions q
 		JOIN family.subjects s  ON s.id = q.subject_id
 		JOIN core.users asked ON asked.id = q.asked_of_user_id
 		LEFT JOIN family.entries owner_answer
 		       ON owner_answer.question_id = q.id
-		      AND owner_answer.author_user_id = q.asked_of_user_id
 		      AND owner_answer.is_draft = false
+		      AND EXISTS (SELECT 1 FROM family.question_askees oa
+		                   WHERE oa.question_id = q.id
+		                     AND oa.user_id = owner_answer.author_user_id)
 		WHERE `+strings.Join(where, " AND "), args...).Scan(&c.Unanswered, &c.Answered)
 	if err != nil {
 		return ListCounts{}, fmt.Errorf("list counts: %w", err)
@@ -324,11 +340,15 @@ func (s *Store) SubjectsWithProgress(ctx context.Context, askedOf, familySlug st
 		LEFT JOIN family.questions q
 		       ON q.subject_id = s.id
 		      AND q.archived_at IS NULL
-		      AND ($1 = '' OR q.asked_of_user_id = asked.id)
+		      AND ($1 = '' OR EXISTS (SELECT 1 FROM family.question_askees qa
+		                               WHERE qa.question_id = q.id
+		                                 AND qa.user_id = asked.id))
 		LEFT JOIN family.entries owner_answer
 		       ON owner_answer.question_id = q.id
-		      AND owner_answer.author_user_id = q.asked_of_user_id
 		      AND owner_answer.is_draft = false
+		      AND EXISTS (SELECT 1 FROM family.question_askees oa
+		                   WHERE oa.question_id = q.id
+		                     AND oa.user_id = owner_answer.author_user_id)
 		WHERE $2 = '' OR f.slug = $2
 		GROUP BY s.id, s.slug, s.kind, s.display_name, s.sort_order, s.generation, s.relation,
 		         f.slug, f.display_name

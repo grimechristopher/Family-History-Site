@@ -353,7 +353,9 @@ func (s *Server) handleAskQuestion(w http.ResponseWriter, r *http.Request) {
 	u := auth.User(r.Context())
 	slug := r.PathValue("slug")
 
-	subject, err := s.Store.SubjectBySlug(r.Context(), slug, r.FormValue("family"))
+	// Resolved with its line, because who may be asked depends on which family
+	// this person belongs to.
+	subject, err := s.Store.SubjectProgressBySlug(r.Context(), slug, r.FormValue("family"))
 	if errors.Is(err, store.ErrNotFound) {
 		http.NotFound(w, r)
 		return
@@ -369,30 +371,57 @@ func (s *Server) handleAskQuestion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Who it is for. Must be a contributor: asking a question of somebody who is
-	// never shown a card stack would bury it.
-	askedOf := r.FormValue("asked_of")
-	contributors, err := s.Store.Contributors(r.Context(), "")
+	// Who it is for -- possibly several people, because one question is often for
+	// all of them. Each must be a contributor: asking somebody who is never shown a
+	// card stack would bury it.
+	//
+	// Scoped to the subject's line, so the list cannot offer somebody from another
+	// family and a hand-made request cannot name one.
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "could not read the form", http.StatusBadRequest)
+		return
+	}
+	contributors, err := s.Store.Contributors(r.Context(), subject.FamilySlug)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
 	}
-	var target *store.User
+	byName := make(map[string]*store.User, len(contributors))
 	for _, c := range contributors {
-		if c.DisplayName == askedOf {
-			target = c
-			break
+		byName[c.DisplayName] = c
+	}
+
+	var targets []*store.User
+	seen := map[int64]bool{}
+	for _, name := range r.Form["asked_of"] {
+		c, ok := byName[name]
+		if !ok {
+			http.Error(w, "Choose who the question is for.", http.StatusBadRequest)
+			return
+		}
+		if !seen[c.ID] {
+			seen[c.ID] = true
+			targets = append(targets, c)
 		}
 	}
-	if target == nil {
+	if len(targets) == 0 {
 		http.Error(w, "Choose who the question is for.", http.StatusBadRequest)
 		return
 	}
 
-	id, err := s.Store.CreateUserQuestion(r.Context(), subject.ID, target.ID, u.ID, nil, body)
+	// One question, however many people are asked it. The first is recorded on the
+	// row itself, the rest alongside; all of them get it in their card stack and
+	// their answers gather in one place.
+	id, err := s.Store.CreateUserQuestion(r.Context(), subject.ID, targets[0].ID, u.ID, nil, body)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
+	}
+	for _, t := range targets[1:] {
+		if err := s.Store.AskAlso(r.Context(), id, t.ID); err != nil {
+			s.serverError(w, r, err)
+			return
+		}
 	}
 	http.Redirect(w, r, "/questions/"+strconv.FormatInt(id, 10), http.StatusSeeOther)
 }

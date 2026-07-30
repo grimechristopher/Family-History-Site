@@ -83,9 +83,10 @@ func (s *Store) Contributors(ctx context.Context, familySlug string) ([]*User, e
 		 WHERE m.family_id = ANY($1) AND m.role = 'contributor'
 		   AND ($2 = '' OR f.slug = $2)
 		   AND EXISTS (SELECT 1 FROM family.questions q
-		                WHERE q.asked_of_user_id = u.id
-		                  AND q.family_id = m.family_id
-		                  AND q.archived_at IS NULL)
+		                JOIN family.question_askees qa ON qa.question_id = q.id
+		               WHERE qa.user_id = u.id
+		                 AND q.family_id = m.family_id
+		                 AND q.archived_at IS NULL)
 		 GROUP BY u.id, u.email, u.supabase_user_id, u.display_name
 		 ORDER BY u.display_name`, FamilyIDsFrom(ctx), familySlug)
 	if err != nil {

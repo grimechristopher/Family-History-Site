@@ -55,17 +55,17 @@ func TestParseOrdinalResetsPerHeading(t *testing.T) {
 func TestImportKeyIsContentAddressed(t *testing.T) {
 	const subject, body = "alice-may-osgood", "What kind of cars did he have?"
 
-	if ImportKey("Dad", subject, body, 1) != ImportKey("Dad", subject, body, 1) {
+	if ImportKey(subject, body, 1) != ImportKey(subject, body, 1) {
 		t.Fatal("the same inputs must give the same key")
 	}
 	// Reflowing or re-spacing a line is not a different question.
-	if ImportKey("Dad", subject, body, 1) !=
-		ImportKey("Dad", subject, "  What  kind of cars\n  did he have? ", 1) {
+	if ImportKey(subject, body, 1) !=
+		ImportKey(subject, "  What  kind of cars\n  did he have? ", 1) {
 		t.Error("whitespace should not change identity")
 	}
 	// Neither the heading nor the question is recoverable from the key, and no
 	// part of it counts position within the file.
-	key := ImportKey("Dad", subject, body, 1)
+	key := ImportKey(subject, body, 1)
 	if strings.Contains(key, "cars") || strings.Contains(key, "alice") {
 		t.Errorf("key %q should carry neither heading nor body text", key)
 	}
@@ -73,16 +73,23 @@ func TestImportKeyIsContentAddressed(t *testing.T) {
 	// Everything that genuinely distinguishes two questions must reach the key.
 	seen := map[string]string{}
 	for what, k := range map[string]string{
-		"baseline":              ImportKey("Dad", subject, body, 1),
-		"second occurrence":     ImportKey("Dad", subject, body, 2),
-		"asked of someone else": ImportKey("Mom", subject, body, 1),
-		"about someone else":    ImportKey("Dad", "louis-hale", body, 1),
-		"different question":    ImportKey("Dad", subject, "A different question?", 1),
+		"baseline":           ImportKey(subject, body, 1),
+		"second occurrence":  ImportKey(subject, body, 2),
+		"about someone else": ImportKey("louis-hale", body, 1),
+		"different question": ImportKey(subject, "A different question?", 1),
 	} {
 		if prev, dup := seen[k]; dup {
 			t.Errorf("%s collides with %s", what, prev)
 		}
 		seen[k] = what
+	}
+
+	// Who is asked is deliberately not in it. Robert, Frank, Tony and Inez are
+	// given the same prompts about their parents; keyed by person that was four
+	// rows of one question, four cards and four places to answer. One key means one
+	// question, and they are recorded against it as the people asked.
+	if ImportKey(subject, body, 1) != ImportKey(subject, body, 1) {
+		t.Error("two people given the same prompt must reach the same question")
 	}
 }
 

@@ -71,7 +71,13 @@ func (s *Store) AnswersTo(ctx context.Context, questionID int64) ([]Entry, error
 		JOIN core.users u ON u.id = e.author_user_id
 		JOIN family.questions q ON q.id = e.question_id
 		WHERE e.question_id = $1 AND e.is_draft = false
-		ORDER BY (e.author_user_id = q.asked_of_user_id) DESC, e.created_at`,
+		-- The answers from the people actually asked come first, then everybody
+		-- else's. There may be several: a question put to four brothers has four
+		-- answers that all belong at the top, in the order they were written.
+		ORDER BY EXISTS (SELECT 1 FROM family.question_askees oa
+		                  WHERE oa.question_id = q.id
+		                    AND oa.user_id = e.author_user_id) DESC,
+		         e.created_at`,
 		questionID)
 	if err != nil {
 		return nil, fmt.Errorf("answers to question %d: %w", questionID, err)

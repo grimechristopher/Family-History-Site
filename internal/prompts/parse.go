@@ -70,9 +70,17 @@ func (h Heading) String() string {
 // archives the old one, taking its answers into the archive rather than carrying
 // them forward. That is the safer failure: an answer stays attached to the words it
 // was actually answering, and nothing is ever overwritten.
-func ImportKey(person, subject, body string, occurrence int) string {
+// The person is deliberately not part of the key. Robert, Frank, Tony and Inez are
+// given the same prompts about their parents, and keying by person made that four
+// rows of the same question -- four cards, four places to answer, the same sentence
+// printed four times in any list. Keyed by content alone they are one question, and
+// the four of them are recorded against it as the people asked.
+//
+// Occurrence is still counted per person, so somebody asked the same thing twice in
+// their own section still gets two rows, and so does everybody else.
+func ImportKey(subject, body string, occurrence int) string {
 	sum := sha256.Sum256([]byte(subject + "\n" + normaliseBody(body)))
-	return fmt.Sprintf("%s|%s|%d", person, hex.EncodeToString(sum[:8]), occurrence)
+	return fmt.Sprintf("%s|%d", hex.EncodeToString(sum[:8]), occurrence)
 }
 
 // normaliseBody collapses whitespace so that reflowing a line in Obsidian, or

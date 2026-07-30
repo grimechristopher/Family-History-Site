@@ -236,18 +236,29 @@ func (s *Server) handleDraft(w http.ResponseWriter, r *http.Request) {
 }
 
 // ownsQuestion keeps one person out of another's queue. Everyone may read
-// everything, but only the person a question was asked of may answer or defer it.
+// everything, and anybody may add their own answer from a question's page; this
+// guards the card stack, where a defer or a skip belongs to the person whose stack
+// it is.
+//
+// "Asked of" is now a set. A question put to Robert, Frank, Tony and Inez is in
+// four stacks at once, and each of them may defer his own copy of it without
+// touching anybody else's.
 func (s *Server) ownsQuestion(w http.ResponseWriter, r *http.Request, questionID, userID int64) bool {
-	owner, err := s.Store.QuestionOwner(r.Context(), questionID)
-	if errors.Is(err, store.ErrNotFound) {
+	// Gone and not-yours are different answers and deserve different words.
+	if _, err := s.Store.Question(r.Context(), questionID); errors.Is(err, store.ErrNotFound) {
 		http.Error(w, "that question no longer exists", http.StatusNotFound)
 		return false
+	} else if err != nil {
+		s.serverError(w, r, err)
+		return false
 	}
+
+	asked, err := s.Store.IsAskedOf(r.Context(), questionID, userID)
 	if err != nil {
 		s.serverError(w, r, err)
 		return false
 	}
-	if owner != userID {
+	if !asked {
 		http.Error(w, "that question was asked of someone else", http.StatusForbidden)
 		return false
 	}

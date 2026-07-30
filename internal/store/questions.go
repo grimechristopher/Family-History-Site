@@ -39,6 +39,12 @@ func UpsertImportedQuestion(ctx context.Context, db DBTX, q ImportedQuestion) (i
 	if err != nil {
 		return 0, fmt.Errorf("upsert question %s: %w", q.ImportKey, err)
 	}
+	// Recorded here rather than left to the caller. Being asked lives in
+	// question_askees now, and a question with nobody attached is in no card stack
+	// at all -- a silence that looks exactly like having answered everything.
+	if err := AddAskee(ctx, db, id, q.AskedOfUserID); err != nil {
+		return 0, err
+	}
 	return id, nil
 }
 
@@ -99,5 +105,68 @@ func (s *Store) CreateUserQuestion(ctx context.Context, subjectID, askedOfUserID
 	if err != nil {
 		return 0, fmt.Errorf("create question: %w", err)
 	}
+	// Being asked lives in question_askees, and a question with nobody in it would
+	// appear in no card stack at all.
+	if err := AddAskee(ctx, s.q(ctx), id, askedOfUserID); err != nil {
+		return 0, err
+	}
 	return id, nil
+}
+
+// AddAskee records that a question is put to somebody. Repeating it is harmless,
+// which matters because an import runs over the same prompts every time.
+//
+// The line comes from the question rather than from the context. A web request
+// carries the several families somebody belongs to and not one chosen family, so
+// reading it from the context inserted a zero and the write failed on the foreign
+// key -- which is the right failure, but the wrong question to have asked.
+func AddAskee(ctx context.Context, db DBTX, questionID, userID int64) error {
+	if _, err := db.Exec(ctx, `
+		INSERT INTO family.question_askees (family_id, question_id, user_id)
+		SELECT q.family_id, q.id, $2 FROM family.questions q WHERE q.id = $1
+		ON CONFLICT DO NOTHING`, questionID, userID); err != nil {
+		return fmt.Errorf("add askee: %w", err)
+	}
+	return nil
+}
+
+// Askee is one person a question is put to.
+type Askee struct {
+	QuestionID int64
+	UserID     int64
+}
+
+// PruneAskeesNotIn detaches people the import no longer asks, within this family.
+//
+// family_id is named explicitly rather than left to row-level security, for the
+// same reason the archive statement names it: this deletes everything it does not
+// recognise, and a statement like that must never depend on a session setting
+// being right.
+func PruneAskeesNotIn(ctx context.Context, db DBTX, keep []Askee) (int64, error) {
+	questionIDs := make([]int64, len(keep))
+	userIDs := make([]int64, len(keep))
+	for i, a := range keep {
+		questionIDs[i] = a.QuestionID
+		userIDs[i] = a.UserID
+	}
+	tag, err := db.Exec(ctx, `
+		DELETE FROM family.question_askees a
+		 USING family.questions q
+		 WHERE q.id = a.question_id
+		   AND a.family_id = $3
+		   AND q.source = 'import'
+		   AND q.archived_at IS NULL
+		   AND NOT EXISTS (
+		       SELECT 1 FROM unnest($1::bigint[], $2::bigint[]) AS k(question_id, user_id)
+		        WHERE k.question_id = a.question_id AND k.user_id = a.user_id)`,
+		questionIDs, userIDs, FamilyFrom(ctx))
+	if err != nil {
+		return 0, fmt.Errorf("prune askees: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}
+
+// AskAlso puts an existing question to one more person.
+func (s *Store) AskAlso(ctx context.Context, questionID, userID int64) error {
+	return AddAskee(ctx, s.q(ctx), questionID, userID)
 }

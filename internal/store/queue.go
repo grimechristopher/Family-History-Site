@@ -53,7 +53,13 @@ func (s *Store) NextCards(ctx context.Context, u *User, limit int) ([]Card, erro
 		LEFT JOIN family.question_deferrals d
 		       ON d.question_id = q.id
 		      AND d.user_id = $1
-		WHERE q.asked_of_user_id = $1
+		-- Being asked is membership of question_askees, not one column on the
+		-- question: Robert, Frank, Tony and Inez are asked the same ten and each
+		-- of them gets his own card for it, which is the point -- each has to
+		-- answer in his own words. The card leaves a stack when its owner has
+		-- answered, not when somebody else has.
+		WHERE EXISTS (SELECT 1 FROM family.question_askees a
+		               WHERE a.question_id = q.id AND a.user_id = $1)
 		  AND q.archived_at IS NULL
 		  AND published.id IS NULL
 		  AND ($2::bigint IS NULL OR q.subject_id = $2)
@@ -110,8 +116,9 @@ func (s *Store) Progress(ctx context.Context, userID int64) (Progress, error) {
 		  (SELECT count(*) FROM family.entries e
 		    JOIN family.questions q ON q.id = e.question_id
 		   WHERE e.author_user_id = $1 AND e.is_draft = false AND q.archived_at IS NULL),
-		  (SELECT count(*) FROM family.questions
-		   WHERE asked_of_user_id = $1 AND archived_at IS NULL)`,
+		  (SELECT count(*) FROM family.questions q
+		    JOIN family.question_askees a ON a.question_id = q.id
+		   WHERE a.user_id = $1 AND q.archived_at IS NULL)`,
 		userID).Scan(&p.Answered, &p.Total)
 	if err != nil {
 		return Progress{}, fmt.Errorf("progress for user %d: %w", userID, err)
@@ -119,15 +126,22 @@ func (s *Store) Progress(ctx context.Context, userID int64) (Progress, error) {
 	return p, nil
 }
 
-// QuestionOwner reports who a question was asked of, so a handler can reject a
-// defer or answer aimed at somebody else's queue.
-func (s *Store) QuestionOwner(ctx context.Context, questionID int64) (int64, error) {
-	var userID int64
-	err := s.q(ctx).QueryRow(ctx,
-		`SELECT asked_of_user_id FROM family.questions WHERE id = $1 AND archived_at IS NULL`,
-		questionID).Scan(&userID)
+// IsAskedOf reports whether a question is in this person's stack, so a handler
+// can reject a defer aimed at somebody else's.
+//
+// It replaced QuestionOwner, which asked "whose question is this" -- a question
+// with four people answering it has no single owner, and the honest question is
+// whether it is yours as well.
+func (s *Store) IsAskedOf(ctx context.Context, questionID, userID int64) (bool, error) {
+	var ok bool
+	err := s.q(ctx).QueryRow(ctx, `
+		SELECT EXISTS (
+		    SELECT 1 FROM family.question_askees a
+		      JOIN family.questions q ON q.id = a.question_id
+		     WHERE a.question_id = $1 AND a.user_id = $2 AND q.archived_at IS NULL)`,
+		questionID, userID).Scan(&ok)
 	if err != nil {
-		return 0, ErrNotFound
+		return false, fmt.Errorf("is asked of: %w", err)
 	}
-	return userID, nil
+	return ok, nil
 }

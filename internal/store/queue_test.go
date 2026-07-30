@@ -370,20 +370,35 @@ func TestSaveAnswerReplacesRatherThanDuplicating(t *testing.T) {
 	}
 }
 
-func TestQuestionOwner(t *testing.T) {
+// A question can be put to several people, so the question is not "whose is it"
+// but "is it also yours".
+func TestIsAskedOf(t *testing.T) {
 	s := testStore(t)
 	ctx := testCtx(t, s)
 	u, ids := seedQueue(t, s, 1)
 
-	owner, err := s.QuestionOwner(ctx, ids[0])
+	asked, err := s.IsAskedOf(ctx, ids[0], u.ID)
 	if err != nil {
-		t.Fatalf("QuestionOwner: %v", err)
+		t.Fatalf("IsAskedOf: %v", err)
 	}
-	if owner != u.ID {
-		t.Errorf("owner = %d, want %d", owner, u.ID)
+	if !asked {
+		t.Error("the person a question was created for is not recorded as asked")
 	}
-	if _, err := s.QuestionOwner(ctx, 999999); err != ErrNotFound {
-		t.Errorf("err = %v, want ErrNotFound", err)
+
+	stranger, err := s.IsAskedOf(ctx, ids[0], u.ID+9999)
+	if err != nil {
+		t.Fatalf("IsAskedOf: %v", err)
+	}
+	if stranger {
+		t.Error("somebody never asked this question is treated as though they were")
+	}
+
+	gone, err := s.IsAskedOf(ctx, 999999, u.ID)
+	if err != nil {
+		t.Fatalf("IsAskedOf: %v", err)
+	}
+	if gone {
+		t.Error("a question that does not exist is in nobody's stack")
 	}
 }
 
