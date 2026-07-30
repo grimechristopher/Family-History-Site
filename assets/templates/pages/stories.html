@@ -4,7 +4,7 @@
 
 <details class="new-story" {{if not .Stories}}open{{end}}>
   <summary>Write a story</summary>
-  <form method="post" action="/stories">
+  <form method="post" action="{{fam $.FamilySlug "/stories"}}">
     <label for="title">What would you call it?</label>
     <input id="title" name="title" type="text" placeholder="The drive back from Chicago">
 
@@ -46,7 +46,7 @@
 
     <details class="reply-form">
       <summary>Reply</summary>
-      <form method="post" action="/entries/{{.ID}}/replies">
+      <form method="post" action="/f/{{$.FamilySlug}}/entries/{{.ID}}/replies">
         <input type="hidden" name="return_to" value="/stories">
         <label for="sreply-{{.ID}}">Add to this</label>
         <textarea id="sreply-{{.ID}}" name="body" rows="3"></textarea>
@@ -55,7 +55,7 @@
     </details>
 
     {{if .IsMine}}
-      <form method="post" action="/stories/{{.ID}}/delete"
+      <form method="post" action="/f/{{$.FamilySlug}}/stories/{{.ID}}/delete"
             onsubmit="return confirm('Delete this story? It cannot be undone.')">
         <button class="link" type="submit">Delete</button>
       </form>

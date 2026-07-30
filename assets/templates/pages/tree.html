@@ -14,7 +14,7 @@
   <ul class="slist">
     {{range .SubjectProgress}}
       <li class="srow">
-        <a class="srow-name" href="/subjects/{{.Slug}}">{{.DisplayName}}</a>
+        <a class="srow-name" href="/f/{{$.FamilySlug}}/subjects/{{.Slug}}">{{.DisplayName}}</a>
         <p class="srow-meta">{{.Answered}} of {{.Total}} answered</p>
       </li>
     {{end}}

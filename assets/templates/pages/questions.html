@@ -14,12 +14,12 @@
     {{if .Counts}}
       <p class="segmented" role="group" aria-label="Which questions to show">
         <a class="segment" aria-pressed="{{eq .Show "waiting"}}"
-           href="/questions?show=waiting{{if .FilterAskedOf}}&asked_of={{.FilterAskedOf}}{{end}}{{if .FilterSubject}}&subject={{.FilterSubject}}{{end}}">
+           href="/f/{{$.FamilySlug}}/questions?show=waiting{{if .FilterAskedOf}}&asked_of={{.FilterAskedOf}}{{end}}{{if .FilterSubject}}&subject={{.FilterSubject}}{{end}}">
           <span class="seg-long">Still waiting</span><span class="seg-short">Waiting</span>
           <span class="segment-count">{{.Counts.Unanswered}}</span>
         </a>
         <a class="segment" aria-pressed="{{eq .Show "answered"}}"
-           href="/questions?show=answered{{if .FilterAskedOf}}&asked_of={{.FilterAskedOf}}{{end}}{{if .FilterSubject}}&subject={{.FilterSubject}}{{end}}">
+           href="/f/{{$.FamilySlug}}/questions?show=answered{{if .FilterAskedOf}}&asked_of={{.FilterAskedOf}}{{end}}{{if .FilterSubject}}&subject={{.FilterSubject}}{{end}}">
           Answered <span class="segment-count">{{.Counts.Answered}}</span>
         </a>
       </p>
@@ -39,13 +39,13 @@
           <ul class="side-list">
             {{range .Contributors}}
               <li><a class="side-link" {{if eq $.FilterAskedOf .DisplayName}}aria-current="true"{{end}}
-                     href="/questions?asked_of={{.DisplayName}}{{if eq $.Show "answered"}}&show=answered{{end}}">
+                     href="/f/{{$.FamilySlug}}/questions?asked_of={{.DisplayName}}{{if eq $.Show "answered"}}&show=answered{{end}}">
                 {{.DisplayName}}{{if eq $.User.DisplayName .DisplayName}} <span class="side-count">you</span>{{end}}
               </a></li>
             {{end}}
             {{if .ViewerIsAdmin}}
               <li><a class="side-link" {{if eq .FilterAskedOf ""}}aria-current="true"{{end}}
-                     href="/questions?asked_of=everyone{{if eq .Show "answered"}}&show=answered{{end}}">Everyone</a></li>
+                     href="/f/{{$.FamilySlug}}/questions?asked_of=everyone{{if eq .Show "answered"}}&show=answered{{end}}">Everyone</a></li>
             {{end}}
           </ul>
         </details>
@@ -54,12 +54,12 @@
           <summary>Who it&rsquo;s about</summary>
           <ul class="side-list">
             <li><a class="side-link" {{if eq .FilterSubject ""}}aria-current="true"{{end}}
-                   href="/questions?show={{.Show}}{{if .FilterAskedOf}}&asked_of={{.FilterAskedOf}}{{end}}">Anyone</a></li>
+                   href="/f/{{$.FamilySlug}}/questions?show={{.Show}}{{if .FilterAskedOf}}&asked_of={{.FilterAskedOf}}{{end}}">Anyone</a></li>
             {{range .SubjectProgress}}
               {{if .Total}}
                 <li>
                   <a class="side-link" {{if eq $.FilterSubject .Slug}}aria-current="true"{{end}}
-                     href="/questions?subject={{.Slug}}&show={{$.Show}}{{if $.FilterAskedOf}}&asked_of={{$.FilterAskedOf}}{{end}}">
+                     href="/f/{{$.FamilySlug}}/questions?subject={{.Slug}}&show={{$.Show}}{{if $.FilterAskedOf}}&asked_of={{$.FilterAskedOf}}{{end}}">
                     <span class="side-name">{{.DisplayName}}</span>
                     <span class="side-count">{{.Answered}}/{{.Total}}</span>
                   </a>
@@ -77,14 +77,14 @@
       {{range .Groups}}
         <section class="qgroup">
           <h3 class="qgroup-head">{{.Label}} <span class="count">{{len .Items}}</span></h3>
-          <ul class="qlist">{{range .Items}}{{template "qrow" .}}{{end}}</ul>
+          <ul class="qlist">{{range .Items}}{{template "qrow" (qrow $.FamilySlug .)}}{{end}}</ul>
         </section>
       {{end}}
     {{else if .NothingMatches}}
       <div class="panel panel-empty">
         <p class="lede">No questions match this. {{if .FilterSubject}}{{.FilterAskedOf}} isn&rsquo;t asked anything about that person.{{end}}</p>
         <div class="btn-row">
-          <a class="btn btn-quiet" href="/questions{{if .FilterAskedOf}}?asked_of={{.FilterAskedOf}}{{end}}">Show all
+          <a class="btn btn-quiet" href="/f/{{$.FamilySlug}}/questions{{if .FilterAskedOf}}?asked_of={{.FilterAskedOf}}{{end}}">Show all
             {{if .FilterAskedOf}}of {{.FilterAskedOf}}&rsquo;s{{end}} questions</a>
         </div>
       </div>

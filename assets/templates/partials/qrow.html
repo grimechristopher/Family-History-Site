@@ -2,7 +2,7 @@
      person's page, so it lives in partials rather than in either page. */}}
 {{define "qrow"}}
 <li class="qrow{{if .Answered}} qrow-done{{end}}">
-  <a class="qrow-body" href="/questions/{{.ID}}">{{.Body}}</a>
+  <a class="qrow-body" href="/f/{{$.FamilySlug}}/questions/{{.ID}}">{{.Body}}</a>
   <p class="qrow-meta">
     <span class="qrow-subject">{{.SubjectName}} &middot;</span>
     asked of {{.AskedOfName}}

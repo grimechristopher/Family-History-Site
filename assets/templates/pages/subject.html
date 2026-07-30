@@ -1,6 +1,6 @@
 {{define "content"}}
 <nav class="crumbs" aria-label="Where you are">
-  <a class="link" href="/tree">The family</a>
+  <a class="link" href="{{fam $.FamilySlug "/tree"}}">The family</a>
   <span class="crumbs-sep" aria-hidden="true">/</span>
   <span class="crumbs-here">{{.Subject.DisplayName}}</span>
 </nav>
@@ -28,12 +28,12 @@
        blocks with a stray sentence between them. */}}
   <div class="section-head">
     <h2>Questions waiting <span class="count">{{len .Unanswered}}</span></h2>
-    <form method="post" action="/subjects/{{.Subject.Slug}}/focus">
+    <form method="post" action="/f/{{$.FamilySlug}}/subjects/{{.Subject.Slug}}/focus">
       <button class="btn" type="submit">Show these as cards</button>
     </form>
   </div>
   <p class="lede">Answer them one at a time, one card at a time.</p>
-  <ul class="qlist qlist-onesubject">{{range .Unanswered}}{{template "qrow" .}}{{end}}</ul>
+  <ul class="qlist qlist-onesubject">{{range .Unanswered}}{{template "qrow" (qrow $.FamilySlug .)}}{{end}}</ul>
 {{end}}
 
 {{if or .Answered .Stories}}
@@ -52,7 +52,7 @@
       {{template "photos" .}}
       {{template "photo-form" .}}
       {{if .IsMine}}
-        <form method="post" action="/stories/{{.ID}}/delete"
+        <form method="post" action="/f/{{$.FamilySlug}}/stories/{{.ID}}/delete"
               onsubmit="return confirm('Delete this story? It cannot be undone.')">
           <input type="hidden" name="return_to" value="/subjects/{{$.Subject.Slug}}">
           <button class="link" type="submit">Delete this story</button>
@@ -62,7 +62,7 @@
   {{end}}
 
   {{if .Answered}}
-    <ul class="qlist qlist-onesubject">{{range .Answered}}{{template "qrow" .}}{{end}}</ul>
+    <ul class="qlist qlist-onesubject">{{range .Answered}}{{template "qrow" (qrow $.FamilySlug .)}}{{end}}</ul>
   {{end}}
 {{end}}
 
@@ -70,7 +70,7 @@
 <p class="lede">It joins their cards like any other question.</p>
 <details class="new-story">
   <summary>Write a question</summary>
-  <form method="post" action="/subjects/{{.Subject.Slug}}/questions">
+  <form method="post" action="/f/{{$.FamilySlug}}/subjects/{{.Subject.Slug}}/questions">
     <label for="asked-of">Who should answer it?</label>
     <select id="asked-of" name="asked_of">
       {{range .Contributors}}
@@ -92,7 +92,7 @@
 <p class="lede">For something no question happens to ask about.</p>
 <details class="new-story">
   <summary>Write a story</summary>
-  <form method="post" action="/stories">
+  <form method="post" action="{{fam $.FamilySlug "/stories"}}">
     <input type="hidden" name="subject" value="{{.Subject.Slug}}">
     <input type="hidden" name="return_to" value="/subjects/{{.Subject.Slug}}">
 

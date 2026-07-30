@@ -1,5 +1,5 @@
 {{define "content"}}
-<p class="backlink"><a class="link" href="/questions">&larr; All questions</a></p>
+<p class="backlink"><a class="link" href="{{fam $.FamilySlug "/questions"}}">&larr; All questions</a></p>
 
 <article class="panel panel-question">
   <p class="card-subject">{{.Question.SubjectName}}{{if .Question.Topic}} &middot; {{.Question.Topic}}{{end}}</p>
@@ -15,7 +15,7 @@
   {{template "answers" .}}
 </div>
 
-<p class="backlink"><a class="link" href="/questions">&larr; All questions</a></p>
+<p class="backlink"><a class="link" href="{{fam $.FamilySlug "/questions"}}">&larr; All questions</a></p>
 {{end}}
 
 {{define "answers"}}
@@ -38,7 +38,7 @@
 
   <form class="panel panel-compose"
         hx-post="/questions/{{.Question.ID}}/answer" hx-target="#answers" hx-swap="outerHTML"
-        method="post" action="/questions/{{.Question.ID}}/answer">
+        method="post" action="/f/{{$.FamilySlug}}/questions/{{.Question.ID}}/answer">
     <div class="byline">
       <span class="avatar avatar-you" aria-hidden="true">{{printf "%.1s" .User.DisplayName}}</span>
       <div class="byline-text">
@@ -88,7 +88,7 @@
   <details class="reply-form">
     <summary>Reply</summary>
     <form hx-post="/entries/{{.ID}}/replies" hx-target="#answers" hx-swap="outerHTML"
-          method="post" action="/entries/{{.ID}}/replies">
+          method="post" action="/f/{{$.FamilySlug}}/entries/{{.ID}}/replies">
       <input type="hidden" name="return_to" value="/questions/{{.QuestionID}}">
       <label class="visually-hidden" for="reply-{{.ID}}">Add to this</label>
       <textarea id="reply-{{.ID}}" name="body" rows="3" placeholder="Add to this&hellip;"></textarea>

@@ -42,6 +42,9 @@ type harness struct {
 	momID       int64
 	dadQuestion int64
 	momQuestion int64
+	familyID    int64
+	familySlug  string
+	ctx         context.Context
 	sentEmails  []string
 	// liveCode is the one six-digit code the stubbed Supabase will accept.
 	liveCode string
@@ -118,25 +121,43 @@ func newHarness(t *testing.T) *harness {
 		BaseURL:           "http://localhost:8099",
 		Addr:              ":0",
 	}
-	srv, err := New(cfg, s, slog.New(slog.NewTextHandler(io.Discard, nil)), "test")
+	srv, err := New(cfg, s, slog.New(slog.NewTextHandler(os.Stderr, nil)), "test")
 	if err != nil {
 		t.Fatalf("web.New: %v", err)
 	}
 	h.server = srv
 	h.handler = srv.Routes()
 
+	// The family everything is seeded into. 0003 creates it; the fixtures join it.
+	fam, err := s.FamilyBySlug(ctx, "home")
+	if err != nil {
+		t.Fatalf("the migration should have created a family: %v", err)
+	}
+	h.familyID = fam.ID
+	h.familySlug = fam.Slug
+	ctx = store.WithFamily(ctx, fam.ID)
+	h.ctx = ctx
+
 	// Seed two contributors, each with a question of their own.
 	err = s.InTx(ctx, func(db store.DBTX) error {
-		dad, err := store.UpsertUser(ctx, db, "dad@example.com", "Dad", store.RoleContributor)
+		dad, err := store.UpsertUser(ctx, db, "dad@example.com", "Dad")
 		if err != nil {
 			return err
 		}
-		mom, err := store.UpsertUser(ctx, db, "mom@example.com", "Mom", store.RoleContributor)
+		mom, err := store.UpsertUser(ctx, db, "mom@example.com", "Mom")
 		if err != nil {
 			return err
 		}
-		if _, err := store.UpsertUser(ctx, db, "chris@example.com", "Chris", store.RoleAdmin); err != nil {
+		chris, err := store.UpsertUser(ctx, db, "chris@example.com", "Chris")
+		if err != nil {
 			return err
+		}
+		for id, role := range map[int64]string{
+			dad: store.RoleContributor, mom: store.RoleContributor, chris: store.RoleAdmin,
+		} {
+			if err := store.AddMemberTx(ctx, db, fam.ID, id, role); err != nil {
+				return err
+			}
 		}
 		h.dadID, h.momID = dad, mom
 
@@ -205,7 +226,30 @@ func (h *harness) do(req *http.Request) *httptest.ResponseRecorder {
 	return rec
 }
 
+// inFamily prefixes the paths that live under a family, so the existing tests can
+// go on naming "/cards" and mean this harness's family. Anything already absolute
+// about a family, and everything outside one -- login, the callback, the invite
+// pages -- is left alone.
+func (h *harness) inFamily(path string) string {
+	if strings.HasPrefix(path, "/f/") {
+		return path
+	}
+	// "/" means this family's home page. The bare root is a chooser that redirects,
+	// and no test is about that.
+	if path == "/" {
+		return "/f/" + h.familySlug + "/"
+	}
+	for _, p := range []string{"/cards", "/questions", "/entries", "/stories",
+		"/photos", "/tree", "/subjects"} {
+		if path == p || strings.HasPrefix(path, p+"/") || strings.HasPrefix(path, p+"?") {
+			return "/f/" + h.familySlug + path
+		}
+	}
+	return path
+}
+
 func (h *harness) post(path string, form url.Values, cookie *http.Cookie) *httptest.ResponseRecorder {
+	path = h.inFamily(path)
 	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	if cookie != nil {
@@ -215,6 +259,7 @@ func (h *harness) post(path string, form url.Values, cookie *http.Cookie) *httpt
 }
 
 func (h *harness) get(path string, cookie *http.Cookie) *httptest.ResponseRecorder {
+	path = h.inFamily(path)
 	req := httptest.NewRequest(http.MethodGet, path, nil)
 	if cookie != nil {
 		req.AddCookie(cookie)
@@ -397,7 +442,7 @@ func TestProtectedPagesRedirectWhenSignedOut(t *testing.T) {
 func TestExpiredSessionOnHtmxRequestUsesHXRedirect(t *testing.T) {
 	h := newHarness(t)
 
-	req := httptest.NewRequest(http.MethodPost, "/cards/1/defer", nil)
+	req := httptest.NewRequest(http.MethodPost, h.inFamily("/cards/1/defer"), nil)
 	req.Header.Set("HX-Request", "true")
 	rec := h.do(req)
 
@@ -420,7 +465,7 @@ func TestSignInIssuesSessionAndBackfillsSupabaseID(t *testing.T) {
 		t.Errorf("SameSite = %v, want Lax", cookie.SameSite)
 	}
 
-	u, err := h.store.UserByEmail(context.Background(), "dad@example.com")
+	u, err := h.store.UserByEmail(h.ctx, "dad@example.com")
 	if err != nil {
 		t.Fatalf("UserByEmail: %v", err)
 	}
@@ -576,7 +621,7 @@ func TestAnswerSavesAndRemovesTheCard(t *testing.T) {
 		t.Error("the answered question should be gone from the stack")
 	}
 
-	e, err := h.store.AnswerFor(context.Background(), h.dadQuestion, h.dadID)
+	e, err := h.store.AnswerFor(h.ctx, h.dadQuestion, h.dadID)
 	if err != nil {
 		t.Fatalf("AnswerFor: %v", err)
 	}
@@ -602,7 +647,7 @@ func TestEmptyAnswerIsTreatedAsDeferral(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), "kept that one in the pile") {
 		t.Errorf("expected a gentle explanation, got: %s", rec.Body.String())
 	}
-	if _, err := h.store.AnswerFor(context.Background(), h.dadQuestion, h.dadID); err != store.ErrNotFound {
+	if _, err := h.store.AnswerFor(h.ctx, h.dadQuestion, h.dadID); err != store.ErrNotFound {
 		t.Error("no entry should have been created for an empty save")
 	}
 }
@@ -620,7 +665,7 @@ func TestDraftSavesWithoutSwappingAnything(t *testing.T) {
 		t.Error("the draft endpoint must return no body: swapping mid-sentence would be hostile")
 	}
 
-	e, err := h.store.AnswerFor(context.Background(), h.dadQuestion, h.dadID)
+	e, err := h.store.AnswerFor(h.ctx, h.dadQuestion, h.dadID)
 	if err != nil {
 		t.Fatalf("AnswerFor: %v", err)
 	}
@@ -644,14 +689,14 @@ func TestDraftDoesNotDemoteAPublishedAnswer(t *testing.T) {
 	h.post("/cards/"+id+"/answer", url.Values{"body": {"final answer"}}, cookie)
 	h.post("/cards/"+id+"/draft", url.Values{"body": {"final answer plus a bit"}}, cookie)
 
-	e, err := h.store.AnswerFor(context.Background(), h.dadQuestion, h.dadID)
+	e, err := h.store.AnswerFor(h.ctx, h.dadQuestion, h.dadID)
 	if err != nil {
 		t.Fatalf("AnswerFor: %v", err)
 	}
 	if e.IsDraft {
 		t.Error("a published answer must stay published")
 	}
-	p, _ := h.store.Progress(context.Background(), h.dadID)
+	p, _ := h.store.Progress(h.ctx, h.dadID)
 	if p.Answered != 1 {
 		t.Errorf("Answered = %d, want 1", p.Answered)
 	}
@@ -692,9 +737,12 @@ func TestSetModePersistsAndValidates(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d", rec.Code)
 	}
-	u, _ := h.store.UserByID(context.Background(), h.dadID)
-	if u.QueueMode != store.QueueShuffle {
-		t.Errorf("QueueMode = %q, want shuffle", u.QueueMode)
+	m, err := h.store.MembershipOf(h.ctx, h.familyID, h.dadID)
+	if err != nil {
+		t.Fatalf("MembershipOf: %v", err)
+	}
+	if m.QueueMode != store.QueueShuffle {
+		t.Errorf("QueueMode = %q, want shuffle", m.QueueMode)
 	}
 
 	if rec := h.post("/cards/mode", url.Values{"mode": {"nonsense"}}, cookie); rec.Code != http.StatusBadRequest {
@@ -845,10 +893,10 @@ func TestQuestionListDefaultsToTheViewerAndOffersOthers(t *testing.T) {
 	dad := h.signIn("dad@example.com")
 
 	body := h.get("/questions", dad).Body.String()
-	if !strings.Contains(body, `href="/questions?asked_of=Dad"`) {
+	if !strings.Contains(body, `href="/f/home/questions?asked_of=Dad"`) {
 		t.Error("expected Dad in the people list")
 	}
-	if !strings.Contains(body, `href="/questions?asked_of=Mom"`) {
+	if !strings.Contains(body, `href="/f/home/questions?asked_of=Mom"`) {
 		t.Error("expected Mom offered as somewhere else to look")
 	}
 	// Contributors are not offered "everyone"; only an admin is.
@@ -905,7 +953,7 @@ func TestPrimaryAnswerOthersSectionAndReplies(t *testing.T) {
 		t.Error("the primary answer must render before Others")
 	}
 
-	entry, err := h.store.AnswerFor(context.Background(), h.dadQuestion, h.dadID)
+	entry, err := h.store.AnswerFor(h.ctx, h.dadQuestion, h.dadID)
 	if err != nil {
 		t.Fatalf("AnswerFor: %v", err)
 	}
@@ -938,7 +986,7 @@ func TestAnyoneMayAnswerAnyQuestionFromTheDetailPage(t *testing.T) {
 	}
 
 	// It must not count as Mom having answered.
-	p, _ := h.store.Progress(context.Background(), h.momID)
+	p, _ := h.store.Progress(h.ctx, h.momID)
 	if p.Answered != 0 {
 		t.Errorf("Mom's answered count = %d, want 0", p.Answered)
 	}
@@ -969,7 +1017,7 @@ func TestStoriesRoundTrip(t *testing.T) {
 		}
 	}
 
-	stories, err := h.store.ListStories(context.Background(), h.dadID)
+	stories, err := h.store.ListStories(h.ctx, h.dadID)
 	if err != nil || len(stories) != 1 {
 		t.Fatalf("ListStories = %v, %v", stories, err)
 	}
@@ -993,7 +1041,7 @@ func TestStoriesRoundTrip(t *testing.T) {
 	if rec := h.post("/stories/"+sid+"/delete", url.Values{}, dad); rec.Code != http.StatusSeeOther {
 		t.Errorf("author deleting: status = %d, want 303", rec.Code)
 	}
-	if left, _ := h.store.ListStories(context.Background(), h.dadID); len(left) != 0 {
+	if left, _ := h.store.ListStories(h.ctx, h.dadID); len(left) != 0 {
 		t.Errorf("story survived deletion: %v", left)
 	}
 }
@@ -1089,7 +1137,7 @@ func (h *harness) uploadPhoto(entryID int64, filename, declaredType string, cont
 	mw.Close()
 
 	req := httptest.NewRequest(http.MethodPost,
-		"/entries/"+strconv.FormatInt(entryID, 10)+"/photos", &buf)
+		h.inFamily("/entries/"+strconv.FormatInt(entryID, 10)+"/photos"), &buf)
 	req.Header.Set("Content-Type", mw.FormDataContentType())
 	req.AddCookie(cookie)
 	return h.do(req)
@@ -1098,7 +1146,7 @@ func (h *harness) uploadPhoto(entryID int64, filename, declaredType string, cont
 func (h *harness) makeStory(cookie *http.Cookie, title string) store.Story {
 	h.t.Helper()
 	h.post("/stories", url.Values{"title": {title}, "body": {"A memory."}}, cookie)
-	stories, err := h.store.ListStories(context.Background(), h.dadID)
+	stories, err := h.store.ListStories(h.ctx, h.dadID)
 	if err != nil || len(stories) == 0 {
 		h.t.Fatalf("ListStories = %v, %v", stories, err)
 	}
@@ -1123,7 +1171,7 @@ func TestPhotoUploadAttachesAndRenders(t *testing.T) {
 		t.Errorf("x-upsert = %v, want [false]", fs.upserts)
 	}
 
-	attachments, err := h.store.AttachmentsForEntries(context.Background(), []int64{story.ID})
+	attachments, err := h.store.AttachmentsForEntries(h.ctx, []int64{story.ID})
 	if err != nil {
 		t.Fatalf("AttachmentsForEntries: %v", err)
 	}
@@ -1204,7 +1252,7 @@ func TestPhotoUploadCleansUpWhenStorageFails(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), "words are safe") {
 		t.Errorf("unhelpful failure message: %s", rec.Body.String())
 	}
-	attachments, _ := h.store.AttachmentsForEntries(context.Background(), []int64{story.ID})
+	attachments, _ := h.store.AttachmentsForEntries(h.ctx, []int64{story.ID})
 	if len(attachments[story.ID]) != 0 {
 		t.Error("a failed upload must not leave an attachment row")
 	}
@@ -1218,7 +1266,7 @@ func TestPhotoDeleteOnlyByUploader(t *testing.T) {
 	story := h.makeStory(dad, "A story")
 
 	h.uploadPhoto(story.ID, "x.png", "image/png", tinyPNG, "", dad)
-	attachments, _ := h.store.AttachmentsForEntries(context.Background(), []int64{story.ID})
+	attachments, _ := h.store.AttachmentsForEntries(h.ctx, []int64{story.ID})
 	id := strconv.FormatInt(attachments[story.ID][0].ID, 10)
 
 	if rec := h.post("/photos/"+id+"/delete", url.Values{}, mom); rec.Code != http.StatusForbidden {
@@ -1227,7 +1275,7 @@ func TestPhotoDeleteOnlyByUploader(t *testing.T) {
 	if rec := h.post("/photos/"+id+"/delete", url.Values{}, dad); rec.Code != http.StatusSeeOther {
 		t.Errorf("uploader: status = %d, want 303", rec.Code)
 	}
-	attachments, _ = h.store.AttachmentsForEntries(context.Background(), []int64{story.ID})
+	attachments, _ = h.store.AttachmentsForEntries(h.ctx, []int64{story.ID})
 	if len(attachments[story.ID]) != 0 {
 		t.Error("attachment row survived deletion")
 	}
@@ -1408,7 +1456,7 @@ func TestBuildTreeIgnoresUnknownRoots(t *testing.T) {
 func TestTreePageListsSubjectsOffThePedigree(t *testing.T) {
 	h := newHarness(t)
 	cookie := h.signIn("dad@example.com")
-	ctx := context.Background()
+	ctx := h.ctx
 
 	// A subject with questions and nobody in the tree, like "Further Back".
 	err := h.store.InTx(ctx, func(db store.DBTX) error {
@@ -1511,10 +1559,10 @@ func TestNavIsThreeTabsAndMarksTheCurrentOne(t *testing.T) {
 			t.Errorf("nav missing %q", want)
 		}
 	}
-	if strings.Contains(body, `class="tab" href="/stories"`) {
+	if strings.Contains(body, `class="tab" href="/f/home/stories"`) {
 		t.Error("Stories should no longer be a top-level tab")
 	}
-	if !strings.Contains(body, `href="/cards" aria-current="page"`) {
+	if !strings.Contains(body, `href="/f/home/cards" aria-current="page"`) {
 		t.Error("the current tab should be marked for screen readers")
 	}
 }
@@ -1528,16 +1576,16 @@ func TestFocusSubjectSwitchesTheCardStack(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want 303", rec.Code)
 	}
-	if loc := rec.Header().Get("Location"); loc != "/cards" {
-		t.Errorf("Location = %q, want /cards", loc)
+	if loc := rec.Header().Get("Location"); loc != "/f/home/cards" {
+		t.Errorf("Location = %q, want /f/home/cards", loc)
 	}
 
-	u, err := h.store.UserByID(context.Background(), h.dadID)
+	m, err := h.store.MembershipOf(h.ctx, h.familyID, h.dadID)
 	if err != nil {
-		t.Fatalf("UserByID: %v", err)
+		t.Fatalf("MembershipOf: %v", err)
 	}
-	if u.QueueMode != store.QueueOneSubject || u.QueueFocusSubjectID == nil {
-		t.Errorf("queue not focused: mode=%q focus=%v", u.QueueMode, u.QueueFocusSubjectID)
+	if m.QueueMode != store.QueueOneSubject || m.QueueFocusSubjectID == nil {
+		t.Errorf("queue not focused: mode=%q focus=%v", m.QueueMode, m.QueueFocusSubjectID)
 	}
 
 	if rec := h.post("/subjects/nope/focus", url.Values{}, cookie); rec.Code != http.StatusNotFound {
@@ -1570,10 +1618,10 @@ func TestSwitchingPersonDropsTheSubjectFilter(t *testing.T) {
 	dad := h.signIn("dad@example.com")
 
 	body := h.get("/questions?subject=peter-samuel-hale", dad).Body.String()
-	if strings.Contains(body, `href="/questions?asked_of=Mom&subject=`) {
+	if strings.Contains(body, `href="/f/home/questions?asked_of=Mom&subject=`) {
 		t.Error("a person link must not carry the current subject filter")
 	}
-	if !strings.Contains(body, `href="/questions?asked_of=Mom"`) {
+	if !strings.Contains(body, `href="/f/home/questions?asked_of=Mom"`) {
 		t.Error("expected a plain link to Mom's questions")
 	}
 }
@@ -1583,7 +1631,7 @@ func TestSwitchingPersonDropsTheSubjectFilter(t *testing.T) {
 func TestEmptyFilterExplainsItselfRatherThanCongratulating(t *testing.T) {
 	h := newHarness(t)
 	dad := h.signIn("dad@example.com")
-	ctx := context.Background()
+	ctx := h.ctx
 
 	// A subject Dad has no questions about.
 	err := h.store.InTx(ctx, func(db store.DBTX) error {
@@ -1610,7 +1658,7 @@ func TestEmptyFilterExplainsItselfRatherThanCongratulating(t *testing.T) {
 	if !strings.Contains(body, "No questions match") {
 		t.Error("expected an explanation of why the list is empty")
 	}
-	if !strings.Contains(body, `href="/questions?asked_of=Dad"`) {
+	if !strings.Contains(body, `href="/f/home/questions?asked_of=Dad"`) {
 		t.Error("expected a way back to all of Dad's questions")
 	}
 
@@ -1665,14 +1713,14 @@ func TestReplyingSwapsInPlaceInsteadOfReloading(t *testing.T) {
 	id := strconv.FormatInt(h.dadQuestion, 10)
 
 	h.post("/questions/"+id+"/answer", url.Values{"body": {"A Studebaker."}}, dad)
-	entry, err := h.store.AnswerFor(context.Background(), h.dadQuestion, h.dadID)
+	entry, err := h.store.AnswerFor(h.ctx, h.dadQuestion, h.dadID)
 	if err != nil {
 		t.Fatalf("AnswerFor: %v", err)
 	}
 	entryID := strconv.FormatInt(entry.ID, 10)
 
 	// An htmx reply comes back as the answers fragment, so the page never moves.
-	req := httptest.NewRequest(http.MethodPost, "/entries/"+entryID+"/replies",
+	req := httptest.NewRequest(http.MethodPost, h.inFamily("/entries/"+entryID+"/replies"),
 		strings.NewReader(url.Values{"body": {"Was that 1954?"}}.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("HX-Request", "true")
@@ -1724,7 +1772,7 @@ func TestRedirectsLandOnTheEntryAndStayOnSite(t *testing.T) {
 		t.Errorf("Location = %q, want the person's page anchored on the new story", loc)
 	}
 
-	stories, err := h.store.ListStories(context.Background(), h.dadID)
+	stories, err := h.store.ListStories(h.ctx, h.dadID)
 	if err != nil || len(stories) == 0 {
 		t.Fatalf("ListStories = %v, %v", stories, err)
 	}
@@ -1758,7 +1806,7 @@ func TestRedirectsLandOnTheEntryAndStayOnSite(t *testing.T) {
 func TestAskingAQuestion(t *testing.T) {
 	h := newHarness(t)
 	dad := h.signIn("dad@example.com")
-	ctx := context.Background()
+	ctx := h.ctx
 
 	page := h.get("/subjects/peter-samuel-hale", dad).Body.String()
 	if !strings.Contains(page, "Ask something about") {
@@ -1775,7 +1823,7 @@ func TestAskingAQuestion(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want 303", rec.Code)
 	}
-	if loc := rec.Header().Get("Location"); !strings.HasPrefix(loc, "/questions/") {
+	if loc := rec.Header().Get("Location"); !strings.HasPrefix(loc, "/f/home/questions/") {
 		t.Errorf("Location = %q, want the new question", loc)
 	}
 
@@ -1831,7 +1879,7 @@ func TestAskingAQuestion(t *testing.T) {
 func TestUserQuestionsSurviveAReimport(t *testing.T) {
 	h := newHarness(t)
 	dad := h.signIn("dad@example.com")
-	ctx := context.Background()
+	ctx := h.ctx
 
 	h.post("/subjects/peter-samuel-hale/questions", url.Values{
 		"asked_of": {"Dad"}, "body": {"Written on the site, not imported."},

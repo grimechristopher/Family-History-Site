@@ -52,7 +52,7 @@ func New(cfg config.Config, s *store.Store, log *slog.Logger, assetVersion strin
 // all at once means every page can define "content" without colliding.
 func (s *Server) parseTemplates() error {
 	pages := []string{"home", "login", "denied", "callback", "cards",
-		"questions", "question", "stories", "subjects", "subject", "tree"}
+		"questions", "question", "stories", "subjects", "subject", "tree", "families"}
 	s.templates = make(map[string]*template.Template, len(pages))
 
 	for _, name := range pages {
@@ -70,7 +70,24 @@ func (s *Server) parseTemplates() error {
 }
 
 func templateFuncs() template.FuncMap {
-	return template.FuncMap{}
+	return template.FuncMap{
+		// Family-relative link: {{fam $.FamilySlug "/questions"}} -> /f/home/questions.
+		// Every in-site link goes through this, so nothing can accidentally point
+		// at another family's page or drop the prefix.
+		"fam": func(slug, path string) string { return "/f/" + slug + path },
+
+		// A question row needs the family for its link, and a partial receives only
+		// the item. Embedding the item means every other field in the template --
+		// .Body, .SubjectName, .ReplyCount -- goes on resolving unchanged.
+		"qrow": func(slug string, item store.QuestionListItem) qrowView {
+			return qrowView{QuestionListItem: item, FamilySlug: slug}
+		},
+	}
+}
+
+type qrowView struct {
+	store.QuestionListItem
+	FamilySlug string
 }
 
 // pageData is the shape every template receives.
@@ -132,6 +149,10 @@ type pageData struct {
 	// photos
 	PhotosEnabled bool
 
+	// families
+	Families   []store.Family
+	FamilySlug string
+
 	// tree and subject pages
 	Tree    []*treeNode
 	Subject *store.SubjectProgress
@@ -139,12 +160,16 @@ type pageData struct {
 }
 
 func (s *Server) newPageData(r *http.Request, title string) pageData {
-	return pageData{
+	d := pageData{
 		Title:         title,
 		AssetVersion:  s.assetVersion,
 		User:          auth.User(r.Context()),
 		PhotosEnabled: s.Storage.Configured(),
 	}
+	if f := FamilyOf(r.Context()); f != nil {
+		d.FamilySlug = f.Slug
+	}
+	return d
 }
 
 func (s *Server) render(w http.ResponseWriter, r *http.Request, page string, data pageData) {
@@ -218,31 +243,37 @@ func (s *Server) Routes() http.Handler {
 	}
 
 	require := s.Sessions.Require
-	mux.Handle("GET /{$}", require(http.HandlerFunc(s.handleHome)))
-	mux.Handle("GET /cards", require(http.HandlerFunc(s.handleCards)))
-	mux.Handle("POST /cards/mode", require(http.HandlerFunc(s.handleSetMode)))
-	mux.Handle("POST /cards/{id}/defer", require(http.HandlerFunc(s.handleDefer)))
-	mux.Handle("POST /cards/{id}/answer", require(http.HandlerFunc(s.handleAnswer)))
-	mux.Handle("POST /cards/{id}/draft", require(http.HandlerFunc(s.handleDraft)))
+	// Signed in, and a member of the family named in the path. Order matters:
+	// membership is a question about a user, so the session is resolved first.
+	family := func(h http.HandlerFunc) http.Handler { return require(s.inFamily(h)) }
 
-	mux.Handle("GET /questions", require(http.HandlerFunc(s.handleQuestions)))
-	mux.Handle("GET /questions/{id}", require(http.HandlerFunc(s.handleQuestion)))
-	mux.Handle("POST /questions/{id}/answer", require(http.HandlerFunc(s.handleQuestionAnswer)))
-	mux.Handle("POST /entries/{id}/replies", require(http.HandlerFunc(s.handleReply)))
+	// The root belongs to no family: it sends you to yours.
+	mux.Handle("GET /{$}", require(http.HandlerFunc(s.handleRoot)))
+	mux.Handle("GET /f/{family}/{$}", family(s.handleHome))
+	mux.Handle("GET /f/{family}/cards", family(s.handleCards))
+	mux.Handle("POST /f/{family}/cards/mode", family(s.handleSetMode))
+	mux.Handle("POST /f/{family}/cards/{id}/defer", family(s.handleDefer))
+	mux.Handle("POST /f/{family}/cards/{id}/answer", family(s.handleAnswer))
+	mux.Handle("POST /f/{family}/cards/{id}/draft", family(s.handleDraft))
 
-	mux.Handle("GET /stories", require(http.HandlerFunc(s.handleStories)))
-	mux.Handle("POST /stories", require(http.HandlerFunc(s.handleCreateStory)))
-	mux.Handle("POST /stories/{id}/delete", require(http.HandlerFunc(s.handleDeleteStory)))
+	mux.Handle("GET /f/{family}/questions", family(s.handleQuestions))
+	mux.Handle("GET /f/{family}/questions/{id}", family(s.handleQuestion))
+	mux.Handle("POST /f/{family}/questions/{id}/answer", family(s.handleQuestionAnswer))
+	mux.Handle("POST /f/{family}/entries/{id}/replies", family(s.handleReply))
 
-	mux.Handle("POST /entries/{id}/photos", require(http.HandlerFunc(s.handleUploadPhoto)))
-	mux.Handle("POST /photos/{id}/delete", require(http.HandlerFunc(s.handleDeletePhoto)))
+	mux.Handle("GET /f/{family}/stories", family(s.handleStories))
+	mux.Handle("POST /f/{family}/stories", family(s.handleCreateStory))
+	mux.Handle("POST /f/{family}/stories/{id}/delete", family(s.handleDeleteStory))
 
-	mux.Handle("GET /tree", require(http.HandlerFunc(s.handleTree)))
-	mux.Handle("GET /tree.json", require(http.HandlerFunc(s.handleTreeJSON)))
-	mux.Handle("GET /subjects", require(http.HandlerFunc(s.handleSubjects)))
-	mux.Handle("GET /subjects/{slug}", require(http.HandlerFunc(s.handleSubject)))
-	mux.Handle("POST /subjects/{slug}/focus", require(http.HandlerFunc(s.handleFocusSubject)))
-	mux.Handle("POST /subjects/{slug}/questions", require(http.HandlerFunc(s.handleAskQuestion)))
+	mux.Handle("POST /f/{family}/entries/{id}/photos", family(s.handleUploadPhoto))
+	mux.Handle("POST /f/{family}/photos/{id}/delete", family(s.handleDeletePhoto))
+
+	mux.Handle("GET /f/{family}/tree", family(s.handleTree))
+	mux.Handle("GET /f/{family}/tree.json", family(s.handleTreeJSON))
+	mux.Handle("GET /f/{family}/subjects", family(s.handleSubjects))
+	mux.Handle("GET /f/{family}/subjects/{slug}", family(s.handleSubject))
+	mux.Handle("POST /f/{family}/subjects/{slug}/focus", family(s.handleFocusSubject))
+	mux.Handle("POST /f/{family}/subjects/{slug}/questions", family(s.handleAskQuestion))
 
 	return s.securityHeaders(mux)
 }

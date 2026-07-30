@@ -63,6 +63,12 @@ func User(ctx context.Context) *store.User {
 	return u
 }
 
+// WithUser attaches the signed-in person. Exported because the family middleware
+// re-attaches them with this family's role and queue settings merged on.
+func WithUser(ctx context.Context, u *store.User) context.Context {
+	return withUser(ctx, u)
+}
+
 func withUser(ctx context.Context, u *store.User) context.Context {
 	return context.WithValue(ctx, ctxKey{}, u)
 }

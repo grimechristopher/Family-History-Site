@@ -1,0 +1,28 @@
+{{define "content"}}
+{{if .Families}}
+  <h1>Which family?</h1>
+  <p class="lede">You&rsquo;re part of more than one. Pick where you want to be.</p>
+
+  <ul class="note-list">
+    {{range .Families}}
+      <li>
+        <a class="side-link" href="/f/{{.Slug}}/">
+          <strong>{{.DisplayName}}</strong>
+        </a>
+      </li>
+    {{end}}
+  </ul>
+{{else}}
+  {{/* Signed in and a member of nothing: an invitation was revoked after it was
+       accepted, or an account exists that has not been added to anything yet.
+       Saying so is better than redirecting nowhere. */}}
+  <h1>You&rsquo;re signed in</h1>
+  <p class="lede">
+    You&rsquo;re not part of a family here yet. Whoever invited you can add you,
+    or send the invitation again.
+  </p>
+  <div class="btn-row">
+    <form method="post" action="/logout"><button class="btn btn-quiet" type="submit">Sign out</button></form>
+  </div>
+{{end}}
+{{end}}

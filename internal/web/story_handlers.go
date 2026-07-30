@@ -45,6 +45,7 @@ func (s *Server) handleStories(w http.ResponseWriter, r *http.Request) {
 	data.Subjects = subjects
 	for _, st := range stories {
 		data.Stories = append(data.Stories, storyView{
+			FamilySlug:    famSlug(r.Context()),
 			Story:         st,
 			Replies:       replies[st.ID],
 			Photos:        photos[st.ID],
@@ -63,6 +64,8 @@ type storyView struct {
 	IsMine        bool
 	PhotosEnabled bool
 	ReturnTo      string
+	// Same reason as answerView: the shared partials see only this view.
+	FamilySlug string
 }
 
 func (s *Server) handleCreateStory(w http.ResponseWriter, r *http.Request) {
@@ -98,7 +101,7 @@ func (s *Server) handleCreateStory(w http.ResponseWriter, r *http.Request) {
 	}
 	// Anchored on the new story, so it is the first thing seen rather than the
 	// top of the page it was written from.
-	back := returnTo(r, "/stories")
+	back := returnTo(r, famPath(r.Context(), "/stories"))
 	http.Redirect(w, r, back+"#entry-"+strconv.FormatInt(id, 10), http.StatusSeeOther)
 }
 
@@ -128,5 +131,5 @@ func (s *Server) handleDeleteStory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Nothing to anchor to any more, so the page it came from is right.
-	http.Redirect(w, r, returnTo(r, "/stories"), http.StatusSeeOther)
+	http.Redirect(w, r, returnTo(r, famPath(r.Context(), "/stories")), http.StatusSeeOther)
 }
