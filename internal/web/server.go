@@ -196,7 +196,11 @@ type pageData struct {
 	ShownFamilyName string
 	// OwnFooter is set by a page that places the footer itself, inside whatever
 	// part of it actually scrolls.
-	OwnFooter     bool
+	OwnFooter bool
+	// Who to ask when something is wrong. Empty leaves the footer off entirely,
+	// which is what happens on a deployment that has not set them.
+	SupportEmail  string
+	SupportPhone  string
 	ViewerIsAdmin bool
 	// NothingMatches distinguishes an empty filter from having answered
 	// everything. Congratulating somebody for an empty result is misleading.
@@ -237,6 +241,8 @@ func (s *Server) newPageData(r *http.Request, title string) pageData {
 	d := pageData{
 		Title:         title,
 		AssetVersion:  s.assetVersion,
+		SupportEmail:  s.Config.SupportEmail,
+		SupportPhone:  s.Config.SupportPhone,
 		User:          auth.User(r.Context()),
 		PhotosEnabled: s.Storage.Configured(),
 	}

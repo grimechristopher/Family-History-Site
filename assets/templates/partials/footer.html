@@ -7,12 +7,15 @@
      place it inside their own scrolling column instead, and set OwnFooter so it
      is not also drawn here. */}}
 {{define "site-footer"}}
-{{if .User}}
+{{/* The address and number come from the environment. They belong on the site,
+     where the family can reach whoever runs it, and not in a public repository
+     where they would be somebody's personal mobile number on the open web. */}}
+{{if and .User .SupportEmail}}
 <footer class="footer">
   <p>
     Need something added or changed? Ask me!
-    <a href="mailto:chris@chrisgrime.com">chris@chrisgrime.com</a>
-    or text <a href="tel:+16266468324">6266468324</a>
+    <a href="mailto:{{.SupportEmail}}">{{.SupportEmail}}</a>
+    {{if .SupportPhone}}or text <a href="tel:{{.SupportPhone}}">{{.SupportPhone}}</a>{{end}}
   </p>
 </footer>
 {{end}}

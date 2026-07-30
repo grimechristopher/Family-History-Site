@@ -21,6 +21,12 @@ type Config struct {
 	PhotoBucket string
 	AudioBucket string
 
+	// Who to ask when something is wrong, shown in the footer to people who are
+	// signed in. Out of the code because it is a personal address and a personal
+	// telephone number, and this repository is public.
+	SupportEmail string
+	SupportPhone string
+
 	// DevLogin turns on a route that signs in as any contributor without a magic
 	// link, so the site can be checked as Mom or Dad. It is an authentication
 	// bypass and exists only because it is off unless DEV_LOGIN is set to 1 in the
@@ -43,6 +49,8 @@ func Load(get func(string) string) (Config, error) {
 		Addr:               get("ADDR"),
 		PhotoBucket:        get("SUPABASE_PHOTO_BUCKET"),
 		AudioBucket:        get("SUPABASE_AUDIO_BUCKET"),
+		SupportEmail:       get("SUPPORT_EMAIL"),
+		SupportPhone:       get("SUPPORT_PHONE"),
 		DevLogin:           get("DEV_LOGIN") == "1",
 	}
 	if c.PhotoBucket == "" {
