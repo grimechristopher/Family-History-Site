@@ -210,6 +210,53 @@ func (h *harness) signIn(email string) *http.Cookie {
 
 // --- auth ---------------------------------------------------------------
 
+// The dev login signs in as anybody with no link at all, so the thing worth
+// pinning down is that it does not exist unless DEV_LOGIN was set.
+func TestDevLoginExistsOnlyWhenConfigured(t *testing.T) {
+	h := newHarness(t)
+
+	rec := h.get("/dev/login/Mom", nil)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("with DEV_LOGIN unset, GET /dev/login/Mom = %d, want 404", rec.Code)
+	}
+
+	// Same server, same store, the flag on.
+	cfg := h.server.Config
+	cfg.DevLogin = true
+	srv, err := New(cfg, h.store, slog.New(slog.NewTextHandler(io.Discard, nil)), "test")
+	if err != nil {
+		t.Fatalf("web.New: %v", err)
+	}
+	dev := srv.Routes()
+
+	rec = httptest.NewRecorder()
+	dev.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/dev/login/Mom", nil))
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("with DEV_LOGIN on, GET /dev/login/Mom = %d, want 303", rec.Code)
+	}
+	var signedIn bool
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == auth.SessionCookie && c.Value != "" {
+			signedIn = true
+		}
+	}
+	if !signedIn {
+		t.Error("no session cookie issued")
+	}
+
+	// A name that is not a contributor must not mint a session.
+	rec = httptest.NewRecorder()
+	dev.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/dev/login/Nobody", nil))
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("GET /dev/login/Nobody = %d, want 404", rec.Code)
+	}
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == auth.SessionCookie && c.Value != "" {
+			t.Error("a session was issued for a name that does not exist")
+		}
+	}
+}
+
 func TestProtectedPagesRedirectWhenSignedOut(t *testing.T) {
 	h := newHarness(t)
 

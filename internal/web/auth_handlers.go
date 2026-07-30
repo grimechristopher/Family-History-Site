@@ -10,6 +10,41 @@ import (
 	"github.com/grimechristopher/family-history-site/internal/store"
 )
 
+// handleDevLogin signs in as a contributor by name, so the site can be opened as
+// Mom or Dad from a link. Registered only when DEV_LOGIN=1; see config.DevLogin.
+func (s *Server) handleDevLogin(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+
+	u, err := s.Store.UserByDisplayName(r.Context(), name)
+	if errors.Is(err, store.ErrNotFound) {
+		// Names the alternatives rather than a bare 404, since the whole point is
+		// to be typed by hand.
+		contributors, cErr := s.Store.Contributors(r.Context())
+		if cErr != nil {
+			s.serverError(w, r, cErr)
+			return
+		}
+		var names []string
+		for _, c := range contributors {
+			names = append(names, c.DisplayName)
+		}
+		http.Error(w, "No contributor called "+name+". Try one of: "+strings.Join(names, ", "),
+			http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+
+	if err := s.Sessions.Issue(w, r, u.ID); err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	s.Log.Warn("dev login used", "as", u.DisplayName, "user", u.ID)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
 func (s *Server) handleLoginForm(w http.ResponseWriter, r *http.Request) {
 	if auth.User(r.Context()) != nil {
 		http.Redirect(w, r, "/", http.StatusSeeOther)

@@ -20,6 +20,13 @@ type Config struct {
 	// Storage buckets, created by hand in Supabase.
 	PhotoBucket string
 	AudioBucket string
+
+	// DevLogin turns on a route that signs in as any contributor without a magic
+	// link, so the site can be checked as Mom or Dad. It is an authentication
+	// bypass and exists only because it is off unless DEV_LOGIN is set to 1 in the
+	// environment, which production never does. The server logs a warning on every
+	// start while it is on.
+	DevLogin bool
 }
 
 // Load reads configuration using the supplied lookup function, which is
@@ -36,6 +43,7 @@ func Load(get func(string) string) (Config, error) {
 		Addr:               get("ADDR"),
 		PhotoBucket:        get("SUPABASE_PHOTO_BUCKET"),
 		AudioBucket:        get("SUPABASE_AUDIO_BUCKET"),
+		DevLogin:           get("DEV_LOGIN") == "1",
 	}
 	if c.PhotoBucket == "" {
 		c.PhotoBucket = "family-questions-photos"

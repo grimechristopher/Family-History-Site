@@ -205,6 +205,14 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("POST /auth/session", http.HandlerFunc(s.handleSession))
 	mux.Handle("POST /logout", http.HandlerFunc(s.handleLogout))
 
+	// Signs in as a contributor with no magic link, for checking the site as Mom or
+	// Dad. Registered only when DEV_LOGIN=1, so in production the route does not
+	// exist at all rather than existing and refusing.
+	if s.Config.DevLogin {
+		s.Log.Warn("DEV_LOGIN is on: /dev/login/{name} will sign in as any contributor without a link")
+		mux.Handle("GET /dev/login/{name}", http.HandlerFunc(s.handleDevLogin))
+	}
+
 	require := s.Sessions.Require
 	mux.Handle("GET /{$}", require(http.HandlerFunc(s.handleHome)))
 	mux.Handle("GET /cards", require(http.HandlerFunc(s.handleCards)))

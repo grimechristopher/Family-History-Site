@@ -472,13 +472,32 @@ details[open] > summary::after { content: "–"; }
 /* ---------- Display settings --------------------------------------- */
 
 .display-settings { position: relative; }
+/* The disclosure triangle is a ::marker, not an ::after, and hiding the wrong one
+   left it holding space at the start of the pill so the label sat right of centre.
+   A summary only stops generating a marker once it is no longer display: list-item,
+   which is what the flex here is for; the two resets below cover older engines. */
 .display-settings > summary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  list-style: none;
   padding: var(--s2) var(--s4);
   border: 2px solid var(--rule-firm); border-radius: var(--r-pill);
   color: var(--ink-mid); white-space: nowrap;
+  cursor: pointer;
 }
+.display-settings > summary::marker { content: ""; }
+.display-settings > summary::-webkit-details-marker { display: none; }
+/* Opts out of the "+" that summary::after gives every other collapsible here. The
+   pill already reads as a button, and centring the label against a "+" is what put
+   it off centre in the first place. content: none generates no box at all, where
+   content: "" still makes an empty flex item.
+   The open state needs its own selector: details[open] > summary::after swaps in a
+   "–" and, at two type selectors to this rule's one, wins on specificity unless the
+   [open] is matched here as well. */
+.display-settings > summary::after,
+.display-settings[open] > summary::after { content: none; }
 .display-settings > summary:hover { border-color: var(--teal); color: var(--ink); }
-.display-settings > summary::after { content: ""; }
 
 .display-panel {
   position: absolute; right: 0; top: calc(100% + var(--s2)); z-index: 40;
@@ -1265,14 +1284,20 @@ a.pnode-hit:focus-visible .pnode-box { stroke: var(--teal); stroke-width: 3; }
 
 .note p { max-width: var(--measure); text-wrap: pretty; }
 
+/* Not capped at --measure, unlike the paragraphs: once the blocks carry a fill they
+   have to reach the panel's edge, or they end in a ragged margin of unused sheet.
+   The panel is narrow enough that the lines stay short anyway. */
 .note-list {
   list-style: none;
   margin: var(--s5) 0 0;
   padding: 0;
   display: grid;
   gap: var(--s3);
-  max-width: var(--measure);
 }
+
+/* Under a label the list needs less room above it than it does under a paragraph,
+   which is what the margin above is sized for. */
+.note .eyebrow + .note-list { margin-top: var(--s3); }
 
 /* Blocks rather than bordered lines: on a warm sheet the wash is what separates
    them from the paragraphs above, and the rule marks where each one starts. */
