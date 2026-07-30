@@ -90,15 +90,23 @@ type subjectGroup struct {
 // about itself -- "Grandparents", not "generation 2" -- and anything that is not a
 // person on the direct line falls into the last group.
 func groupSubjects(subs []store.SubjectProgress) []subjectGroup {
-	labels := []string{"Them", "Parents", "Grandparents", "Great-grandparents"}
+	// Ancestors read as generations -- Parents, Grandparents. The people beside the
+	// line do not: an aunt is one generation up but calling her a grandparent would
+	// be worse than leaving her out, so relation decides the heading first.
+	ancestors := []string{"Them", "Parents", "Grandparents", "Great-grandparents"}
 	byGen := map[int][]store.SubjectProgress{}
-	var other []store.SubjectProgress
+	bySibGen := map[int][]store.SubjectProgress{}
+	var cousins, other []store.SubjectProgress
 
 	for _, s := range subs {
 		switch {
+		case s.Relation == "cousin":
+			cousins = append(cousins, s)
+		case s.Relation == "sibling":
+			bySibGen[s.Generation] = append(bySibGen[s.Generation], s)
 		case s.Kind == "group":
 			other = append(other, s)
-		case s.Generation >= 0 && s.Generation < len(labels):
+		case s.Generation >= 0 && s.Generation < len(ancestors):
 			byGen[s.Generation] = append(byGen[s.Generation], s)
 		default:
 			other = append(other, s)
@@ -106,19 +114,26 @@ func groupSubjects(subs []store.SubjectProgress) []subjectGroup {
 	}
 
 	var out []subjectGroup
-	for gen, label := range labels {
-		if len(byGen[gen]) == 0 {
-			continue
+	add := func(label string, subs []store.SubjectProgress) {
+		if len(subs) == 0 {
+			return
 		}
-		out = append(out, subjectGroup{
-			Label: label, Subjects: byGen[gen],
-			// The nearest generation present starts open.
-			Open: len(out) == 0,
-		})
+		// Only the first group present starts open, whichever it turns out to be.
+		out = append(out, subjectGroup{Label: label, Subjects: subs, Open: len(out) == 0})
 	}
-	if len(other) > 0 {
-		out = append(out, subjectGroup{Label: "Further back", Subjects: other})
+
+	add(ancestors[0], byGen[0])
+	add("Brothers and sisters", bySibGen[0])
+	add(ancestors[1], byGen[1])
+	add("Aunts and uncles", bySibGen[1])
+	add("Cousins", cousins)
+	for gen := 2; gen < len(ancestors); gen++ {
+		add(ancestors[gen], byGen[gen])
+		if gen == 2 {
+			add("Great-aunts and uncles", bySibGen[2])
+		}
 	}
+	add("Further back", other)
 	return out
 }
 

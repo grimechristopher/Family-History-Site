@@ -8,10 +8,12 @@ import (
 
 // QuestionListItem is one row in the browsable list.
 type QuestionListItem struct {
-	ID            int64
-	Body          string
-	Topic         *string
-	SubjectName   string
+	ID          int64
+	Body        string
+	Topic       *string
+	SubjectName string
+	// AboutAskedOf marks a question about the person being asked it.
+	AboutAskedOf  bool
 	SubjectSlug   string
 	AskedOfName   string
 	AskedOfUserID int64
@@ -87,6 +89,19 @@ func (s *Store) ListQuestions(ctx context.Context, viewerID int64, f QuestionFil
 	query := `
 		SELECT q.id, q.body, q.topic, s.display_name, s.slug,
 		       asked.display_name, q.asked_of_user_id, q.is_proposed,
+		       -- Whether the question is about the very person being asked it, which
+		       -- reads as a mistake if both names are printed: "Lori Ann (Ayres)
+		       -- Grime, asked of Lori Grime". Decided by who they are in the tree
+		       -- rather than by comparing the two names, because the same person is
+		       -- written differently in each -- the subject in full genealogical form,
+		       -- the account by the name they go by.
+		       EXISTS (
+		           SELECT 1 FROM family.subject_members sm
+		             JOIN core.family_members fm
+		               ON fm.person_id = sm.person_id AND fm.family_id = q.family_id
+		            WHERE sm.subject_id = q.subject_id
+		              AND fm.user_id = q.asked_of_user_id
+		       ) AS about_asked_of,
 		       (owner_answer.id IS NOT NULL) AS answered,
 		       coalesce(counts.other_answers, 0),
 		       coalesce(counts.replies, 0),
@@ -128,7 +143,7 @@ func (s *Store) ListQuestions(ctx context.Context, viewerID int64, f QuestionFil
 	for rows.Next() {
 		var q QuestionListItem
 		if err := rows.Scan(&q.ID, &q.Body, &q.Topic, &q.SubjectName, &q.SubjectSlug,
-			&q.AskedOfName, &q.AskedOfUserID, &q.IsProposed,
+			&q.AskedOfName, &q.AskedOfUserID, &q.IsProposed, &q.AboutAskedOf,
 			&q.Answered, &q.OtherAnswers, &q.ReplyCount, &q.ViewerAnswered); err != nil {
 			return nil, err
 		}
@@ -224,7 +239,7 @@ type SubjectProgress struct {
 // is a dead end.
 func (s *Store) SubjectsWithProgress(ctx context.Context, askedOf string) ([]SubjectProgress, error) {
 	rows, err := s.q(ctx).Query(ctx, `
-		SELECT s.id, s.slug, s.kind, s.display_name, s.sort_order, s.generation,
+		SELECT s.id, s.slug, s.kind, s.display_name, s.sort_order, s.generation, s.relation,
 		       count(q.id),
 		       count(owner_answer.id)
 		FROM family.subjects s
@@ -238,7 +253,7 @@ func (s *Store) SubjectsWithProgress(ctx context.Context, askedOf string) ([]Sub
 		       ON owner_answer.question_id = q.id
 		      AND owner_answer.author_user_id = q.asked_of_user_id
 		      AND owner_answer.is_draft = false
-		GROUP BY s.id, s.slug, s.kind, s.display_name, s.sort_order, s.generation
+		GROUP BY s.id, s.slug, s.kind, s.display_name, s.sort_order, s.generation, s.relation
 		ORDER BY s.sort_order, s.slug`, askedOf)
 	if err != nil {
 		return nil, fmt.Errorf("subjects with progress: %w", err)
@@ -249,7 +264,7 @@ func (s *Store) SubjectsWithProgress(ctx context.Context, askedOf string) ([]Sub
 	for rows.Next() {
 		var p SubjectProgress
 		if err := rows.Scan(&p.ID, &p.Slug, &p.Kind, &p.DisplayName, &p.SortOrder,
-			&p.Generation, &p.Total, &p.Answered); err != nil {
+			&p.Generation, &p.Relation, &p.Total, &p.Answered); err != nil {
 			return nil, err
 		}
 		out = append(out, p)

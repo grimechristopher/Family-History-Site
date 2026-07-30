@@ -133,6 +133,7 @@ func Run(ctx context.Context, db store.DBTX, ged *gedcom.File, qs []prompts.Ques
 			DisplayName: s.DisplayName,
 			SortOrder:   s.SortOrder,
 			Generation:  s.Generation,
+			Relation:    s.Relation,
 		})
 		if err != nil {
 			return nil, err

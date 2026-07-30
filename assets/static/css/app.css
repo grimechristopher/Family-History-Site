@@ -1461,3 +1461,32 @@ a.pnode-hit:focus-visible .pnode-box { stroke: var(--teal); stroke-width: 3; }
 /* Tighter rows too, since the whole family is listed now rather than a filtered few. */
 .side-group .side-list { margin: 0 0 var(--s2); }
 .side-group .side-link { padding-top: var(--s1); padding-bottom: var(--s1); }
+
+/* ---------- Footer ----------------------------------------------------
+   Somebody stuck on a question at nine in the evening should not have to go
+   looking for how to reach a person. Quiet, but on every page they can see.
+   -------------------------------------------------------------------- */
+
+.footer {
+  margin-top: var(--s8);
+  padding: var(--s5) clamp(var(--s4), 4vw, var(--s6));
+  padding-bottom: max(var(--s5), calc(env(safe-area-inset-bottom) + var(--s4)));
+  border-top: 1px solid var(--rule);
+  background: var(--sheet);
+}
+
+.footer p {
+  margin: 0;
+  max-width: var(--measure);
+  font-size: var(--t-small);
+  line-height: 1.6;
+  color: var(--ink-mid);
+}
+
+.footer a { color: var(--teal); }
+
+/* The full-height column pages hide their own overflow, so the footer would be
+   cut off. It sits below the columns instead of inside them. */
+@media (min-width: 62rem) {
+  body:has(.with-side) > .footer { flex: none; }
+}

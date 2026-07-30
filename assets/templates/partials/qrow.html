@@ -4,10 +4,11 @@
 <li class="qrow{{if .Answered}} qrow-done{{end}}">
   <a class="qrow-body" href="/questions/{{.ID}}">{{.Body}}</a>
   <p class="qrow-meta">
-    {{/* "Tony Lucero · asked of Tony Lucero" reads as a mistake. When somebody is
-         asked about themselves the subject adds nothing, so only the person is
-         named. */}}
-    {{if ne .SubjectName .AskedOfName}}<span class="qrow-subject">{{.SubjectName}} &middot;</span>{{end}}
+    {{/* "Lori Ann (Ayres) Grime · asked of Lori Grime" reads as a mistake. When
+         somebody is asked about themselves the subject adds nothing, so only the
+         person is named. Decided by who they are in the tree, not by comparing the
+         names: the same person is written differently in each. */}}
+    {{if not .AboutAskedOf}}<span class="qrow-subject">{{.SubjectName}} &middot;</span>{{end}}
     asked of {{.AskedOfName}}
     {{if .Answered}}&middot; <strong>answered</strong>{{end}}
     {{if .OtherAnswers}}&middot; {{.OtherAnswers}} from others{{end}}

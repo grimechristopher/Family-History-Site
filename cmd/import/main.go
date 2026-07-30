@@ -43,6 +43,10 @@ func main() {
 		"comma-separated GEDCOM names to include who are not blood ancestors, such as a "+
 			"step-parent (defaults to $EXTRA_GEDCOM_NAMES)")
 	generations := fs.Int("generations", 3, "generations above the two roots to import")
+	siblingsUpTo := fs.Int("siblings", 1,
+		"include brothers and sisters of everybody this many generations up: 1 covers "+
+			"the roots' own siblings and their aunts and uncles; -1 for none")
+	cousins := fs.Bool("cousins", true, "also include the children of those siblings")
 	familySlug := fs.String("family", "home", "slug of the family to import into")
 	var people personList
 	fs.Var(&people, "person",
@@ -108,6 +112,7 @@ func main() {
 		DadEmail: *dadEmail, MomEmail: *momEmail, AdminEmail: *adminEmail,
 		DadName: *dadName, MomName: *momName, AdminLabel: *adminLabel, Family: *familySlug,
 		ExtraNames: extras, Generations: *generations, DryRun: *dryRun,
+		SiblingsUpTo: *siblingsUpTo, Cousins: *cousins,
 		Contributors: contributors,
 	}
 	if err := run(cfg); err != nil {
@@ -128,7 +133,11 @@ type importConfig struct {
 	Family      string
 	ExtraNames  []string
 	Generations int
-	DryRun      bool
+	// SiblingsUpTo and Cousins widen the walk beyond the line of descent, to the
+	// brothers, sisters and cousins a family actually talks about.
+	SiblingsUpTo int
+	Cousins      bool
+	DryRun       bool
 	// Contributors are everybody questions are asked of. A family may have one, two
 	// or several: two parents, or four siblings recording their own parents.
 	Contributors []importer.Contributor
@@ -213,9 +222,11 @@ func run(cfg importConfig) error {
 
 	opts := importer.Options{
 		Tree: subjects.Options{
-			RootNames:   roots,
-			Generations: cfg.Generations,
-			ExtraNames:  cfg.ExtraNames,
+			RootNames:    roots,
+			Generations:  cfg.Generations,
+			ExtraNames:   cfg.ExtraNames,
+			SiblingsUpTo: cfg.SiblingsUpTo,
+			Cousins:      cfg.Cousins,
 		},
 		Contributors: cfg.Contributors,
 		Admins:       []importer.Admin{{Label: cfg.AdminLabel, Email: cfg.AdminEmail}},

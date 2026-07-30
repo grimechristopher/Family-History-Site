@@ -30,6 +30,9 @@ type Subject struct {
 	// Generation is how far back from the contributors: 0 one of them, 1 a parent,
 	// 2 a grandparent. Used to group the sidebar.
 	Generation int
+	// Relation is "ancestor", "sibling" or "cousin": whether they are on the line
+	// of descent or beside it.
+	Relation string
 }
 
 // UpsertPerson inserts or updates by GEDCOM xref and returns the row id. Parent
@@ -68,15 +71,16 @@ func SetParents(ctx context.Context, db DBTX, personID int64, fatherID, motherID
 func UpsertSubject(ctx context.Context, db DBTX, s Subject) (int64, error) {
 	var id int64
 	err := db.QueryRow(ctx, `
-		INSERT INTO family.subjects (slug, kind, display_name, sort_order, family_id, generation)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO family.subjects (slug, kind, display_name, sort_order, family_id, generation, relation)
+		VALUES ($1, $2, $3, $4, $5, $6, coalesce(nullif($7, ''), 'ancestor'))
 		ON CONFLICT (family_id, slug) DO UPDATE SET
 		  kind         = EXCLUDED.kind,
 		  display_name = EXCLUDED.display_name,
 		  sort_order   = EXCLUDED.sort_order,
-		  generation   = EXCLUDED.generation
+		  generation   = EXCLUDED.generation,
+		  relation     = EXCLUDED.relation
 		RETURNING id`, s.Slug, s.Kind, s.DisplayName, s.SortOrder, FamilyFrom(ctx),
-		s.Generation).Scan(&id)
+		s.Generation, s.Relation).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("upsert subject %s: %w", s.Slug, err)
 	}

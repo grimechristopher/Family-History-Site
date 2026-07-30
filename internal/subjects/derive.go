@@ -27,6 +27,15 @@ const (
 // name no specific ancestor.
 const FurtherBackSlug = "further-back"
 
+// How somebody reaches the roots. Ancestors are the line itself; the other two are
+// the people beside it, who have no place on a pedigree chart but plenty of place
+// in a family's memory.
+const (
+	RelationAncestor = "ancestor"
+	RelationSibling  = "sibling"
+	RelationCousin   = "cousin"
+)
+
 // Subject is a thing questions can be about: one person, a married couple, or a
 // catch-all group.
 type Subject struct {
@@ -36,6 +45,9 @@ type Subject struct {
 	SortOrder   int
 	Generation  int      // 0 = Mom/Dad, 1 = their parents, ...
 	MemberIDs   []string // GEDCOM xrefs
+	// Relation is how this subject reaches the roots: on the line of descent, or
+	// beside it. It decides which heading they appear under.
+	Relation string
 }
 
 // Person is an individual inside the imported window.
@@ -49,6 +61,11 @@ type Person struct {
 	FatherID   string
 	MotherID   string
 	Generation int
+
+	// Relation says how this person reaches the roots: an ancestor, somebody's
+	// brother or sister, or the child of one. An ancestor chart has no place for
+	// the last two, so they are marked rather than laid out.
+	Relation string
 
 	// AliasSurnames holds surnames this person is commonly referred to by but
 	// is not recorded under — chiefly married names. "Grandma Alice Nash" is
@@ -104,6 +121,14 @@ type Options struct {
 	// whole block of questions to them. Resolved against the whole file, so they
 	// must be unambiguous there.
 	ExtraNames []string
+
+	// SiblingsUpTo brings in the brothers and sisters of everybody at this
+	// generation or nearer the roots. 1 covers the roots' own siblings and their
+	// parents' -- somebody's brothers and sisters, and their aunts and uncles.
+	// Negative means none, which is how the tree behaved before.
+	SiblingsUpTo int
+	// Cousins adds the children of those siblings.
+	Cousins bool
 }
 
 // Derive builds the bounded tree and its subjects from a parsed GEDCOM.
@@ -122,6 +147,25 @@ func Derive(f *gedcom.File, opts Options) (*Tree, error) {
 	}
 
 	window := f.Ancestors(rootIDs, opts.Generations)
+
+	// Brothers, sisters and cousins: the people an ancestor walk misses and a
+	// family talks about most. Kept apart from the ancestors so each can be
+	// labelled for what it is, and so the chart still has a clean line to draw.
+	relation := map[string]string{}
+	for id := range window {
+		relation[id] = RelationAncestor
+	}
+	if opts.SiblingsUpTo >= 0 {
+		sibs, kids := f.Collaterals(window, opts.SiblingsUpTo, opts.Cousins)
+		for id, gen := range sibs {
+			window[id] = gen
+			relation[id] = RelationSibling
+		}
+		for id := range kids {
+			window[id] = 1
+			relation[id] = RelationCousin
+		}
+	}
 
 	// Step-parents and the like are not reachable by an ancestor walk, so they
 	// are named explicitly and folded in at their spouse's generation.
@@ -149,6 +193,7 @@ func Derive(f *gedcom.File, opts Options) (*Tree, error) {
 			continue
 		}
 		p := &Person{
+			Relation:      relation[id],
 			GedcomID:      id,
 			Given:         ind.Given,
 			Surname:       ind.Surname,
@@ -321,6 +366,7 @@ func (t *Tree) buildSubjects(f *gedcom.File) []Subject {
 				DisplayName: p.DisplayName(),
 				SortOrder:   order,
 				Generation:  gen,
+				Relation:    p.Relation,
 				MemberIDs:   []string{id},
 			})
 		}
