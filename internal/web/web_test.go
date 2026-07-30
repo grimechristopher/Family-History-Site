@@ -1277,7 +1277,7 @@ func TestSubjectPageGathersQuestionsAndStories(t *testing.T) {
 	for _, want := range []string{
 		"Peter Samuel Hale",
 		"What kind of cars did he have?",
-		"Start on ", // straight into a focused card stack
+		"Show these as cards", // straight into a focused card stack
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("subject page missing %q", want)
@@ -1581,5 +1581,104 @@ func TestRedirectsLandOnTheEntryAndStayOnSite(t *testing.T) {
 		if strings.Contains(loc, "example.com") {
 			t.Errorf("return_to %q was followed off-site: %q", evil, loc)
 		}
+	}
+}
+
+// Anyone can ask anyone: Dad adds one for himself when he remembers something
+// worth recording, and Chris asks his father what the prompts file never thought
+// to. Either way it joins that person's cards.
+func TestAskingAQuestion(t *testing.T) {
+	h := newHarness(t)
+	dad := h.signIn("dad@example.com")
+	ctx := context.Background()
+
+	page := h.get("/subjects/peter-samuel-hale", dad).Body.String()
+	if !strings.Contains(page, "Ask something about") {
+		t.Error("expected a way to ask a question from the person's page")
+	}
+	if !strings.Contains(page, `name="asked_of"`) {
+		t.Error("expected a choice of who should answer")
+	}
+
+	// Dad asks himself something.
+	rec := h.post("/subjects/peter-samuel-hale/questions", url.Values{
+		"asked_of": {"Dad"}, "body": {"What did his workshop smell like?"},
+	}, dad)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303", rec.Code)
+	}
+	if loc := rec.Header().Get("Location"); !strings.HasPrefix(loc, "/questions/") {
+		t.Errorf("Location = %q, want the new question", loc)
+	}
+
+	// It is in Dad's waiting list, and in his card stack.
+	if !strings.Contains(h.get("/questions", dad).Body.String(), "workshop smell like") {
+		t.Error("the new question should appear in the asking person's list")
+	}
+	u, _ := h.store.UserByID(ctx, h.dadID)
+	cards, err := h.store.NextCards(ctx, u, 200)
+	if err != nil {
+		t.Fatalf("NextCards: %v", err)
+	}
+	var found bool
+	for _, c := range cards {
+		if strings.Contains(c.Body, "workshop smell like") {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("the new question should join the card stack")
+	}
+
+	// Chris asks Dad something. It lands on Dad, not on Chris.
+	chris := h.signIn("chris@example.com")
+	h.post("/subjects/peter-samuel-hale/questions", url.Values{
+		"asked_of": {"Dad"}, "body": {"Did he ever talk about the war?"},
+	}, chris)
+
+	dadCount, _ := h.store.CountQuestionsFor(ctx, h.dadID)
+	if dadCount != 4 { // two seeded plus the two just added
+		t.Errorf("Dad has %d questions, want 4", dadCount)
+	}
+
+	// Nonsense is refused rather than stored.
+	for name, form := range map[string]url.Values{
+		"empty body":     {"asked_of": {"Dad"}, "body": {"   "}},
+		"unknown person": {"asked_of": {"Nobody"}, "body": {"x"}},
+		"missing person": {"body": {"x"}},
+	} {
+		rec := h.post("/subjects/peter-samuel-hale/questions", form, dad)
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("%s: status = %d, want 400", name, rec.Code)
+		}
+	}
+	if rec := h.post("/subjects/nope/questions",
+		url.Values{"asked_of": {"Dad"}, "body": {"x"}}, dad); rec.Code != http.StatusNotFound {
+		t.Errorf("unknown subject: status = %d, want 404", rec.Code)
+	}
+}
+
+// A question written on the site must survive a re-import, which archives
+// imported questions no longer in the markdown.
+func TestUserQuestionsSurviveAReimport(t *testing.T) {
+	h := newHarness(t)
+	dad := h.signIn("dad@example.com")
+	ctx := context.Background()
+
+	h.post("/subjects/peter-samuel-hale/questions", url.Values{
+		"asked_of": {"Dad"}, "body": {"Written on the site, not imported."},
+	}, dad)
+
+	// Stand in for a re-import that no longer mentions any of the seeded keys.
+	err := h.store.InTx(ctx, func(db store.DBTX) error {
+		_, err := store.ArchiveImportedQuestionsNotIn(ctx, db, []string{"nothing-matches"})
+		return err
+	})
+	if err != nil {
+		t.Fatalf("archive: %v", err)
+	}
+
+	if !strings.Contains(h.get("/questions", dad).Body.String(), "Written on the site") {
+		t.Error("a question written on the site must not be archived by a re-import")
 	}
 }

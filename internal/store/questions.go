@@ -71,3 +71,24 @@ func (s *Store) CountQuestionsFor(ctx context.Context, userID int64) (int, error
 		 WHERE asked_of_user_id = $1 AND archived_at IS NULL`, userID).Scan(&n)
 	return n, err
 }
+
+// CreateUserQuestion adds a question written on the site rather than imported
+// from the markdown.
+//
+// It carries no import_key, so a re-import never touches it, and records who
+// wrote it: a question Chris asks his father should read differently from one
+// that came out of the prompts file.
+func (s *Store) CreateUserQuestion(ctx context.Context, subjectID, askedOfUserID, authorID int64, topic *string, body string) (int64, error) {
+	var id int64
+	err := s.Pool.QueryRow(ctx, `
+		INSERT INTO family.questions
+		  (subject_id, asked_of_user_id, topic, body, sort_order, source, created_by_user_id)
+		VALUES ($1, $2, $3, $4,
+		        coalesce((SELECT max(sort_order) + 1 FROM family.questions), 0),
+		        'user', $5)
+		RETURNING id`, subjectID, askedOfUserID, topic, body, authorID).Scan(&id)
+	if err != nil {
+		return 0, fmt.Errorf("create question: %w", err)
+	}
+	return id, nil
+}

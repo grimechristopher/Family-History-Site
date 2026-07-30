@@ -230,6 +230,7 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("GET /subjects", require(http.HandlerFunc(s.handleSubjects)))
 	mux.Handle("GET /subjects/{slug}", require(http.HandlerFunc(s.handleSubject)))
 	mux.Handle("POST /subjects/{slug}/focus", require(http.HandlerFunc(s.handleFocusSubject)))
+	mux.Handle("POST /subjects/{slug}/questions", require(http.HandlerFunc(s.handleAskQuestion)))
 
 	return s.securityHeaders(mux)
 }

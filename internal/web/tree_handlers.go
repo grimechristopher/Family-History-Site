@@ -162,9 +162,16 @@ func (s *Server) handleSubject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	contributors, err := s.Store.Contributors(r.Context())
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+
 	data := s.newPageData(r, subject.DisplayName)
 	data.Nav = "tree"
 	data.Subject = subject
+	data.Contributors = contributors
 	data.Members = members
 	data.Unanswered = unanswered
 	data.Answered = answered
@@ -242,6 +249,15 @@ func (s *Server) handleTreeJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A couple is worth opening whether or not questions have been written for
+	// them yet, so this ignores the count that link() checks.
+	coupleSlug := func(p *store.TreePerson) string {
+		if p.SubjectSlug != nil {
+			return *p.SubjectSlug
+		}
+		return ""
+	}
+
 	link := func(p *store.TreePerson) string {
 		// Linked only where there is something to read, matching the list view.
 		if p.SubjectSlug != nil && p.QuestionCount > 0 {
@@ -275,7 +291,12 @@ func (s *Server) handleTreeJSON(w http.ResponseWriter, r *http.Request) {
 				Gen:      n.Parents[0].Generation,
 				Total:    a.QuestionCount,
 				Answered: a.AnsweredCount,
-				Slug:     link(a),
+				// Always clickable, unlike an individual. A couple's page names
+				// both of them and offers a story about them, so it is worth
+				// opening even before any question has been asked -- and these
+				// pairs currently have none, since the great-grandparent
+				// questions all sit under "Further Back".
+				Slug: coupleSlug(a),
 				Members: []pedigreeMember{
 					{Name: a.FullName(), Years: a.Lifespan()},
 					{Name: b.FullName(), Years: b.Lifespan()},

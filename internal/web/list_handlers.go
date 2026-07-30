@@ -284,3 +284,56 @@ func returnTo(r *http.Request, fallback string) string {
 	}
 	return back
 }
+
+// handleAskQuestion adds a question to a person's page.
+//
+// Anyone may ask anyone: Dad can add one for himself when he remembers something
+// he wants to record, and Chris can ask his father something the prompts file
+// never thought of. The question joins that person's card stack like any other.
+func (s *Server) handleAskQuestion(w http.ResponseWriter, r *http.Request) {
+	u := auth.User(r.Context())
+	slug := r.PathValue("slug")
+
+	subject, err := s.Store.SubjectBySlug(r.Context(), slug)
+	if errors.Is(err, store.ErrNotFound) {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+
+	body := strings.TrimSpace(r.FormValue("body"))
+	if body == "" {
+		http.Error(w, "A question needs something in it.", http.StatusBadRequest)
+		return
+	}
+
+	// Who it is for. Must be a contributor: asking a question of somebody who is
+	// never shown a card stack would bury it.
+	askedOf := r.FormValue("asked_of")
+	contributors, err := s.Store.Contributors(r.Context())
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	var target *store.User
+	for _, c := range contributors {
+		if c.DisplayName == askedOf {
+			target = c
+			break
+		}
+	}
+	if target == nil {
+		http.Error(w, "Choose who the question is for.", http.StatusBadRequest)
+		return
+	}
+
+	id, err := s.Store.CreateUserQuestion(r.Context(), subject.ID, target.ID, u.ID, nil, body)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	http.Redirect(w, r, "/questions/"+strconv.FormatInt(id, 10), http.StatusSeeOther)
+}

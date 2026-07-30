@@ -1126,10 +1126,11 @@ a.pnode-hit:focus-visible .pnode-box { stroke: var(--teal); stroke-width: 3; }
 
 
 /* A great-grandparent couple is one box, because that is also how their
-   questions are asked and how the book's chapters are organised. */
+   questions are asked and how the book's chapters are organised. Solid and
+   openable even with no questions yet: their page names both of them and takes
+   a story. */
 .pnode-couple .pnode-box { fill: var(--sheet-warm); stroke: var(--rule-firm); stroke-width: 1.5; }
-.pnode-couple.pnode-flat .pnode-box,
-.pnode-couple .pnode-flat .pnode-box { fill: var(--oat-deep); stroke-dasharray: 4 4; }
+.pnode-couple .pnode-name { fill: var(--ink); font-weight: 700; }
 .pnode-count { font-size: 12px; }
 
 /* ---------- Whose line ----------------------------------------------- */
@@ -1215,4 +1216,42 @@ a.pnode-hit:focus-visible .pnode-box { stroke: var(--teal); stroke-width: 3; }
 @media (max-width: 26rem) {
   .segmented { display: flex; width: 100%; }
   .segment { flex: 1; justify-content: center; padding-inline: var(--s2); }
+}
+
+/* ---------- Breadcrumbs ---------------------------------------------- */
+
+.crumbs {
+  display: flex; align-items: center; gap: var(--s2);
+  flex-wrap: wrap;
+  margin-bottom: var(--s2);
+  font: 600 var(--t-small)/1.4 var(--sans);
+}
+
+.crumbs .link { min-height: 2.25rem; }
+.crumbs-sep { color: var(--rule-firm); }
+.crumbs-here { color: var(--ink-soft); font-weight: 400; }
+
+/* A section heading with an action beside it, rather than the action stranded
+   below a sentence below the heading. */
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s4);
+  flex-wrap: wrap;
+  margin: var(--s7) 0 var(--s3);
+}
+
+.section-head h2 {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  flex: 1 1 auto;
+}
+
+.section-head form { margin: 0; flex: none; }
+.section-head + .lede { margin-bottom: var(--s4); }
+
+@media (max-width: 30rem) {
+  .section-head .btn { width: 100%; }
 }
