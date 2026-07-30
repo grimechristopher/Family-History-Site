@@ -60,7 +60,7 @@
 {{end}}
 
 {{define "answer"}}
-<article class="panel{{if .IsPrimary}} panel-primary{{end}}">
+<article class="panel{{if .IsPrimary}} panel-primary{{end}}" id="entry-{{.ID}}">
   <div class="byline">
     <span class="avatar{{if .IsPrimary}} avatar-primary{{end}}" aria-hidden="true">{{printf "%.1s" .AuthorName}}</span>
     <div class="byline-text">
@@ -87,7 +87,8 @@
 
   <details class="reply-form">
     <summary>Reply</summary>
-    <form method="post" action="/entries/{{.ID}}/replies">
+    <form hx-post="/entries/{{.ID}}/replies" hx-target="#answers" hx-swap="outerHTML"
+          method="post" action="/entries/{{.ID}}/replies">
       <input type="hidden" name="return_to" value="/questions/{{.QuestionID}}">
       <label class="visually-hidden" for="reply-{{.ID}}">Add to this</label>
       <textarea id="reply-{{.ID}}" name="body" rows="3" placeholder="Add to this&hellip;"></textarea>

@@ -239,13 +239,29 @@ func (s *Server) handleReply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// On a question page, swap just the answers back in. Redirecting reloaded the
+	// page and threw the reader to the top, which for a long thread meant losing
+	// their place every time they replied.
+	if r.Header.Get("HX-Request") == "true" {
+		questionID, err := s.Store.EntryQuestion(r.Context(), entryID)
+		if err == nil && questionID != nil {
+			data, err := s.questionData(r, *questionID)
+			if err != nil {
+				s.serverError(w, r, err)
+				return
+			}
+			s.renderNamed(w, r, "question", "answers", data)
+			return
+		}
+	}
+
 	// Replies can hang off a story as well as an answer, so return to whichever
-	// page the reply came from.
+	// page the reply came from, landing on the entry rather than the top.
 	back := r.FormValue("return_to")
 	if back == "" {
 		back = "/stories"
 	}
-	http.Redirect(w, r, back, http.StatusSeeOther)
+	http.Redirect(w, r, back+"#entry-"+strconv.FormatInt(entryID, 10), http.StatusSeeOther)
 }
 
 // redirectOrFragment re-renders the question for htmx, or redirects for a plain

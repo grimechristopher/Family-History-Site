@@ -1466,3 +1466,51 @@ func TestUnansweredNoticeIsHiddenFromThePersonAsked(t *testing.T) {
 		t.Error("the notice should go once there is an answer")
 	}
 }
+
+// Replying used to redirect, which reloaded the page and threw the reader back to
+// the top -- losing their place in a long thread every time.
+func TestReplyingSwapsInPlaceInsteadOfReloading(t *testing.T) {
+	h := newHarness(t)
+	dad := h.signIn("dad@example.com")
+	mom := h.signIn("mom@example.com")
+	id := strconv.FormatInt(h.dadQuestion, 10)
+
+	h.post("/questions/"+id+"/answer", url.Values{"body": {"A Studebaker."}}, dad)
+	entry, err := h.store.AnswerFor(context.Background(), h.dadQuestion, h.dadID)
+	if err != nil {
+		t.Fatalf("AnswerFor: %v", err)
+	}
+	entryID := strconv.FormatInt(entry.ID, 10)
+
+	// An htmx reply comes back as the answers fragment, so the page never moves.
+	req := httptest.NewRequest(http.MethodPost, "/entries/"+entryID+"/replies",
+		strings.NewReader(url.Values{"body": {"Was that 1954?"}}.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("HX-Request", "true")
+	req.AddCookie(mom)
+	rec := h.do(req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 with a fragment", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "Was that 1954?") {
+		t.Error("the swapped fragment should already contain the new reply")
+	}
+	if strings.Contains(body, "<!doctype html>") {
+		t.Error("expected a fragment, not a whole page")
+	}
+	if !strings.Contains(body, `id="answers"`) {
+		t.Error("the fragment must be the answers region so htmx can swap it")
+	}
+
+	// Without htmx it still works, landing on the entry rather than the top.
+	plain := h.post("/entries/"+entryID+"/replies",
+		url.Values{"body": {"And the Buick?"}, "return_to": {"/questions/" + id}}, mom)
+	if plain.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303", plain.Code)
+	}
+	if loc := plain.Header().Get("Location"); !strings.HasSuffix(loc, "#entry-"+entryID) {
+		t.Errorf("Location = %q, want an anchor on the entry", loc)
+	}
+}

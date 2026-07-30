@@ -32,7 +32,7 @@
   <h2>What&rsquo;s been said <span class="count">{{len .Answered}} answered{{if .Stories}} &middot; {{len .Stories}} {{if eq (len .Stories) 1}}story{{else}}stories{{end}}{{end}}</span></h2>
 
   {{range .Stories}}
-    <article class="answer answer-primary">
+    <article class="answer answer-primary" id="entry-{{.ID}}">
       <h3>{{.Title}}</h3>
       <p class="answer-by">
         {{.AuthorName}}

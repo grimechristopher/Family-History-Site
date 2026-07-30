@@ -84,3 +84,16 @@ func (s *Store) EntryExists(ctx context.Context, entryID int64) (bool, error) {
 		`SELECT EXISTS (SELECT 1 FROM family.entries WHERE id = $1)`, entryID).Scan(&exists)
 	return exists, err
 }
+
+// EntryQuestion returns the question an entry answers, or nil for a story. Used
+// to re-render just the answers after a reply, instead of reloading the page and
+// throwing the reader back to the top.
+func (s *Store) EntryQuestion(ctx context.Context, entryID int64) (*int64, error) {
+	var questionID *int64
+	err := s.Pool.QueryRow(ctx,
+		`SELECT question_id FROM family.entries WHERE id = $1`, entryID).Scan(&questionID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	return questionID, err
+}
