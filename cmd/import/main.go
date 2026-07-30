@@ -278,6 +278,14 @@ func run(cfg importConfig) error {
 		}
 		fmt.Println()
 	}
+	if res.PrunedSubjects > 0 || res.PrunedPeople > 0 {
+		fmt.Printf("\nremoved, no longer in this family: %d subject(s), %d person/people\n",
+			res.PrunedSubjects, res.PrunedPeople)
+	}
+	if res.KeptSubjects > 0 {
+		fmt.Printf("kept %d subject(s) that are no longer derived but have answers or "+
+			"questions attached\n", res.KeptSubjects)
+	}
 	if res.Archived > 0 {
 		fmt.Printf("archived:  %d question(s) no longer in the markdown\n", res.Archived)
 	}

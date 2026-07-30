@@ -27,6 +27,9 @@ type Subject struct {
 	Kind        string
 	DisplayName string
 	SortOrder   int
+	// Generation is how far back from the contributors: 0 one of them, 1 a parent,
+	// 2 a grandparent. Used to group the sidebar.
+	Generation int
 }
 
 // UpsertPerson inserts or updates by GEDCOM xref and returns the row id. Parent
@@ -65,13 +68,15 @@ func SetParents(ctx context.Context, db DBTX, personID int64, fatherID, motherID
 func UpsertSubject(ctx context.Context, db DBTX, s Subject) (int64, error) {
 	var id int64
 	err := db.QueryRow(ctx, `
-		INSERT INTO family.subjects (slug, kind, display_name, sort_order, family_id)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO family.subjects (slug, kind, display_name, sort_order, family_id, generation)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (family_id, slug) DO UPDATE SET
 		  kind         = EXCLUDED.kind,
 		  display_name = EXCLUDED.display_name,
-		  sort_order   = EXCLUDED.sort_order
-		RETURNING id`, s.Slug, s.Kind, s.DisplayName, s.SortOrder, FamilyFrom(ctx)).Scan(&id)
+		  sort_order   = EXCLUDED.sort_order,
+		  generation   = EXCLUDED.generation
+		RETURNING id`, s.Slug, s.Kind, s.DisplayName, s.SortOrder, FamilyFrom(ctx),
+		s.Generation).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("upsert subject %s: %w", s.Slug, err)
 	}
@@ -139,4 +144,70 @@ func (s *Store) CountPeople(ctx context.Context) (int, error) {
 	var n int
 	err := s.q(ctx).QueryRow(ctx, `SELECT count(*) FROM family.people`).Scan(&n)
 	return n, err
+}
+
+// PruneSubjectsNotIn removes subjects this family no longer derives.
+//
+// Re-importing has always updated and added, never removed, so a subject that
+// falls out of scope stayed for ever: splitting a family in two left one side
+// holding the other's ancestors, and renaming somebody left the old name behind.
+//
+// Only rows with nothing attached are deleted. A subject that has questions or a
+// story is left alone and counted, because losing what somebody wrote is worse
+// than a stale name in a list -- the caller reports it rather than deciding.
+func PruneSubjectsNotIn(ctx context.Context, db DBTX, slugs []string) (deleted, kept int64, err error) {
+	row := db.QueryRow(ctx, `
+		WITH stale AS (
+			SELECT s.id,
+			       EXISTS (SELECT 1 FROM family.questions q WHERE q.subject_id = s.id) AS has_questions,
+			       EXISTS (SELECT 1 FROM family.entries   e WHERE e.subject_id = s.id) AS has_entries
+			  FROM family.subjects s
+			 WHERE s.family_id = $2 AND NOT (s.slug = ANY($1::text[]))
+		),
+		gone AS (
+			DELETE FROM family.subjects
+			 WHERE id IN (SELECT id FROM stale WHERE NOT has_questions AND NOT has_entries)
+			RETURNING 1
+		)
+		SELECT (SELECT count(*) FROM gone),
+		       (SELECT count(*) FROM stale WHERE has_questions OR has_entries)`,
+		slugs, FamilyFrom(ctx))
+	if err := row.Scan(&deleted, &kept); err != nil {
+		return 0, 0, fmt.Errorf("prune subjects: %w", err)
+	}
+	return deleted, kept, nil
+}
+
+// PrunePeopleNotIn removes people no longer inside the imported window, for the
+// same reason and with the same caution: anyone still referenced is left.
+func PrunePeopleNotIn(ctx context.Context, db DBTX, gedcomIDs []string) (int64, error) {
+	// People point at their parents, so anyone still referenced cannot simply be
+	// deleted. The references are cleared first: whoever survives keeps their own
+	// parents, and a link to somebody who is leaving becomes nothing rather than
+	// blocking the whole prune.
+	for _, column := range []string{"father_id", "mother_id"} {
+		_, err := db.Exec(ctx, `
+			UPDATE family.people SET `+column+` = NULL
+			 WHERE family_id = $2
+			   AND `+column+` IN (
+			       SELECT id FROM family.people
+			        WHERE family_id = $2 AND NOT (gedcom_id = ANY($1::text[])))`,
+			gedcomIDs, FamilyFrom(ctx))
+		if err != nil {
+			return 0, fmt.Errorf("clear %s before pruning people: %w", column, err)
+		}
+	}
+
+	tag, err := db.Exec(ctx, `
+		DELETE FROM family.people p
+		 WHERE p.family_id = $2
+		   AND NOT (p.gedcom_id = ANY($1::text[]))
+		   AND NOT EXISTS (SELECT 1 FROM family.subject_members sm WHERE sm.person_id = p.id)
+		   AND NOT EXISTS (SELECT 1 FROM core.family_members m
+		                    WHERE m.family_id = p.family_id AND m.person_id = p.id)`,
+		gedcomIDs, FamilyFrom(ctx))
+	if err != nil {
+		return 0, fmt.Errorf("prune people: %w", err)
+	}
+	return tag.RowsAffected(), nil
 }

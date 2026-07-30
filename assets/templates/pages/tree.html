@@ -5,7 +5,7 @@
 <div id="pedigree-views">
   {{/* Filled in once the chart is drawn: one button per line. */}}
   <p class="line-picker" id="line-picker" role="group" aria-label="Whose line to show"></p>
-  <div id="pedigree" class="pedigree-chart" data-viewer="{{.User.DisplayName}}"></div>
+  <div id="pedigree" data-src="{{fam $.FamilySlug "/tree.json"}}" class="pedigree-chart" data-viewer="{{.User.DisplayName}}"></div>
 </div>
 
 {{if .SubjectProgress}}

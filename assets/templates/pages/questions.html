@@ -50,13 +50,22 @@
           </ul>
         </details>
 
-        <details class="side-group" open>
-          <summary>Who it&rsquo;s about</summary>
-          <ul class="side-list">
-            <li><a class="side-link" {{if eq .FilterSubject ""}}aria-current="true"{{end}}
-                   href="/f/{{$.FamilySlug}}/questions?show={{.Show}}{{if .FilterAskedOf}}&asked_of={{.FilterAskedOf}}{{end}}">Anyone</a></li>
-            {{range .SubjectProgress}}
-              {{if .Total}}
+        {{/* Everyone in the family, not only the people the selected person has
+             questions about. Somebody with 0/0 is still worth reaching: their page
+             takes a story, and a question can be added to them. Grouped by how far
+             back they are, because two dozen names in one list is unusable, and
+             collapsed except the nearest generation. */}}
+        <p class="side-heading">Who it&rsquo;s about</p>
+        <ul class="side-list">
+          <li><a class="side-link" {{if eq .FilterSubject ""}}aria-current="true"{{end}}
+                 href="/f/{{$.FamilySlug}}/questions?show={{.Show}}{{if .FilterAskedOf}}&asked_of={{.FilterAskedOf}}{{end}}">Anyone</a></li>
+        </ul>
+
+        {{range .SubjectGroups}}
+          <details class="side-group"{{if .Open}} open{{end}}>
+            <summary>{{.Label}} <span class="side-count">{{len .Subjects}}</span></summary>
+            <ul class="side-list">
+              {{range .Subjects}}
                 <li>
                   <a class="side-link" {{if eq $.FilterSubject .Slug}}aria-current="true"{{end}}
                      href="/f/{{$.FamilySlug}}/questions?subject={{.Slug}}&show={{$.Show}}{{if $.FilterAskedOf}}&asked_of={{$.FilterAskedOf}}{{end}}">
@@ -65,9 +74,9 @@
                   </a>
                 </li>
               {{end}}
-            {{end}}
-          </ul>
-        </details>
+            </ul>
+          </details>
+        {{end}}
       </aside>
     </details>
   </div>

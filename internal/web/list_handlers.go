@@ -74,6 +74,7 @@ func (s *Server) handleQuestions(w http.ResponseWriter, r *http.Request) {
 	data.Contributors = contributors
 	data.FilterSubject = filter.SubjectSlug
 	data.FilterAskedOf = filter.AskedOfName
+	data.SubjectGroups = groupSubjects(data.SubjectProgress)
 	data.ViewerIsAdmin = u.Role == store.RoleAdmin
 	data.NothingMatches = counts.Unanswered == 0 && counts.Answered == 0
 

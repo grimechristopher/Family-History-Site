@@ -1419,3 +1419,16 @@ a.pnode-hit:focus-visible .pnode-box { stroke: var(--teal); stroke-width: 3; }
   letter-spacing: .3em;
   max-width: 11ch;
 }
+
+/* The "who it's about" heading, which is a label rather than a collapsible group:
+   the groups underneath are the things that open and close. */
+.side-heading {
+  font-family: var(--sans);
+  font-size: var(--t-small);
+  font-weight: 700;
+  margin: 0 0 var(--s2);
+  color: var(--ink-mid);
+}
+
+/* A count beside a group name, so a collapsed group still says how much is in it. */
+.side-group > summary .side-count { margin-left: var(--s2); }

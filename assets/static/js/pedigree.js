@@ -266,7 +266,9 @@
     show(start);
   }
 
-  fetch('/tree.json', { credentials: 'same-origin' })
+  // The address comes from the page rather than being written here: every page now
+  // lives under /f/{family}/, so a hardcoded path fetches nothing at all.
+  fetch(mount.dataset.src || '/tree.json', { credentials: 'same-origin' })
     .then(function (res) {
       if (!res.ok) throw new Error('status ' + res.status);
       return res.json();

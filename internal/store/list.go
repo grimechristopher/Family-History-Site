@@ -212,7 +212,7 @@ type SubjectProgress struct {
 // is a dead end.
 func (s *Store) SubjectsWithProgress(ctx context.Context, askedOf string) ([]SubjectProgress, error) {
 	rows, err := s.q(ctx).Query(ctx, `
-		SELECT s.id, s.slug, s.kind, s.display_name, s.sort_order,
+		SELECT s.id, s.slug, s.kind, s.display_name, s.sort_order, s.generation,
 		       count(q.id),
 		       count(owner_answer.id)
 		FROM family.subjects s
@@ -226,7 +226,7 @@ func (s *Store) SubjectsWithProgress(ctx context.Context, askedOf string) ([]Sub
 		       ON owner_answer.question_id = q.id
 		      AND owner_answer.author_user_id = q.asked_of_user_id
 		      AND owner_answer.is_draft = false
-		GROUP BY s.id, s.slug, s.kind, s.display_name, s.sort_order
+		GROUP BY s.id, s.slug, s.kind, s.display_name, s.sort_order, s.generation
 		ORDER BY s.sort_order, s.slug`, askedOf)
 	if err != nil {
 		return nil, fmt.Errorf("subjects with progress: %w", err)
@@ -237,7 +237,7 @@ func (s *Store) SubjectsWithProgress(ctx context.Context, askedOf string) ([]Sub
 	for rows.Next() {
 		var p SubjectProgress
 		if err := rows.Scan(&p.ID, &p.Slug, &p.Kind, &p.DisplayName, &p.SortOrder,
-			&p.Total, &p.Answered); err != nil {
+			&p.Generation, &p.Total, &p.Answered); err != nil {
 			return nil, err
 		}
 		out = append(out, p)

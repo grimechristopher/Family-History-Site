@@ -44,7 +44,7 @@ type Options struct {
 	Overrides    subjects.Overrides
 }
 
-// RoutedQuestion is a further-back question moved onto a named couple.
+// Result counts what an import did.
 type RoutedQuestion struct {
 	Subject string
 	Body    string
@@ -63,6 +63,12 @@ type Result struct {
 	Archived  int64
 	Matched   int
 	PerPerson map[string]int
+
+	// What a re-import removed because the derivation no longer produces it, and
+	// what it left alone because somebody had written against it.
+	PrunedSubjects int64
+	KeptSubjects   int64
+	PrunedPeople   int64
 }
 
 // Run performs the whole import inside db, which is expected to be a transaction.
@@ -126,6 +132,7 @@ func Run(ctx context.Context, db store.DBTX, ged *gedcom.File, qs []prompts.Ques
 			Kind:        s.Kind,
 			DisplayName: s.DisplayName,
 			SortOrder:   s.SortOrder,
+			Generation:  s.Generation,
 		})
 		if err != nil {
 			return nil, err
@@ -347,6 +354,30 @@ func Run(ctx context.Context, db store.DBTX, ged *gedcom.File, qs []prompts.Ques
 			}
 		}
 	}
+
+	// Anything the derivation no longer produces goes, so a re-import after a
+	// family is split or somebody renamed does not leave the old rows behind.
+	subjectSlugs := make([]string, 0, len(subjectIDs))
+	for slug := range subjectIDs {
+		subjectSlugs = append(subjectSlugs, slug)
+	}
+	personGedcomIDs := make([]string, 0, len(personIDs))
+	for gid := range personIDs {
+		personGedcomIDs = append(personGedcomIDs, gid)
+	}
+
+	prunedSubjects, keptSubjects, err := store.PruneSubjectsNotIn(ctx, db, subjectSlugs)
+	if err != nil {
+		return nil, err
+	}
+	res.PrunedSubjects = prunedSubjects
+	res.KeptSubjects = keptSubjects
+
+	prunedPeople, err := store.PrunePeopleNotIn(ctx, db, personGedcomIDs)
+	if err != nil {
+		return nil, err
+	}
+	res.PrunedPeople = prunedPeople
 
 	archived, err := store.ArchiveImportedQuestionsNotIn(ctx, db, keys)
 	if err != nil {

@@ -66,15 +66,22 @@ func (s *Store) UserByDisplayName(ctx context.Context, name string) (*User, erro
 		`SELECT `+userColumns+` FROM core.users WHERE display_name = $1`, name))
 }
 
-// Contributors are the people questions get asked of in this family, in
-// display-name order. Membership decides it: the same person may be a contributor
-// here and only an admin elsewhere.
+// Contributors are the people this family actually asks something of.
+//
+// Having at least one question is the test, not the role. A spouse who belongs to
+// the other side of the family is a member here so she can read her husband's
+// answers, but nothing is asked of her here -- offering her under "whose
+// questions" leads to an empty page.
 func (s *Store) Contributors(ctx context.Context) ([]*User, error) {
 	rows, err := s.q(ctx).Query(ctx, `
 		SELECT `+prefixed(userColumns, "u.")+`
 		  FROM core.users u
 		  JOIN core.family_members m ON m.user_id = u.id
 		 WHERE m.family_id = $1 AND m.role = 'contributor'
+		   AND EXISTS (SELECT 1 FROM family.questions q
+		                WHERE q.asked_of_user_id = u.id
+		                  AND q.family_id = m.family_id
+		                  AND q.archived_at IS NULL)
 		 ORDER BY u.display_name`, FamilyFrom(ctx))
 	if err != nil {
 		return nil, err

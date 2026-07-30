@@ -4,7 +4,10 @@
 <li class="qrow{{if .Answered}} qrow-done{{end}}">
   <a class="qrow-body" href="/f/{{$.FamilySlug}}/questions/{{.ID}}">{{.Body}}</a>
   <p class="qrow-meta">
-    <span class="qrow-subject">{{.SubjectName}} &middot;</span>
+    {{/* "Tony Lucero · asked of Tony Lucero" reads as a mistake. When somebody is
+         asked about themselves the subject adds nothing, so only the person is
+         named. */}}
+    {{if ne .SubjectName .AskedOfName}}<span class="qrow-subject">{{.SubjectName}} &middot;</span>{{end}}
     asked of {{.AskedOfName}}
     {{if .Answered}}&middot; <strong>answered</strong>{{end}}
     {{if .OtherAnswers}}&middot; {{.OtherAnswers}} from others{{end}}

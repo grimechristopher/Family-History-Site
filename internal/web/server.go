@@ -85,6 +85,51 @@ func templateFuncs() template.FuncMap {
 	}
 }
 
+// subjectGroup is one collapsible block of the "who it's about" sidebar.
+type subjectGroup struct {
+	Label    string
+	Subjects []store.SubjectProgress
+	// Open marks the group that starts expanded: the people closest to whoever is
+	// answering, which is where nearly every visit begins.
+	Open bool
+}
+
+// groupSubjects splits subjects by generation. The labels are how a family talks
+// about itself -- "Grandparents", not "generation 2" -- and anything that is not a
+// person on the direct line falls into the last group.
+func groupSubjects(subs []store.SubjectProgress) []subjectGroup {
+	labels := []string{"Them", "Parents", "Grandparents", "Great-grandparents"}
+	byGen := map[int][]store.SubjectProgress{}
+	var other []store.SubjectProgress
+
+	for _, s := range subs {
+		switch {
+		case s.Kind == "group":
+			other = append(other, s)
+		case s.Generation >= 0 && s.Generation < len(labels):
+			byGen[s.Generation] = append(byGen[s.Generation], s)
+		default:
+			other = append(other, s)
+		}
+	}
+
+	var out []subjectGroup
+	for gen, label := range labels {
+		if len(byGen[gen]) == 0 {
+			continue
+		}
+		out = append(out, subjectGroup{
+			Label: label, Subjects: byGen[gen],
+			// The nearest generation present starts open.
+			Open: len(out) == 0,
+		})
+	}
+	if len(other) > 0 {
+		out = append(out, subjectGroup{Label: "Further back", Subjects: other})
+	}
+	return out
+}
+
 type qrowView struct {
 	store.QuestionListItem
 	FamilySlug string
@@ -155,6 +200,9 @@ type pageData struct {
 	Members2   []store.Member
 	TreePeople []store.TreePerson
 	Added      string
+	// SubjectGroups is SubjectProgress split by generation, so two dozen names
+	// read as four short lists instead of one long one.
+	SubjectGroups []subjectGroup
 
 	// tree and subject pages
 	Tree    []*treeNode
