@@ -2,7 +2,7 @@
 GEDCOM ?= $(GEDCOM_PATH)
 PROMPTS ?= $(PROMPTS_PATH)
 
-.PHONY: help build test test-unit test-db test-real fmt vet check testdb-start testdb-stop import import-dry run set-email
+.PHONY: help build test test-unit test-db test-real fmt vet check testdb-start testdb-stop import import-dry run set-email family
 
 help:
 	@grep -hE '^[a-z-]+:.*?##' $(MAKEFILE_LIST) | sed 's/:.*##/\t/' | expand -t22
@@ -44,16 +44,24 @@ import-dry: ## Parse and match without writing anything
 	  -gedcom "$(GEDCOM)" -prompts "$(PROMPTS)" \
 	  -dad-email "$(DAD_EMAIL)" -mom-email "$(MOM_EMAIL)" -admin-email "$(ADMIN_EMAIL)"
 
-import: ## Seed the development database
-	eval "$$(./scripts/testdb.sh start)" && DATABASE_URL="$$DEV_DATABASE_URL" go run ./cmd/import \
+import: ## Seed the development database (FAMILY=slug)
+	eval "$$(./scripts/testdb.sh start)" && DATABASE_URL="$$DEV_ADMIN_DATABASE_URL" go run ./cmd/import \
+	  -family "$(FAMILY)" \
 	  -gedcom "$(GEDCOM)" -prompts "$(PROMPTS)" \
 	  -dad-email "$(DAD_EMAIL)" -mom-email "$(MOM_EMAIL)" -admin-email "$(ADMIN_EMAIL)"
 
 # Both places have to agree: this site's allowlist and Supabase's own auth.users.
 # make set-email NAME=Dad EMAIL=dad@theirdomain.com
 set-email: ## Set the address a person signs in with, and create their Supabase account
-	eval "$$(./scripts/testdb.sh start)" && DATABASE_URL="$${DATABASE_URL:-$$DEV_DATABASE_URL}" \
+	eval "$$(./scripts/testdb.sh start)" && DATABASE_URL="$${DATABASE_URL:-$$DEV_ADMIN_DATABASE_URL}" \
 	  go run ./cmd/user -name "$(NAME)" -email "$(EMAIL)" -create-supabase
+
+# The server connects as fhs_app, not postgres. A superuser is exempt from every
+# row-level security policy, so running it as postgres silently disables family
+# isolation -- which is how one family's tree came to render inside another's.
+family: ## Create a family and its first admin (SLUG=, NAME=, ADMIN=)
+	eval "$$(./scripts/testdb.sh start)" && DATABASE_URL="$$DEV_ADMIN_DATABASE_URL" \
+	  go run ./cmd/family -slug "$(SLUG)" -name "$(NAME)" -admin "$(ADMIN)"
 
 run: ## Run the server against the development database
 	eval "$$(./scripts/testdb.sh start)" && DATABASE_URL="$$DEV_DATABASE_URL" go run ./cmd/server
