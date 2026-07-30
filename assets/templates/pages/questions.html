@@ -34,6 +34,13 @@
         <span class="side-toggle-label">Filters</span>
       </summary>
       <aside class="side" aria-label="Filters">
+        {{/* Three lists stacked on top of each other, and nothing said that they
+             narrow one another. Said once, at the top, rather than explained three
+             times or left to be worked out. Only where there is more than one
+             thing to combine. */}}
+        {{if or (gt (len .Families) 1) (gt (len .Contributors) 1)}}
+          <p class="side-note">Each of these narrows the list further.</p>
+        {{end}}
         {{/* Only worth showing to somebody in more than one line. For everybody
              else there is nothing to choose between. */}}
         {{if gt (len .Families) 1}}

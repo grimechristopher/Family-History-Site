@@ -6,19 +6,30 @@
     {{if gt $rest 1}}<div class="stack-peek stack-peek-1" aria-hidden="true"></div>{{end}}
     {{template "card" (index .Cards 0)}}
   {{else}}
+    {{/* An empty stack has two quite different meanings and used to have one
+         message. Somebody who has answered everything deserves the thanks; an
+         admin, who is asked nothing at all, was being congratulated for work that
+         had never been put to them and did not exist. */}}
     <div class="empty">
-      <h1>{{if .Focused}}That&rsquo;s everything for {{.FocusName}}.{{else}}You&rsquo;ve answered everything.{{end}}</h1>
-      <p class="lede">
-        {{if .Focused}}
-          Pick someone else, or go back to all the questions.
-        {{else}}
-          Every question has an answer from you. Thank you &mdash; genuinely.
-        {{end}}
-      </p>
       {{if .Focused}}
+        <h1>That&rsquo;s everything for {{.FocusName}}.</h1>
+        <p class="lede">Pick someone else, or go back to all the questions.</p>
         <div class="btn-row" style="justify-content:center">
           <button class="btn" hx-post="/cards/mode" hx-vals='{"mode":"in_order"}'
                   hx-target="#stack-region" hx-swap="outerHTML">All questions</button>
+        </div>
+      {{else if and .Progress (gt .Progress.Total 0)}}
+        <h1>You&rsquo;ve answered everything.</h1>
+        <p class="lede">Every question has an answer from you. Thank you &mdash; genuinely.</p>
+      {{else}}
+        <h1>Nothing is asked of you.</h1>
+        <p class="lede">
+          You&rsquo;re the one keeping this going, not the one answering. Read
+          what&rsquo;s come in, or add a question for somebody.
+        </p>
+        <div class="btn-row" style="justify-content:center">
+          <a class="btn" href="/questions?show=answered&amp;asked_of=everyone">What&rsquo;s been answered</a>
+          <a class="btn btn-quiet" href="/tree">The family</a>
         </div>
       {{end}}
     </div>

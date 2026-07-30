@@ -80,7 +80,7 @@ func (s *Store) Contributors(ctx context.Context, familySlug string) ([]*User, e
 		  FROM core.users u
 		  JOIN core.family_members m ON m.user_id = u.id
 		  JOIN core.families f ON f.id = m.family_id
-		 WHERE m.family_id = ANY($1) AND m.role = 'contributor'
+		 WHERE m.family_id = ANY($1) AND m.removed_at IS NULL AND m.role = 'contributor'
 		   AND ($2 = '' OR f.slug = $2)
 		   AND EXISTS (SELECT 1 FROM family.questions q
 		                JOIN family.question_askees qa ON qa.question_id = q.id

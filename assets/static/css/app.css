@@ -1594,3 +1594,97 @@ a.pnode-hit:focus-visible .pnode-box { stroke: var(--teal); stroke-width: 3; }
 }
 
 .askee input { width: 1.4rem; height: 1.4rem; accent-color: var(--teal); }
+
+/* Says the chart goes on past the right edge, which nothing else does: the boxes
+   there are clipped mid-word, which reads as a fault rather than as more chart. */
+.pedigree-more {
+  margin: var(--s2) 0 0;
+  max-width: none;
+  font-size: var(--t-micro);
+  color: var(--ink-soft);
+}
+.pedigree-more[hidden] { display: none; }
+
+/* A soft edge on the scroller, so the cut is obviously a window onto something
+   wider rather than where the drawing stops. Only while there is something past
+   it: fading the edge of a chart that fits would look like a fault. */
+.pedigree-scroll[data-more="yes"] {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent);
+          mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent);
+}
+
+/* One line at the top of the filter rail. The three lists below it narrow each
+   other, and stacking them said nothing about that. */
+.side-note {
+  margin: 0 0 var(--s3);
+  max-width: none;
+  font-size: var(--t-micro);
+  line-height: 1.4;
+  color: var(--ink-soft);
+}
+
+/* ---------- Where an admin lands ------------------------------------
+   Not a dashboard. Who is writing, who has not started, and the two things an
+   admin actually does.
+   ------------------------------------------------------------------ */
+
+.standings {
+  list-style: none;
+  margin: 0 0 var(--s5);
+  padding: 0;
+  max-width: var(--measure);
+}
+
+.standing {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s4);
+  padding: var(--s3) 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.standing-name { font-weight: 700; color: var(--ink); }
+.standing-count {
+  font: 400 var(--t-small)/1.3 var(--typed);
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+/* ---------- Editing who's here --------------------------------------
+   This list is read far more often than it is changed, so the controls fold
+   away: a row of buttons against every name turns a page you skim into a page
+   you have to be careful on.
+   ------------------------------------------------------------------ */
+
+.member + .member { margin-top: var(--s4); }
+
+.member-edit > summary {
+  display: inline-block;
+  margin-top: var(--s2);
+  padding: var(--s1) var(--s3);
+  border-radius: var(--r-pill);
+  font: 700 var(--t-micro)/1.4 var(--sans);
+  color: var(--ink-soft);
+  cursor: pointer;
+  list-style: none;
+}
+.member-edit > summary::-webkit-details-marker { display: none; }
+.member-edit > summary:hover { color: var(--teal); }
+.member-edit[open] > summary { color: var(--ink); }
+
+.member-edit-body {
+  margin-top: var(--s3);
+  padding: var(--s4);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+  background: var(--sheet-warm);
+}
+.member-edit-body form + form {
+  margin-top: var(--s5);
+  padding-top: var(--s4);
+  border-top: 1px solid var(--rule);
+}
+
+.btn-danger { border-color: var(--rust); color: var(--rust); background: var(--sheet); }
+.btn-danger:hover { background: var(--rust); color: var(--sheet); border-color: var(--rust); }

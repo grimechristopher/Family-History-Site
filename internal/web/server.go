@@ -97,7 +97,10 @@ func groupSubjects(subs []store.SubjectProgress, showLine bool) []subjectGroup {
 	// Ancestors read as generations -- Parents, Grandparents. The people beside the
 	// line do not: an aunt is one generation up but calling her a grandparent would
 	// be worse than leaving her out, so relation decides the heading first.
-	ancestors := []string{"Them", "Parents", "Grandparents", "Great-grandparents"}
+	// "Them" was the heading here and it is not a word anybody uses for this.
+	// Every other heading in the list is a plain family word, so this one is too:
+	// it is the generation the questions are being asked of.
+	ancestors := []string{"This generation", "Parents", "Grandparents", "Great-grandparents"}
 	byGen := map[int][]store.SubjectProgress{}
 	bySibGen := map[int][]store.SubjectProgress{}
 	var cousins, niblings, other []store.SubjectProgress
@@ -199,8 +202,14 @@ type pageData struct {
 	OwnFooter bool
 	// Who to ask when something is wrong. Empty leaves the footer off entirely,
 	// which is what happens on a deployment that has not set them.
-	SupportEmail  string
-	SupportPhone  string
+	SupportEmail string
+	SupportPhone string
+	// HomeLine is the slug of the line the tree should open on.
+	HomeLine string
+	// What an admin lands on: how each line and each person is getting on.
+	Lines         []store.LineStanding
+	People        []store.PersonStanding
+	RecentAnswers int
 	ViewerIsAdmin bool
 	// NothingMatches distinguishes an empty filter from having answered
 	// everything. Congratulating somebody for an empty result is misleading.
@@ -355,6 +364,8 @@ func (s *Server) Routes() http.Handler {
 
 	mux.Handle("GET /people", inFamilies(s.handlePeople))
 	mux.Handle("POST /people", inFamilies(s.handleAddPerson))
+	mux.Handle("POST /people/remove", inFamilies(s.handleRemovePerson))
+	mux.Handle("POST /people/email", inFamilies(s.handleChangeEmail))
 
 	return s.securityHeaders(mux)
 }

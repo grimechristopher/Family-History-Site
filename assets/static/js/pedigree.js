@@ -373,13 +373,39 @@
 
       scroller.appendChild(svg);
       figure.appendChild(scroller);
+
+      // A chart wider than its frame gives no sign of it: the boxes at the right
+      // edge are clipped mid-word, which reads as a rendering fault rather than as
+      // "there is more this way". On an iPad that is 547 of 1176 pixels simply not
+      // there as far as a reader can tell.
+      var more = document.createElement('p');
+      more.className = 'pedigree-more';
+      more.hidden = true;
+      more.innerHTML = '<span aria-hidden="true">\u2192</span> ' +
+        'Older generations are off to the right. Drag the chart sideways to see them.';
+      figure.appendChild(more);
+      var updateMore = function () {
+        var overflows = scroller.scrollWidth > scroller.clientWidth + 8;
+        var atEnd = scroller.scrollLeft + scroller.clientWidth >= scroller.scrollWidth - 8;
+        // Hidden once they have scrolled: they have found it, and a standing
+        // instruction to do the thing you are doing is nagging.
+        more.hidden = !overflows || scroller.scrollLeft > 8;
+        // The fade marks the edge as a window rather than the end of the drawing,
+        // so it belongs only while there is something past it.
+        scroller.dataset.more = overflows && !atEnd ? "yes" : "no";
+      };
+      scroller.addEventListener('scroll', updateMore, { passive: true });
+      window.addEventListener('resize', updateMore);
+      // After it is in the document, so clientWidth is real.
+      requestAnimationFrame(updateMore);
       mount.appendChild(figure);
       figures.push({
         figure: figure,
         scroller: scroller,
         // Where the person the chart is about sits, so the view can open on them.
         rootY: root.py + shiftY,
-        label: rootData.label || rootData.name
+        label: rootData.label || rootData.name,
+        slug: rootData.family || ''
       });
     });
 
@@ -433,10 +459,10 @@
       picker.appendChild(button);
     });
 
-    function indexOfLabel(label) {
-      if (!label) return -1;
+    function indexOf(key, value) {
+      if (!value) return -1;
       for (var i = 0; i < figures.length; i++) {
-        if (figures[i].label === label) return i;
+        if (figures[i][key] === value) return i;
       }
       return -1;
     }
@@ -446,9 +472,14 @@
 
     // Your own line first: signed in as Mom, her family is the one you came to
     // look at. A previous explicit choice still wins over that.
-    var viewer = mount.dataset.viewer;
-    var start = indexOfLabel(saved);
-    if (start < 0) start = indexOfLabel(viewer);
+    //
+    // Matched on the line's slug, which the server works out from who you are.
+    // This used to compare the viewer's own name against the names of the lines,
+    // which matched while a line was called "Dad" and could never match once they
+    // were called "The Grime line" -- so everybody landed on whichever line was
+    // drawn first, and Ashley opened on her husband's family every time.
+    var start = indexOf('label', saved);
+    if (start < 0) start = indexOf('slug', mount.dataset.homeLine);
     if (start < 0) start = 0;
     show(start);
   }

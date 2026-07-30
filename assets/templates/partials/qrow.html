@@ -1,5 +1,11 @@
 {{/* One row in any question list. Shared by the all-questions page and each
-     person's page, so it lives in partials rather than in either page. */}}
+     person's page, so it lives in partials rather than in either page.
+
+     The meta line is a list of facts joined by middots and every one of them is
+     conditional, so the separators go before each part and only once something has
+     already been written. Trailing them left "Edwin Robert Ayres ·" with nothing
+     after it on every row of a page filtered to one person, which reads as
+     something having failed to load. */}}
 {{define "qrow"}}
 <li class="qrow{{if .Answered}} qrow-done{{end}}">
   <a class="qrow-body" href="/questions/{{.ID}}">{{.Body}}</a>
@@ -8,21 +14,30 @@
          somebody is asked about themselves the subject adds nothing, so only the
          person is named. Decided by who they are in the tree, not by comparing the
          names: the same person is written differently in each. */}}
-    {{if not .AboutAskedOf}}<span class="qrow-subject">{{.SubjectName}} &middot;</span>{{end}}
+    {{$said := false}}
+    {{if not .AboutAskedOf}}<span class="qrow-subject">{{.SubjectName}}</span>{{$said = true}}{{end}}
+
     {{/* A question put to several people is one question in several hands: the
          four Lucero siblings are asked the same ten about their parents. They each
-         write their own answer, so the rows stay separate underneath; the list
-         says so once instead of repeating the question four times. */}}
+         write their own answer, so the rows stay separate underneath; the list says
+         so once instead of repeating the question four times.
+
+         On a page already filtered to one person their own name is left off. There
+         it is the reader's own name repeated back at them on all 172 rows. */}}
     {{if .SharedWith}}
-      asked of {{.SharedWithSentence}}
+      {{if $said}}&middot;{{end}} asked of {{.SharedWithSentence}}
       &middot; <strong>{{.SharedAnswered}} of {{len .SharedWith}}</strong> answered
-    {{else}}
-      asked of {{.AskedOfName}}
-      {{if .Answered}}&middot; <strong>answered</strong>{{end}}
+      {{$said = true}}
+    {{else if not .HideAskedOf}}
+      {{if $said}}&middot;{{end}} asked of {{.AskedOfName}}{{$said = true}}
+      {{if .Answered}} &middot; <strong>answered</strong>{{end}}
+    {{else if .Answered}}
+      {{if $said}}&middot;{{end}} <strong>answered</strong>{{$said = true}}
     {{end}}
-    {{if .OtherAnswers}}&middot; {{.OtherAnswers}} from others{{end}}
-    {{if .ReplyCount}}&middot; {{.ReplyCount}} {{if eq .ReplyCount 1}}reply{{else}}replies{{end}}{{end}}
-    {{if .ViewerAnswered}}&middot; you answered{{end}}
+
+    {{if .OtherAnswers}}{{if $said}}&middot;{{end}} {{.OtherAnswers}} from others{{$said = true}}{{end}}
+    {{if .ReplyCount}}{{if $said}}&middot;{{end}} {{.ReplyCount}} {{if eq .ReplyCount 1}}reply{{else}}replies{{end}}{{$said = true}}{{end}}
+    {{if .ViewerAnswered}}{{if $said}}&middot;{{end}} you answered{{end}}
   </p>
 </li>
 {{end}}

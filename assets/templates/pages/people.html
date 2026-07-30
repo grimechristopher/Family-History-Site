@@ -23,10 +23,52 @@
 
 <ul class="note-list">
   {{range .Members2}}
-    <li>
+    <li class="member">
       <strong>{{.DisplayName}}</strong>
       {{if .PersonName}}<span class="qrow-subject">&middot; {{.PersonName}} on the tree</span>{{end}}
-      <p class="qrow-meta">{{.Email}}{{if eq .Role "admin"}} &middot; admin{{end}}</p>
+      <p class="qrow-meta">
+        {{.Email}}{{if eq .Role "admin"}} &middot; admin{{end}}
+        {{if .Written}} &middot; {{.Written}} written{{end}}
+      </p>
+
+      {{/* Folded away, because this list is read far more often than it is
+           edited, and a row of buttons against every name turns a page you skim
+           into a page you have to be careful on. */}}
+      {{if ne .UserID $.User.ID}}
+        <details class="member-edit">
+          <summary>Change this</summary>
+          <div class="member-edit-body">
+            <form method="post" action="/people/email">
+              <input type="hidden" name="family" value="{{$.ShownFamily}}">
+              <input type="hidden" name="user_id" value="{{.UserID}}">
+              <label for="email-{{.UserID}}">The address they sign in with</label>
+              <input id="email-{{.UserID}}" name="email" type="email" required
+                     autocomplete="off" inputmode="email" autocapitalize="off"
+                     spellcheck="false" value="{{.Email}}">
+              <div class="btn-row">
+                <button class="btn btn-quiet" type="submit">Save the address</button>
+              </div>
+            </form>
+
+            <form method="post" action="/people/remove"
+                  onsubmit="return confirm('Remove {{.DisplayName}} from this line?{{if .Written}} What they have written stays.{{end}}')">
+              <input type="hidden" name="family" value="{{$.ShownFamily}}">
+              <input type="hidden" name="user_id" value="{{.UserID}}">
+              <p class="hint">
+                {{if .Written}}
+                  They lose their way in. The {{.Written}} thing{{if ne .Written 1}}s{{end}}
+                  they have written stay here, under their name.
+                {{else}}
+                  They have written nothing, so this removes them and takes nothing with it.
+                {{end}}
+              </p>
+              <div class="btn-row">
+                <button class="btn btn-danger" type="submit">Remove {{.DisplayName}}</button>
+              </div>
+            </form>
+          </div>
+        </details>
+      {{end}}
     </li>
   {{end}}
 </ul>

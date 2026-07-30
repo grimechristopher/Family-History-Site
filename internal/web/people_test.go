@@ -2,6 +2,8 @@ package web
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/url"
 	"strings"
 	"testing"
@@ -179,5 +181,116 @@ func TestAskingSeveralPeopleAtOnce(t *testing.T) {
 	}, chris)
 	if rec.Code != 400 {
 		t.Errorf("a question with nobody to answer it: status %d, want 400", rec.Code)
+	}
+}
+
+// Removing somebody takes away their way in and leaves what they wrote. A family
+// history that deletes what a person told it is not a family history.
+func TestRemovingSomebodyKeepsWhatTheyWrote(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	chris := h.signIn("chris@example.com")
+
+	mom, err := h.store.UserByEmail(ctx, "mom@example.com")
+	if err != nil {
+		t.Fatalf("UserByEmail: %v", err)
+	}
+
+	// She answers something first, so there is a record to protect.
+	items, err := h.store.ListQuestions(ctx, mom.ID, store.QuestionFilter{AskedOfName: "Mom"})
+	if err != nil || len(items) == 0 {
+		t.Fatalf("no questions for Mom: %v", err)
+	}
+	if _, err := h.store.SaveAnswer(ctx, items[0].ID, mom.ID, "Her own words.", false); err != nil {
+		t.Fatalf("SaveAnswer: %v", err)
+	}
+
+	rec := h.post("/people/remove", url.Values{
+		"family":  {"home"},
+		"user_id": {fmt.Sprint(mom.ID)},
+	}, chris)
+	if rec.Code != 303 {
+		t.Fatalf("removing: status %d, body %s", rec.Code, rec.Body.String())
+	}
+
+	// Gone from the family.
+	fam, err := h.store.FamilyBySlug(ctx, "home")
+	if err != nil {
+		t.Fatalf("FamilyBySlug: %v", err)
+	}
+	if _, err := h.store.Member(store.WithFamily(ctx, fam.ID), fam.ID, mom.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("still a member after being removed: %v", err)
+	}
+
+	// And her words are still there.
+	answers, err := h.store.AnswersTo(ctx, items[0].ID)
+	if err != nil {
+		t.Fatalf("AnswersTo: %v", err)
+	}
+	var kept bool
+	for _, a := range answers {
+		if a.Body == "Her own words." {
+			kept = true
+		}
+	}
+	if !kept {
+		t.Error("removing somebody deleted what they had written")
+	}
+}
+
+// Nobody removes themselves: it is almost always a misclick, and an admin who did
+// it to their only family would be locked out of the thing they run.
+func TestYouCannotRemoveYourself(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	chris := h.signIn("chris@example.com")
+	me, err := h.store.UserByEmail(ctx, "chris@example.com")
+	if err != nil {
+		t.Fatalf("UserByEmail: %v", err)
+	}
+
+	rec := h.post("/people/remove", url.Values{
+		"family":  {"home"},
+		"user_id": {fmt.Sprint(me.ID)},
+	}, chris)
+	if rec.Code != 400 {
+		t.Errorf("removing yourself: status %d, want 400", rec.Code)
+	}
+}
+
+// Changing the address somebody signs in with, which until now needed a terminal.
+func TestChangingSomebodysAddress(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	chris := h.signIn("chris@example.com")
+	dad, err := h.store.UserByEmail(ctx, "dad@example.com")
+	if err != nil {
+		t.Fatalf("UserByEmail: %v", err)
+	}
+
+	rec := h.post("/people/email", url.Values{
+		"family":  {"home"},
+		"user_id": {fmt.Sprint(dad.ID)},
+		"email":   {"dad@hisrealdomain.com"},
+	}, chris)
+	if rec.Code == 400 {
+		t.Fatalf("changing an address: %s", rec.Body.String())
+	}
+
+	moved, err := h.store.UserByEmail(ctx, "dad@hisrealdomain.com")
+	if err != nil {
+		t.Fatalf("the address did not move: %v", err)
+	}
+	if moved.ID != dad.ID {
+		t.Error("the address landed on a different account")
+	}
+
+	// Not a new person: his questions are still his.
+	items, err := h.store.ListQuestions(ctx, moved.ID, store.QuestionFilter{AskedOfName: moved.DisplayName})
+	if err != nil {
+		t.Fatalf("ListQuestions: %v", err)
+	}
+	if len(items) == 0 {
+		t.Error("his questions were orphaned by the change of address")
 	}
 }

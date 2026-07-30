@@ -317,3 +317,60 @@ func TestDevLoginResolvesTheNameInsideItsFamily(t *testing.T) {
 		t.Errorf("/dev/login/other/Dad signed in as %s, want the other family's Dad", got)
 	}
 }
+
+// Removing somebody has to actually shut the door. The membership row stays --
+// everything they wrote hangs off it -- so the danger is that a removal which
+// looks right on the People page leaves them able to sign in and read everything.
+//
+// This runs as fhs_app, the role a deployment uses, so it exercises the policies
+// rather than the handlers' own filtering.
+func TestARemovedMemberSeesNothing(t *testing.T) {
+	h := newHarness(t)
+	routes, appStore := appServer(t, h)
+	ctx := context.Background()
+
+	fam, err := h.store.FamilyBySlug(ctx, "home")
+	if err != nil {
+		t.Fatalf("FamilyBySlug: %v", err)
+	}
+	mom, err := h.store.UserByEmail(ctx, "mom@example.com")
+	if err != nil {
+		t.Fatalf("UserByEmail: %v", err)
+	}
+
+	// While she is a member she can read her questions.
+	cookie := h.signIn("mom@example.com")
+	before := call(t, routes, "/questions", cookie)
+	if before.Code != http.StatusOK || !strings.Contains(before.Body.String(), "qrow") {
+		t.Fatalf("a member cannot read her own questions: status %d", before.Code)
+	}
+
+	if err := h.store.RemoveMember(store.WithFamily(ctx, fam.ID), fam.ID, mom.ID); err != nil {
+		t.Fatalf("RemoveMember: %v", err)
+	}
+
+	// Afterwards there is nothing for her anywhere, through the unprivileged
+	// connection that a deployment actually uses.
+	for _, path := range []string{"/questions", "/cards", "/tree", "/people"} {
+		rec := call(t, routes, path, cookie)
+		if strings.Contains(rec.Body.String(), "qrow-body") {
+			t.Errorf("%s still shows questions to somebody who was removed", path)
+		}
+	}
+	if fams, err := appStore.FamiliesOf(ctx, mom.ID); err != nil {
+		t.Fatalf("FamiliesOf: %v", err)
+	} else if len(fams) != 0 {
+		t.Errorf("a removed member still belongs to %d families", len(fams))
+	}
+}
+
+func call(t *testing.T, routes http.Handler, path string, cookie *http.Cookie) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	if cookie != nil {
+		req.AddCookie(cookie)
+	}
+	rec := httptest.NewRecorder()
+	routes.ServeHTTP(rec, req)
+	return rec
+}

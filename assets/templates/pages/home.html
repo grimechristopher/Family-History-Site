@@ -9,9 +9,47 @@
   </p>
 {{end}}
 
-<div class="btn-row">
-  <a class="btn" href="/cards">{{if .Progress}}{{if gt .Progress.Answered 0}}Keep going{{else}}Start answering{{end}}{{else}}Start answering{{end}}</a>
-</div>
+{{if .Progress}}
+  <div class="btn-row">
+    <a class="btn" href="/cards">{{if gt .Progress.Answered 0}}Keep going{{else}}Start answering{{end}}</a>
+  </div>
+{{else}}
+  {{/* Nobody asks the admins anything, so "Start answering" sent them to a card
+       stack that thanked them for having answered everything. This is the work
+       that is actually theirs. */}}
+  <p class="lede">
+    {{if .RecentAnswers}}
+      <strong>{{.RecentAnswers}}</strong>
+      {{if eq .RecentAnswers 1}}answer{{else}}answers{{end}} written this week.
+    {{else}}
+      Nothing written this week.
+    {{end}}
+  </p>
+
+  {{if .People}}
+    <ul class="standings">
+      {{range .People}}
+        <li class="standing">
+          <a class="standing-name" href="/questions?asked_of={{.DisplayName}}">{{.DisplayName}}</a>
+          <span class="standing-count">
+            {{.Answered}} of {{.Total}}{{if .Recent}} &middot; {{.Recent}} this week{{end}}
+          </span>
+        </li>
+      {{end}}
+    </ul>
+  {{end}}
+
+  <div class="btn-row">
+    <a class="btn" href="/questions?show=answered&amp;asked_of=everyone">Read what&rsquo;s been answered</a>
+    <a class="btn btn-quiet" href="/people">Add someone</a>
+  </div>
+
+  {{if gt (len .Lines) 1}}
+    <p class="side-note">
+      {{range $i, $l := .Lines}}{{if $i}} &middot; {{end}}<a class="link" href="/questions?family={{$l.Slug}}">{{$l.DisplayName}}</a> {{$l.Answered}}/{{$l.Total}}{{end}}
+    </p>
+  {{end}}
+{{end}}
 
 {{/*
   A note from Chris to whoever is answering, so it reads in his voice rather than

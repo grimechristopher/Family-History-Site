@@ -131,6 +131,7 @@ func (s *Store) RootPeople(ctx context.Context) ([]TreeRoot, error) {
 		  JOIN core.families f ON f.id = m.family_id
 		  JOIN family.people p ON p.id = m.person_id
 		 WHERE m.family_id = ANY($1)
+		   AND m.removed_at IS NULL
 		   AND m.role = 'contributor'
 		   AND m.person_id IS NOT NULL
 		 ORDER BY m.family_id,

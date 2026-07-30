@@ -82,6 +82,17 @@ func (s *Server) handleTree(w http.ResponseWriter, r *http.Request) {
 
 	data := s.newPageData(r, "Family tree")
 	data.Nav = "tree"
+
+	// Which line to open on. It used to compare the viewer's name against the
+	// names of the lines, which worked when a line was called "Dad" and cannot
+	// possibly match now that they are called "The Grime line" -- so everybody got
+	// whichever line was drawn first, and Ashley opened on her husband's family.
+	home, err := s.Store.HomeLine(r.Context(), auth.User(r.Context()).ID)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	data.HomeLine = home
 	// Four levels covers Mom and Dad through their great-grandparents, which is
 	// everything imported.
 	data.Tree = buildTree(people, rootIDs, 4)

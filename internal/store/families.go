@@ -56,7 +56,7 @@ func (s *Store) MembershipOf(ctx context.Context, familyID, userID int64) (*Memb
 		SELECT family_id, user_id, role, person_id, queue_mode, queue_seed,
 		       queue_focus_subject_id, digest_enabled
 		  FROM core.family_members
-		 WHERE family_id = $1 AND user_id = $2`, familyID, userID).
+		 WHERE family_id = $1 AND user_id = $2 AND removed_at IS NULL`, familyID, userID).
 		Scan(&m.FamilyID, &m.UserID, &m.Role, &m.PersonID, &m.QueueMode, &m.QueueSeed,
 			&m.QueueFocusSubjectID, &m.DigestEnabled)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -74,7 +74,7 @@ func (s *Store) FamiliesOf(ctx context.Context, userID int64) ([]Family, error) 
 		SELECT f.id, f.slug, f.display_name
 		  FROM core.families f
 		  JOIN core.family_members m ON m.family_id = f.id
-		 WHERE m.user_id = $1
+		 WHERE m.user_id = $1 AND m.removed_at IS NULL
 		 ORDER BY f.display_name`, userID)
 	if err != nil {
 		return nil, fmt.Errorf("families of user %d: %w", userID, err)
@@ -132,6 +132,10 @@ type Member struct {
 	Email       string
 	Role        string
 	PersonName  string // who they are on the tree, empty when not linked
+	// Written is how many answers and stories they have contributed to this line.
+	// Removing somebody who has written nothing is housekeeping; removing somebody
+	// who has written is a thing to say out loud first.
+	Written int
 }
 
 // Members lists everybody in this family, in the order they joined, so the page
@@ -139,11 +143,14 @@ type Member struct {
 func (s *Store) Members(ctx context.Context, familyID int64) ([]Member, error) {
 	rows, err := s.q(ctx).Query(ctx, `
 		SELECT u.id, u.display_name, u.email, m.role,
-		       coalesce(trim(p.given_name || ' ' || p.surname), '')
+		       coalesce(trim(p.given_name || ' ' || p.surname), ''),
+		       -- What they have written, which decides how removing them reads.
+		       (SELECT count(*) FROM family.entries e
+		         WHERE e.author_user_id = u.id AND e.family_id = m.family_id)
 		  FROM core.family_members m
 		  JOIN core.users u ON u.id = m.user_id
 		  LEFT JOIN family.people p ON p.id = m.person_id AND p.family_id = m.family_id
-		 WHERE m.family_id = $1
+		 WHERE m.family_id = $1 AND m.removed_at IS NULL
 		 ORDER BY m.created_at`, familyID)
 	if err != nil {
 		return nil, fmt.Errorf("members: %w", err)
@@ -153,7 +160,8 @@ func (s *Store) Members(ctx context.Context, familyID int64) ([]Member, error) {
 	var out []Member
 	for rows.Next() {
 		var m Member
-		if err := rows.Scan(&m.UserID, &m.DisplayName, &m.Email, &m.Role, &m.PersonName); err != nil {
+		if err := rows.Scan(&m.UserID, &m.DisplayName, &m.Email, &m.Role, &m.PersonName,
+			&m.Written); err != nil {
 			return nil, err
 		}
 		out = append(out, m)
@@ -174,7 +182,8 @@ func (s *Store) UnclaimedTreePeople(ctx context.Context, familyID int64) ([]Tree
 		 WHERE p.family_id = $1
 		   AND NOT EXISTS (
 		       SELECT 1 FROM core.family_members m
-		        WHERE m.family_id = p.family_id AND m.person_id = p.id)
+		        WHERE m.family_id = p.family_id AND m.person_id = p.id
+		          AND m.removed_at IS NULL)
 		   -- People who could actually sign in. A death year settles it; so does a
 		   -- birth year old enough that no answer is coming either way. Somebody
 		   -- with neither recorded is still offered, because plenty of living
@@ -234,7 +243,8 @@ func (s *Store) MemberByDisplayName(ctx context.Context, familyID int64, name st
 		SELECT u.id, u.email, u.supabase_user_id, u.display_name
 		  FROM core.users u
 		  JOIN core.family_members m ON m.user_id = u.id
-		 WHERE m.family_id = $1 AND u.display_name = $2`, familyID, name).
+		 WHERE m.family_id = $1 AND m.removed_at IS NULL
+		   AND u.display_name = $2`, familyID, name).
 		Scan(&u.ID, &u.Email, &u.SupabaseUserID, &u.DisplayName)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -251,7 +261,8 @@ func (s *Store) MemberNames(ctx context.Context, familyID int64) ([]string, erro
 	rows, err := s.q(ctx).Query(ctx, `
 		SELECT u.display_name FROM core.users u
 		  JOIN core.family_members m ON m.user_id = u.id
-		 WHERE m.family_id = $1 ORDER BY u.display_name`, familyID)
+		 WHERE m.family_id = $1 AND m.removed_at IS NULL
+		 ORDER BY u.display_name`, familyID)
 	if err != nil {
 		return nil, fmt.Errorf("member names: %w", err)
 	}
@@ -290,10 +301,125 @@ func (s *Store) StandingOf(ctx context.Context, userID int64) (Standing, error) 
 		       coalesce(min(queue_seed), 0),
 		       (array_agg(queue_focus_subject_id) FILTER (WHERE queue_focus_subject_id IS NOT NULL))[1],
 		       (array_agg(person_id) FILTER (WHERE person_id IS NOT NULL))[1]
-		  FROM core.family_members WHERE user_id = $1`, userID).
+		  FROM core.family_members WHERE user_id = $1 AND removed_at IS NULL`, userID).
 		Scan(&st.Role, &st.QueueMode, &st.QueueSeed, &st.QueueFocusSubjectID, &st.PersonID)
 	if err != nil {
 		return st, fmt.Errorf("standing of user %d: %w", userID, err)
 	}
 	return st, nil
+}
+
+// HomeLine is the line somebody's chart should open on: the one they are actually
+// in, rather than whichever happened to be drawn first.
+//
+// Preferring the line where they are a contributor, then any where they are
+// somebody in the tree. An admin who belongs to four lines and is nobody's
+// ancestor has no home line, and gets an empty string -- there is no honest answer
+// for them, and the chart falls back to remembering their last choice.
+func (s *Store) HomeLine(ctx context.Context, userID int64) (string, error) {
+	var slug string
+	err := s.q(ctx).QueryRow(ctx, `
+		SELECT f.slug
+		  FROM core.family_members m
+		  JOIN core.families f ON f.id = m.family_id
+		 WHERE m.user_id = $1 AND m.family_id = ANY($2) AND m.removed_at IS NULL
+		 ORDER BY (m.role = 'contributor') DESC,
+		          (m.person_id IS NOT NULL) DESC,
+		          f.slug
+		 LIMIT 1`, userID, FamilyIDsFrom(ctx)).Scan(&slug)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("home line: %w", err)
+	}
+	return slug, nil
+}
+
+// RemoveMember takes somebody out of a family without touching what they wrote.
+//
+// Their answers and stories stay, under their name. Somebody who has told the
+// family about their grandmother does not stop having told them because their
+// address was a mistake or they have left; the record is the whole point, and it
+// is not the site's to delete.
+//
+// The account itself stays too, because it may belong to another line. It simply
+// no longer has any way into this one: membership is what every policy is written
+// against, so removing it removes the access.
+func (s *Store) RemoveMember(ctx context.Context, familyID, userID int64) error {
+	// Out of everybody's stack first. A question put to four people stays for the
+	// other three; one put only to this person is asked of nobody now, and is
+	// archived rather than left waiting forever.
+	if _, err := s.q(ctx).Exec(ctx, `
+		DELETE FROM family.question_askees a
+		 USING family.questions q
+		 WHERE q.id = a.question_id AND q.family_id = $1 AND a.user_id = $2`,
+		familyID, userID); err != nil {
+		return fmt.Errorf("remove from stacks: %w", err)
+	}
+	if _, err := s.q(ctx).Exec(ctx, `
+		UPDATE family.questions q SET archived_at = now()
+		 WHERE q.family_id = $1 AND q.archived_at IS NULL
+		   AND NOT EXISTS (SELECT 1 FROM family.question_askees a
+		                    WHERE a.question_id = q.id)`, familyID); err != nil {
+		return fmt.Errorf("archive unasked questions: %w", err)
+	}
+
+	// The membership is ended rather than deleted. Every answer, reply and
+	// photograph carries a foreign key to it -- that is what guarantees an author
+	// really is in the family the row belongs to -- so deleting it would mean
+	// deleting everything they wrote, which is the one thing this must not do.
+	tag, err := s.q(ctx).Exec(ctx, `
+		UPDATE core.family_members SET removed_at = now()
+		 WHERE family_id = $1 AND user_id = $2 AND removed_at IS NULL`,
+		familyID, userID)
+	if err != nil {
+		return fmt.Errorf("remove member: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// SetMemberEmail changes the address somebody signs in with.
+//
+// The address is on the account rather than the membership, so this changes it
+// everywhere they are. That is right -- it is one person with one inbox -- but it
+// means a family cannot quietly change how somebody signs in to another family, so
+// the caller checks they share a line first.
+func (s *Store) SetMemberEmail(ctx context.Context, userID int64, email string) error {
+	tag, err := s.q(ctx).Exec(ctx,
+		`UPDATE core.users SET email = $2 WHERE id = $1`, userID, email)
+	if err != nil {
+		return fmt.Errorf("set member email: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// Member is one person's place in one family, with what they have written.
+// Looked up rather than filtered out of Members, so a handler acting on somebody
+// is acting on a row it fetched by id and not on a name it was handed.
+func (s *Store) Member(ctx context.Context, familyID, userID int64) (*Member, error) {
+	var m Member
+	err := s.q(ctx).QueryRow(ctx, `
+		SELECT u.id, u.display_name, u.email, m.role,
+		       coalesce(trim(p.given_name || ' ' || p.surname), ''),
+		       (SELECT count(*) FROM family.entries e
+		         WHERE e.author_user_id = u.id AND e.family_id = m.family_id)
+		  FROM core.family_members m
+		  JOIN core.users u ON u.id = m.user_id
+		  LEFT JOIN family.people p ON p.id = m.person_id AND p.family_id = m.family_id
+		 WHERE m.family_id = $1 AND m.user_id = $2 AND m.removed_at IS NULL`, familyID, userID).
+		Scan(&m.UserID, &m.DisplayName, &m.Email, &m.Role, &m.PersonName, &m.Written)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("member: %w", err)
+	}
+	return &m, nil
 }

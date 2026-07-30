@@ -26,6 +26,11 @@ type QuestionListItem struct {
 	SharedWith []string
 	// SharedAnswered is how many of them have answered.
 	SharedAnswered int
+	// HideAskedOf is set when the whole list is one person's, where naming them on
+	// every row is their own name repeated back at them a hundred and seventy-two
+	// times. A question put to several people still names them all: there it is
+	// information rather than noise.
+	HideAskedOf bool
 
 	// Answered means the person the question was asked of has answered it. This
 	// is what "unanswered" means throughout the site.
@@ -117,6 +122,7 @@ func (s *Store) ListQuestions(ctx context.Context, viewerID int64, f QuestionFil
 		           SELECT 1 FROM family.subject_members sm
 		             JOIN core.family_members fm
 		               ON fm.person_id = sm.person_id AND fm.family_id = q.family_id
+		              AND fm.removed_at IS NULL
 		            WHERE sm.subject_id = q.subject_id
 		              AND fm.user_id = q.asked_of_user_id
 		       ) AS about_asked_of,
@@ -384,4 +390,95 @@ func (q QuestionListItem) SharedWithSentence() string {
 	default:
 		return strings.Join(q.SharedWith[:n-1], ", ") + " and " + q.SharedWith[n-1]
 	}
+}
+
+// LineStanding is how one line is getting on, for the page an admin lands on.
+type LineStanding struct {
+	Slug        string
+	DisplayName string
+	Answered    int
+	Total       int
+	// Recent counts answers written in the last week, which is the only number
+	// that says whether this is alive or has stalled.
+	Recent int
+}
+
+// Standings summarises every line the viewer belongs to.
+//
+// The admins are not asked anything, so a page built around their own progress
+// told them nothing -- and, worse, congratulated them for having answered
+// everything when nothing had ever been asked of them. This is what they actually
+// want to know: who is writing, and who has not started.
+func (s *Store) Standings(ctx context.Context) ([]LineStanding, error) {
+	rows, err := s.q(ctx).Query(ctx, `
+		SELECT f.slug, f.display_name,
+		       count(*) FILTER (WHERE answer.id IS NOT NULL),
+		       count(*),
+		       count(*) FILTER (WHERE answer.created_at > now() - interval '7 days')
+		  FROM family.questions q
+		  JOIN core.families f ON f.id = q.family_id
+		  LEFT JOIN family.entries answer
+		         ON answer.question_id = q.id
+		        AND answer.is_draft = false
+		        AND EXISTS (SELECT 1 FROM family.question_askees a
+		                     WHERE a.question_id = q.id AND a.user_id = answer.author_user_id)
+		 WHERE q.archived_at IS NULL AND q.family_id = ANY($1)
+		 GROUP BY f.slug, f.display_name
+		 ORDER BY f.display_name`, FamilyIDsFrom(ctx))
+	if err != nil {
+		return nil, fmt.Errorf("standings: %w", err)
+	}
+	defer rows.Close()
+
+	var out []LineStanding
+	for rows.Next() {
+		var l LineStanding
+		if err := rows.Scan(&l.Slug, &l.DisplayName, &l.Answered, &l.Total, &l.Recent); err != nil {
+			return nil, err
+		}
+		out = append(out, l)
+	}
+	return out, rows.Err()
+}
+
+// PersonStanding is one contributor's progress, for the same page.
+type PersonStanding struct {
+	DisplayName string
+	Answered    int
+	Total       int
+	Recent      int
+}
+
+// PeopleStandings is everybody who has questions waiting, and how far they have
+// got. Sorted by who has done most recently, so the page opens on what is alive.
+func (s *Store) PeopleStandings(ctx context.Context) ([]PersonStanding, error) {
+	rows, err := s.q(ctx).Query(ctx, `
+		SELECT u.display_name,
+		       count(*) FILTER (WHERE answer.id IS NOT NULL),
+		       count(*),
+		       count(*) FILTER (WHERE answer.created_at > now() - interval '7 days')
+		  FROM family.question_askees a
+		  JOIN family.questions q ON q.id = a.question_id
+		  JOIN core.users u ON u.id = a.user_id
+		  LEFT JOIN family.entries answer
+		         ON answer.question_id = q.id
+		        AND answer.author_user_id = a.user_id
+		        AND answer.is_draft = false
+		 WHERE q.archived_at IS NULL AND q.family_id = ANY($1)
+		 GROUP BY u.display_name
+		 ORDER BY 4 DESC, 2 DESC, u.display_name`, FamilyIDsFrom(ctx))
+	if err != nil {
+		return nil, fmt.Errorf("people standings: %w", err)
+	}
+	defer rows.Close()
+
+	var out []PersonStanding
+	for rows.Next() {
+		var p PersonStanding
+		if err := rows.Scan(&p.DisplayName, &p.Answered, &p.Total, &p.Recent); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
 }

@@ -101,13 +101,31 @@ func (s *Server) handleQuestions(w http.ResponseWriter, r *http.Request) {
 	// whole list for a member with no questions of their own yet -- which is
 	// everybody on their first day, and exactly when they most need to see who
 	// there is to write about.
-	withSomething := subjects[:0]
+	var withSomething []store.SubjectProgress
 	for _, sub := range subjects {
-		if sub.AnyTotal > 0 || sub.Stories > 0 || sub.Slug == filter.SubjectSlug {
+		if sub.Total > 0 || sub.Stories > 0 || sub.Slug == filter.SubjectSlug {
 			withSomething = append(withSomething, sub)
 		}
 	}
+	if len(withSomething) == 0 {
+		// Nothing is asked of this person yet. Rather than an empty list, show who
+		// there is to write about at all.
+		for _, sub := range subjects {
+			if sub.AnyTotal > 0 || sub.Stories > 0 {
+				withSomething = append(withSomething, sub)
+			}
+		}
+	}
 	subjects = withSomething
+
+	// Their own name on every row of their own list says nothing.
+	if filter.AskedOfName != "" {
+		for i := range items {
+			if len(items[i].SharedWith) == 0 {
+				items[i].HideAskedOf = true
+			}
+		}
+	}
 
 	data := s.newPageData(r, "All questions")
 	data.Nav = "questions"

@@ -33,7 +33,40 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 			data.Greeting = "Pick up where you left off."
 		}
 	} else {
-		data.Greeting = "Everything is set up and waiting."
+		// An admin is asked nothing, so a page built around their own progress said
+		// nothing -- and the button on it led to a card stack that congratulated
+		// them for having answered everything when nothing had ever been put to
+		// them. What they want is who is writing and who has not started.
+		lines, err := s.Store.Standings(r.Context())
+		if err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+		people, err := s.Store.PeopleStandings(r.Context())
+		if err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+		data.Lines = lines
+		data.People = people
+
+		var answered, total, recent int
+		for _, l := range lines {
+			answered += l.Answered
+			total += l.Total
+			recent += l.Recent
+		}
+		data.RecentAnswers = recent
+		switch {
+		case total == 0:
+			data.Greeting = "Nothing has been imported yet."
+		case answered == 0:
+			data.Greeting = "Nobody has started yet."
+		case recent == 0:
+			data.Greeting = "Quiet this week."
+		default:
+			data.Greeting = "It's moving."
+		}
 	}
 
 	s.render(w, r, "home", data)

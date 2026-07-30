@@ -166,6 +166,9 @@ func (s *Server) peoplePageData(r *http.Request, title string) (pageData, error)
 	}
 	data.TreePeople = people
 	data.Added = r.URL.Query().Get("added")
+	if note := r.URL.Query().Get("note"); note != "" {
+		data.Added = note
+	}
 	return data, nil
 }
 
@@ -180,4 +183,118 @@ func (s *Server) familyFromForm(r *http.Request) (*store.Family, error) {
 		}
 	}
 	return nil, errors.New("not a family you belong to")
+}
+
+// handleRemovePerson takes somebody out of a family. What they wrote stays.
+func (s *Server) handleRemovePerson(w http.ResponseWriter, r *http.Request) {
+	fam, err := s.familyFromForm(r)
+	if err != nil {
+		http.Error(w, "Pick which family to remove them from.", http.StatusBadRequest)
+		return
+	}
+	userID, err := strconv.ParseInt(r.FormValue("user_id"), 10, 64)
+	if err != nil {
+		http.Error(w, "that wasn't somebody", http.StatusBadRequest)
+		return
+	}
+
+	// Nobody removes themselves. It is almost always a misclick, and an admin who
+	// did it to their only family would be locked out of the thing they run.
+	if userID == auth.User(r.Context()).ID {
+		http.Error(w, "You can't remove yourself.", http.StatusBadRequest)
+		return
+	}
+
+	member, err := s.Store.Member(r.Context(), fam.ID, userID)
+	if errors.Is(err, store.ErrNotFound) {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+
+	if err := s.Store.RemoveMember(r.Context(), fam.ID, userID); err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	s.Log.Info("removed from family", "family", fam.Slug, "who", member.DisplayName,
+		"kept", member.Written, "by", auth.User(r.Context()).DisplayName)
+
+	note := member.DisplayName + " has been removed."
+	if member.Written > 0 {
+		note += " What they wrote is still here."
+	}
+	http.Redirect(w, r, "/people?family="+url.QueryEscape(fam.Slug)+
+		"&note="+url.QueryEscape(note), http.StatusSeeOther)
+}
+
+// handleChangeEmail moves the address somebody signs in with.
+//
+// Both this site and Supabase have to agree, or the magic link is sent to an
+// address that cannot receive it, or to nobody at all.
+func (s *Server) handleChangeEmail(w http.ResponseWriter, r *http.Request) {
+	fam, err := s.familyFromForm(r)
+	if err != nil {
+		http.Error(w, "Pick which family they're in.", http.StatusBadRequest)
+		return
+	}
+	userID, err := strconv.ParseInt(r.FormValue("user_id"), 10, 64)
+	if err != nil {
+		http.Error(w, "that wasn't somebody", http.StatusBadRequest)
+		return
+	}
+	email := strings.ToLower(strings.TrimSpace(r.FormValue("email")))
+
+	fail := func(message string) {
+		r.URL.RawQuery = "family=" + url.QueryEscape(fam.Slug)
+		data, dataErr := s.peoplePageData(r, "Who's here")
+		if dataErr != nil {
+			s.serverError(w, r, dataErr)
+			return
+		}
+		data.Error = message
+		w.WriteHeader(http.StatusBadRequest)
+		s.render(w, r, "people", data)
+	}
+	if email == "" || !strings.Contains(email, "@") {
+		fail("That doesn't look like an email address.")
+		return
+	}
+
+	// Membership of a family this person is in is the authorisation: it is what
+	// stops somebody changing the sign-in address of a stranger in another line.
+	member, err := s.Store.Member(r.Context(), fam.ID, userID)
+	if errors.Is(err, store.ErrNotFound) {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	if member.Email == email {
+		http.Redirect(w, r, "/people?family="+url.QueryEscape(fam.Slug), http.StatusSeeOther)
+		return
+	}
+
+	if err := s.Store.SetMemberEmail(r.Context(), userID, email); err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+
+	// Supabase has to know the address before it will send anything to it. If this
+	// fails the change is still saved and correct here, so say which half worked
+	// rather than pretending either way.
+	note := member.DisplayName + " now signs in with " + email + "."
+	if err := s.Supabase.EnsureAccount(r.Context(), email, s.Config.SupabaseServiceKey); err != nil {
+		s.Log.Error("could not create the supabase account", "email", email, "err", err)
+		note = member.DisplayName + "'s address is changed here, but their sign-in " +
+			"could not be set up. Tell Chris before asking them to log in."
+	}
+	s.Log.Info("changed sign-in address", "family", fam.Slug, "who", member.DisplayName,
+		"by", auth.User(r.Context()).DisplayName)
+	http.Redirect(w, r, "/people?family="+url.QueryEscape(fam.Slug)+
+		"&note="+url.QueryEscape(note), http.StatusSeeOther)
 }
