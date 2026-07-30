@@ -3,69 +3,70 @@
 
 {{/* One section at a time, with the totals on the buttons rather than repeated
      in a line above them. */}}
-{{if .Counts}}
-  <p class="segmented" role="group" aria-label="Which questions to show">
-    <a class="segment" aria-pressed="{{eq .Show "waiting"}}"
-       href="/questions?show=waiting{{if .FilterAskedOf}}&asked_of={{.FilterAskedOf}}{{end}}{{if .FilterSubject}}&subject={{.FilterSubject}}{{end}}">
-      Still waiting <span class="segment-count">{{.Counts.Unanswered}}</span>
-    </a>
-    <a class="segment" aria-pressed="{{eq .Show "answered"}}"
-       href="/questions?show=answered{{if .FilterAskedOf}}&asked_of={{.FilterAskedOf}}{{end}}{{if .FilterSubject}}&subject={{.FilterSubject}}{{end}}">
-      Answered <span class="segment-count">{{.Counts.Answered}}</span>
-    </a>
-  </p>
-{{end}}
-
 <div class="with-side">
-  {{/* On a wide screen this is a sidebar; on an iPad it folds up above the
-       list, because a 16rem rail leaves nothing for the questions. */}}
-  {{/* Below 62rem this collapses behind a hamburger; above it, the summary is
-       hidden and the rail is simply there. Starts open so that with no
-       JavaScript the filters are reachable rather than stranded. */}}
-  <details class="side-toggle" open>
-    <summary class="side-toggle-btn">
-      <span class="burger" aria-hidden="true"></span>
-      <span>Filters</span>
-    </summary>
-  <aside class="side" aria-label="Filters">
-    <details class="side-group" open>
-      <summary>Whose questions</summary>
-      <ul class="side-list">
-        {{range .Contributors}}
-          {{/* No subject carried over: a person the other one has no questions
-               about would leave the page empty. */}}
-          <li><a class="side-link" {{if eq $.FilterAskedOf .DisplayName}}aria-current="true"{{end}}
-                 href="/questions?asked_of={{.DisplayName}}">
-            {{.DisplayName}}{{if eq $.User.DisplayName .DisplayName}} <span class="side-count">you</span>{{end}}
-          </a></li>
-        {{end}}
-        {{if .ViewerIsAdmin}}
-          <li><a class="side-link" {{if eq .FilterAskedOf ""}}aria-current="true"{{end}}
-                 href="/questions?asked_of=everyone">Everyone</a></li>
-        {{end}}
-      </ul>
-    </details>
+  {{/* The waiting/answered toggle and the filter menu are siblings, so they can
+       share one line on a narrow screen and split into rail-and-column on a
+       wide one. */}}
+  <div class="controls">
+    {{if .Counts}}
+      <p class="segmented" role="group" aria-label="Which questions to show">
+        <a class="segment" aria-pressed="{{eq .Show "waiting"}}"
+           href="/questions?show=waiting{{if .FilterAskedOf}}&asked_of={{.FilterAskedOf}}{{end}}{{if .FilterSubject}}&subject={{.FilterSubject}}{{end}}">
+          Still waiting <span class="segment-count">{{.Counts.Unanswered}}</span>
+        </a>
+        <a class="segment" aria-pressed="{{eq .Show "answered"}}"
+           href="/questions?show=answered{{if .FilterAskedOf}}&asked_of={{.FilterAskedOf}}{{end}}{{if .FilterSubject}}&subject={{.FilterSubject}}{{end}}">
+          Answered <span class="segment-count">{{.Counts.Answered}}</span>
+        </a>
+      </p>
+    {{end}}
 
-    <details class="side-group" open>
-      <summary>Who it&rsquo;s about</summary>
-      <ul class="side-list">
-        <li><a class="side-link" {{if eq .FilterSubject ""}}aria-current="true"{{end}}
-               href="/questions{{if .FilterAskedOf}}?asked_of={{.FilterAskedOf}}{{end}}">Anyone</a></li>
-        {{range .SubjectProgress}}
-          {{if .Total}}
-            <li>
-              <a class="side-link" {{if eq $.FilterSubject .Slug}}aria-current="true"{{end}}
-                 href="/questions?subject={{.Slug}}{{if $.FilterAskedOf}}&asked_of={{$.FilterAskedOf}}{{end}}">
-                <span class="side-name">{{.DisplayName}}</span>
-                <span class="side-count">{{.Answered}}/{{.Total}}</span>
-              </a>
-            </li>
-          {{end}}
-        {{end}}
-      </ul>
+    {{/* Below 62rem this is a hamburger beside the toggle; above it, the summary
+         is hidden and the rail is simply a column. Ships open so that with no
+         JavaScript the filters are reachable rather than stranded. */}}
+    <details class="side-toggle" open>
+      <summary class="side-toggle-btn">
+        <span class="burger" aria-hidden="true"></span>
+        <span>Filters</span>
+      </summary>
+      <aside class="side" aria-label="Filters">
+        <details class="side-group" open>
+          <summary>Whose questions</summary>
+          <ul class="side-list">
+            {{range .Contributors}}
+              <li><a class="side-link" {{if eq $.FilterAskedOf .DisplayName}}aria-current="true"{{end}}
+                     href="/questions?asked_of={{.DisplayName}}{{if eq $.Show "answered"}}&show=answered{{end}}">
+                {{.DisplayName}}{{if eq $.User.DisplayName .DisplayName}} <span class="side-count">you</span>{{end}}
+              </a></li>
+            {{end}}
+            {{if .ViewerIsAdmin}}
+              <li><a class="side-link" {{if eq .FilterAskedOf ""}}aria-current="true"{{end}}
+                     href="/questions?asked_of=everyone{{if eq .Show "answered"}}&show=answered{{end}}">Everyone</a></li>
+            {{end}}
+          </ul>
+        </details>
+
+        <details class="side-group" open>
+          <summary>Who it&rsquo;s about</summary>
+          <ul class="side-list">
+            <li><a class="side-link" {{if eq .FilterSubject ""}}aria-current="true"{{end}}
+                   href="/questions?show={{.Show}}{{if .FilterAskedOf}}&asked_of={{.FilterAskedOf}}{{end}}">Anyone</a></li>
+            {{range .SubjectProgress}}
+              {{if .Total}}
+                <li>
+                  <a class="side-link" {{if eq $.FilterSubject .Slug}}aria-current="true"{{end}}
+                     href="/questions?subject={{.Slug}}&show={{$.Show}}{{if $.FilterAskedOf}}&asked_of={{$.FilterAskedOf}}{{end}}">
+                    <span class="side-name">{{.DisplayName}}</span>
+                    <span class="side-count">{{.Answered}}/{{.Total}}</span>
+                  </a>
+                </li>
+              {{end}}
+            {{end}}
+          </ul>
+        </details>
+      </aside>
     </details>
-  </aside>
-  </details>
+  </div>
 
   <div class="with-side-main">
     {{if .Groups}}

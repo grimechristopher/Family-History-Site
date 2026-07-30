@@ -676,9 +676,18 @@ a.tperson:hover { border-color: var(--teal); background: var(--teal-wash); }
   .with-side {
     display: grid;
     grid-template-columns: 15rem minmax(0, 1fr);
-    gap: var(--s6);
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: var(--s4) var(--s6);
     align-items: start;
   }
+
+  /* Dissolved, so the toggle and the rail become grid items and can be placed
+     independently. The child selector is deliberate: a bare `.controls` here
+     loses to the `.controls` rule defined later in this file. */
+  .with-side > .controls { display: contents; }
+  .with-side > .controls > .side-toggle { grid-column: 1; grid-row: 1 / span 2; }
+  .with-side > .controls > .segmented   { grid-column: 2; grid-row: 1; margin: 0; }
+  .with-side > .with-side-main          { grid-column: 2; grid-row: 2; }
   /* The first heading in the main column should line up with the sidebar. */
   .with-side-main > h2:first-child { margin-top: 0; }
   .side-group > summary { pointer-events: none; }        /* always open, no toggle */
@@ -1005,16 +1014,28 @@ a.tperson:hover { border-color: var(--teal); background: var(--teal-wash); }
 
 /* Narrow: the whole page scrolls, so everything pins to the viewport. */
 @media (max-width: 61.99rem) {
-  .side-toggle {
+  /* The controls row pins as a unit, since the two now sit side by side. */
+  .controls {
     position: sticky;
     top: 0;
     z-index: 30;
-    margin-bottom: var(--s4);
     padding: var(--s3) 0;
+    margin-bottom: var(--s3);
     background: var(--oat);
   }
 
-  .qgroup-head { top: 4.75rem; }   /* clears the sticky Filters button */
+  .qgroup-head { top: 4.75rem; }   /* clears the pinned controls row */
+
+  /* The panel drops below the row rather than squeezing into it. */
+  .side-toggle[open] .side {
+    position: absolute;
+    left: 0;
+    right: 0;
+    z-index: 29;
+    margin-top: var(--s2);
+    box-shadow: var(--lift-3);
+  }
+  .side-toggle { position: static; }
 }
 
 /* A person's page: their name stays put while their questions scroll past. */
@@ -1142,9 +1163,22 @@ a.pnode-hit:focus-visible .pnode-box { stroke: var(--teal); stroke-width: 3; }
    scrolling past all of them to reach the handful that were answered.
    ------------------------------------------------------------------ */
 
+/* The waiting/answered toggle and the filter menu share one line: two stacked
+   controls cost a third of the first screen on a phone. */
+.controls {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  flex-wrap: wrap;
+  margin-bottom: var(--s4);
+}
+
+.controls .segmented,
+.controls .side-toggle { margin: 0; }
+
 .segmented {
   display: inline-flex;
-  margin: 0 0 var(--s5);
+  margin: 0 0 var(--s4);
   padding: 4px;
   border: 2px solid var(--rule-firm);
   border-radius: var(--r-pill);
