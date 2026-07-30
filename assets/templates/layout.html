@@ -14,6 +14,15 @@
 {{if .User}}
 <header class="bar">
   <a class="bar-title" href="/">Family History</a>
+
+  {{/* In the bar rather than on a row of its own: the second row cost 77px of
+       every screen before a single question. */}}
+  <nav class="tabs" aria-label="Sections">
+    <a class="tab" href="/cards" {{if eq .Nav "cards"}}aria-current="page"{{end}}>Cards</a>
+    <a class="tab" href="/questions" {{if eq .Nav "questions"}}aria-current="page"{{end}}>Questions</a>
+    <a class="tab" href="/tree" {{if eq .Nav "tree"}}aria-current="page"{{end}}>Tree</a>
+  </nav>
+
   <div class="bar-tools">
     <details class="display-settings">
       <summary>Text size</summary>
@@ -29,12 +38,6 @@
     <form method="post" action="/logout"><button class="link" type="submit">Sign out</button></form>
   </div>
 </header>
-
-<nav class="tabs" aria-label="Sections">
-  <a class="tab" href="/cards" {{if eq .Nav "cards"}}aria-current="page"{{end}}>Cards</a>
-  <a class="tab" href="/questions" {{if eq .Nav "questions"}}aria-current="page"{{end}}>Questions</a>
-  <a class="tab" href="/tree" {{if eq .Nav "tree"}}aria-current="page"{{end}}>Tree</a>
-</nav>
 {{end}}
 
 <main class="page" id="main" tabindex="-1">

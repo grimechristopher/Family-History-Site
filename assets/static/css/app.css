@@ -170,13 +170,14 @@ body {
 .skip:focus { transform: translateY(0); }
 
 /* ---------- Masthead --------------------------------------------------
-   Two rows, and only two, because eight controls above the question is the
-   main reason this felt cluttered. Identity and settings on top; where to go
-   underneath, as tabs big enough to hit without aiming.
+   One row: name, where to go, settings. It was two, with the tabs underneath,
+   which cost 77px of every screen before any content and pushed the first
+   question halfway down an iPad. The tabs stay big enough to hit without aiming
+   and drop to a line of their own once three of them no longer fit.
    ------------------------------------------------------------------- */
 
 .bar {
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex; align-items: center;
   gap: var(--s4); flex-wrap: wrap;
   padding: var(--s4) clamp(var(--s4), 4vw, var(--s6));
   padding-top: max(var(--s4), env(safe-area-inset-top));
@@ -191,14 +192,21 @@ body {
   color: var(--ink); text-decoration: none; white-space: nowrap;
 }
 
-.bar-tools { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; }
+.bar-tools { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; margin-left: auto; }
 .bar-tools form { margin: 0; }
 
+/* Inside the bar, so it carries no padding, background or rule of its own. The
+   tools are pushed to the far edge by their own margin instead of the bar's
+   space-between, which would otherwise strand the tabs in the middle. */
 .tabs {
   display: flex; gap: var(--s2); flex-wrap: wrap;
-  padding: var(--s3) clamp(var(--s4), 4vw, var(--s6));
-  background: var(--sheet);
-  border-bottom: 1px solid var(--rule);
+  margin-left: var(--s5);
+}
+
+@media (max-width: 46rem) {
+  /* Its own line under the title once the three of them stop fitting, which keeps
+     the tap targets full width rather than squeezing them. */
+  .tabs { order: 3; flex: 1 0 100%; margin-left: 0; }
 }
 
 .tab {
@@ -224,6 +232,10 @@ body {
 @media (max-width: 30rem) {
   .page { padding-left: var(--s3); padding-right: var(--s3); }
   .panel, .card, .qrow, .answer { padding: var(--s4); }
+
+  /* At 26px the wordmark was 164px against the 147px left over beside the tools,
+     so the tools wrapped and the bar cost three rows on a phone instead of two. */
+  .bar-title { font-size: 1.375rem; }
 }
 
 /* ---------- Type ---------------------------------------------------- */
@@ -710,7 +722,11 @@ a.tperson:hover { border-color: var(--teal); background: var(--teal-wash); }
   /* The first heading in the main column should line up with the sidebar. */
   .with-side-main > h2:first-child { margin-top: 0; }
   .side-group > summary { pointer-events: none; }        /* always open, no toggle */
-  .side-group > summary::after { content: ""; }
+  /* These are always open at this width, so [open] has to be named or
+     details[open] > summary::after wins on specificity and leaves a stray "–"
+     hanging off "Whose questions". */
+  .side-group > summary::after,
+  .side-group[open] > summary::after { content: none; }
 }
 
 .side { min-width: 0; }
@@ -877,11 +893,13 @@ a.tperson:hover { border-color: var(--teal); background: var(--teal-wash); }
     flex-direction: column;
   }
 
-  /* The masthead and tabs stay put. */
-  body:has(.with-side) > .bar,
-  body:has(.with-side) > .tabs { flex: none; }
+  /* The masthead stays put; the tabs are inside it now. */
+  body:has(.with-side) > .bar { flex: none; }
 
   .page:has(.with-side) {
+    /* No page heading on these, so the generous top gutter only pushed the first
+       question down the screen. */
+    padding-top: var(--s5);
     flex: 1;
     min-height: 0;              /* lets the flex child actually shrink */
     display: flex;
@@ -900,7 +918,12 @@ a.tperson:hover { border-color: var(--teal); background: var(--teal-wash); }
     padding-bottom: 0;
   }
 
-  .side,
+  /* Only the main column here. The rail scrolls on .side-toggle instead -- see the
+     62rem block below. This rule used to name .side as well, which never worked:
+     .side sits inside a details element, and in Chrome that puts an auto-height
+     ::details-content box between them, so height: 100% had nothing to resolve
+     against and the panel grew to its full 1140px. It ended up an overflow: auto box
+     that could not scroll, nested inside the one that could. */
   .with-side-main {
     height: 100%;
     overflow-y: auto;
@@ -920,7 +943,7 @@ a.tperson:hover { border-color: var(--teal); background: var(--teal-wash); }
   }
 
   /* Restrained scrollbars, still wide enough to grab. */
-  .side, .with-side-main { scrollbar-width: thin; scrollbar-color: var(--rule-firm) transparent; }
+  .side-toggle, .with-side-main { scrollbar-width: thin; scrollbar-color: var(--rule-firm) transparent; }
   .side::-webkit-scrollbar, .with-side-main::-webkit-scrollbar { width: 12px; }
   .side::-webkit-scrollbar-track, .with-side-main::-webkit-scrollbar-track { background: transparent; }
   .side::-webkit-scrollbar-thumb, .with-side-main::-webkit-scrollbar-thumb {
@@ -962,8 +985,8 @@ a.tperson:hover { border-color: var(--teal); background: var(--teal-wash); }
   /* Opaque, and padded wide enough that a card passing underneath disappears
      cleanly instead of peeking out above the text. */
   background: var(--oat);
-  padding: var(--s3) 0 var(--s2);
-  margin: 0 0 var(--s3);
+  padding: var(--s2) 0;
+  margin: 0 0 var(--s2);
 }
 
 /* ---------- Narrow-screen filter menu --------------------------------
@@ -1018,9 +1041,24 @@ a.tperson:hover { border-color: var(--teal); background: var(--teal-wash); }
   .side-toggle[open] .side {
     margin-top: 0; padding: 0; border: 0; background: none;
   }
-  /* The details element is the grid child, so it carries the column's height. */
   .with-side { grid-template-columns: 15rem minmax(0, 1fr); }
-  .side-toggle { height: 100%; overflow: hidden; }
+
+  /* The details element is the grid child, so it carries the column's height, and
+     it has to be the scrolling box too. It was clipping instead: overflow: hidden
+     here with overflow-y: auto on the panel inside, which never scrolled because
+     nothing bounded it -- Chrome puts a ::details-content block between a details
+     and its children, so the panel's height resolved against that, not against this
+     box. Scrolling the details sidesteps the wrapper entirely, which also keeps
+     working on the iPadOS versions that do not implement it. */
+  .side-toggle {
+    height: 100%;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    /* Keeps the longer names off the scrollbar, and the last one off the edge. */
+    padding-right: var(--s2);
+    padding-bottom: var(--s7);
+  }
 }
 
 .backlink { margin-bottom: var(--s4); }
@@ -1076,7 +1114,10 @@ a.tperson:hover { border-color: var(--teal); background: var(--teal-wash); }
    passed once, and a second bar would clip the cards under it. */
 
 /* The name block would otherwise sit over the masthead as it scrolls past. */
-.bar, .tabs { position: relative; z-index: 40; }
+/* Above the page, so the text size panel hanging out of the bar paints over what
+   follows it. This used to be a fight with a sibling tab row at the same z-index,
+   which won on document order and covered the panel; the tabs are in the bar now. */
+.bar { position: relative; z-index: 50; }
 
 /* ---------- Drawn pedigree -------------------------------------------
    Styled entirely from the same tokens as the rest of the site, so the chart
