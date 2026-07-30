@@ -3,6 +3,8 @@ package migrate
 import (
 	"context"
 	"os"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -279,4 +281,83 @@ func seedMember(t *testing.T, pool *pgxpool.Pool, slug, email, name string) (fam
 		t.Fatalf("insert membership: %v", err)
 	}
 	return familyID, userID
+}
+
+// The point of row-level security is that a query which forgets to scope itself
+// returns nothing rather than everything. This is also the test that catches
+// connecting as a superuser, or FORCE having been left off: either disables every
+// policy while leaving all the code looking correct.
+func TestUnscopedReadsReturnNothing(t *testing.T) {
+	ctx := context.Background()
+	pool := testPool(t)
+	if err := Run(ctx, pool); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	fam := seedFamily(t, pool, "a", "A")
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO family.subjects (family_id, slug, kind, display_name, sort_order)
+		VALUES ($1,'x','individual','X',1)`, fam); err != nil {
+		t.Fatalf("seed subject: %v", err)
+	}
+
+	app := appRolePool(t)
+
+	var n int
+	if err := app.QueryRow(ctx, `SELECT count(*) FROM family.subjects`).Scan(&n); err != nil {
+		t.Fatalf("unscoped count: %v", err)
+	}
+	if n != 0 {
+		t.Fatalf("an unscoped read saw %d rows; row-level security is not in force", n)
+	}
+
+	// With the family set, exactly that family's rows and no others.
+	other := seedFamily(t, pool, "b", "B")
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO family.subjects (family_id, slug, kind, display_name, sort_order)
+		VALUES ($1,'y','individual','Y',1)`, other); err != nil {
+		t.Fatalf("seed other subject: %v", err)
+	}
+
+	tx, err := app.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, "SELECT set_config('app.family_id', $1, true)",
+		strconv.FormatInt(fam, 10)); err != nil {
+		t.Fatalf("set family: %v", err)
+	}
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM family.subjects`).Scan(&n); err != nil {
+		t.Fatalf("scoped count: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("a scoped read saw %d rows, want exactly the one family's", n)
+	}
+
+	// A write into another family is refused by WITH CHECK, so a mis-scoped insert
+	// fails loudly instead of landing somewhere it should not.
+	_, err = tx.Exec(ctx, `
+		INSERT INTO family.subjects (family_id, slug, kind, display_name, sort_order)
+		VALUES ($1,'z','individual','Z',1)`, other)
+	if err == nil {
+		t.Error("writing into another family was allowed")
+	}
+}
+
+// appRolePool connects as the unprivileged role the server uses. Tests otherwise
+// run as the owner, and without FORCE the owner is exempt from every policy.
+func appRolePool(t *testing.T) *pgxpool.Pool {
+	t.Helper()
+	admin := os.Getenv("TEST_DATABASE_URL")
+	appURL := strings.Replace(admin, "//postgres:", "//fhs_app:", 1)
+	if appURL == admin {
+		t.Fatalf("could not derive the app role URL from %q", admin)
+	}
+	p, err := pgxpool.New(context.Background(), appURL)
+	if err != nil {
+		t.Fatalf("app pool: %v", err)
+	}
+	t.Cleanup(p.Close)
+	return p
 }
