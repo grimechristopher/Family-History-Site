@@ -185,6 +185,17 @@ func run(cfg importConfig) error {
 	}
 	fmt.Printf("parsed gedcom: %d individuals, %d families\n", len(ged.Individuals), len(ged.Families))
 
+	// The same person entered twice, which a tree built over years by several
+	// people always has. Reported rather than done quietly: changing the shape of
+	// somebody's family is not a thing to do in silence, and if the rule ever folds
+	// two people who are not one person, this is where it would be noticed.
+	if merged := ged.MergeDuplicates(); len(merged) > 0 {
+		fmt.Printf("merged %d duplicate record(s):\n", len(merged))
+		for _, m := range merged {
+			fmt.Printf("  %s (%s into %s)\n", m.Name, m.Removed, m.Kept)
+		}
+	}
+
 	pf, err := os.Open(cfg.PromptsPath)
 	if err != nil {
 		return fmt.Errorf("open prompts: %w", err)
