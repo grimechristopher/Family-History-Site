@@ -3,6 +3,7 @@ package web
 import (
 	"errors"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -39,6 +40,8 @@ func (s *Server) handleAddPerson(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(r.FormValue("display_name"))
 
 	fail := func(message string) {
+		// Re-rendered for the line the form named, not the first one they belong to.
+		r.URL.RawQuery = "family=" + url.QueryEscape(fam.Slug)
 		data, err := s.peoplePageData(r, "Who's here")
 		if err != nil {
 			s.serverError(w, r, err)
@@ -123,7 +126,9 @@ func (s *Server) handleAddPerson(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.Log.Info("added to family", "family", fam.Slug, "email", email, "by", auth.User(r.Context()).DisplayName)
-	http.Redirect(w, r, "/people"+"?added="+name, http.StatusSeeOther)
+	// Back to the line they were just added to, or the page would show a different
+	// one and look as though nothing had happened.
+	http.Redirect(w, r, "/people?family="+fam.Slug+"&added="+url.QueryEscape(name), http.StatusSeeOther)
 }
 
 func (s *Server) peoplePageData(r *http.Request, title string) (pageData, error) {
@@ -145,6 +150,7 @@ func (s *Server) peoplePageData(r *http.Request, title string) (pageData, error)
 		}
 	}
 	data.ShownFamily = shown.Slug
+	data.ShownFamilyName = shown.DisplayName
 
 	members, err := s.Store.Members(r.Context(), shown.ID)
 	if err != nil {
@@ -154,7 +160,7 @@ func (s *Server) peoplePageData(r *http.Request, title string) (pageData, error)
 
 	// Only people who are not already claimed, so the picker cannot offer somebody
 	// who is already somebody else.
-	people, err := s.Store.UnclaimedTreePeople(r.Context())
+	people, err := s.Store.UnclaimedTreePeople(r.Context(), shown.ID)
 	if err != nil {
 		return data, err
 	}

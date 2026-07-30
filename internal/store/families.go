@@ -161,17 +161,28 @@ func (s *Store) Members(ctx context.Context, familyID int64) ([]Member, error) {
 	return out, rows.Err()
 }
 
-// UnclaimedTreePeople are the people in this family's tree who are not already
+// UnclaimedTreePeople are the living people in this family's tree who are not already
 // somebody's account, for the picker when adding a member. Offering a person who
 // is already claimed would let two accounts be the same person.
-func (s *Store) UnclaimedTreePeople(ctx context.Context) ([]TreePerson, error) {
+// Scoped to one family, because the picker sits under a form that adds somebody
+// to that family: offering Ashley's grandmother while adding a member of the
+// Grime line is a choice that could only ever be a mistake.
+func (s *Store) UnclaimedTreePeople(ctx context.Context, familyID int64) ([]TreePerson, error) {
 	rows, err := s.q(ctx).Query(ctx, `
 		SELECT p.id, p.given_name, p.surname, p.birth_year
 		  FROM family.people p
-		 WHERE NOT EXISTS (
+		 WHERE p.family_id = $1
+		   AND NOT EXISTS (
 		       SELECT 1 FROM core.family_members m
 		        WHERE m.family_id = p.family_id AND m.person_id = p.id)
-		 ORDER BY p.surname, p.given_name`)
+		   -- People who could actually sign in. A death year settles it; so does a
+		   -- birth year old enough that no answer is coming either way. Somebody
+		   -- with neither recorded is still offered, because plenty of living
+		   -- relatives have no dates in the file.
+		   AND p.death_year IS NULL
+		   AND (p.birth_year IS NULL
+		        OR p.birth_year > extract(year FROM now())::int - 110)
+		 ORDER BY p.surname, p.given_name`, familyID)
 	if err != nil {
 		return nil, fmt.Errorf("unclaimed tree people: %w", err)
 	}

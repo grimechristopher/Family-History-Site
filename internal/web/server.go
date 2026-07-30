@@ -100,12 +100,14 @@ func groupSubjects(subs []store.SubjectProgress, showLine bool) []subjectGroup {
 	ancestors := []string{"Them", "Parents", "Grandparents", "Great-grandparents"}
 	byGen := map[int][]store.SubjectProgress{}
 	bySibGen := map[int][]store.SubjectProgress{}
-	var cousins, other []store.SubjectProgress
+	var cousins, niblings, other []store.SubjectProgress
 
 	for _, s := range subs {
 		switch {
 		case s.Relation == "cousin":
 			cousins = append(cousins, s)
+		case s.Relation == "nibling":
+			niblings = append(niblings, s)
 		case s.Relation == "sibling":
 			bySibGen[s.Generation] = append(bySibGen[s.Generation], s)
 		case s.Kind == "group":
@@ -131,6 +133,7 @@ func groupSubjects(subs []store.SubjectProgress, showLine bool) []subjectGroup {
 
 	add(ancestors[0], byGen[0])
 	add("Brothers and sisters", bySibGen[0])
+	add("Nieces and nephews", niblings)
 	add(ancestors[1], byGen[1])
 	add("Aunts and uncles", bySibGen[1])
 	add("Cousins", cousins)
@@ -185,7 +188,16 @@ type pageData struct {
 	FilterSubject   string
 	FilterAskedOf   string
 	FilterFamily    string
-	ViewerIsAdmin   bool
+	// The chosen person's name as the family writes it, for the empty state. The
+	// slug is what the filter runs on, but "edwin-robert-ayres" is not something to
+	// put in a sentence.
+	FilterSubjectName string
+	// ShownFamilyName is the line the people page is showing, named for a heading.
+	ShownFamilyName string
+	// OwnFooter is set by a page that places the footer itself, inside whatever
+	// part of it actually scrolls.
+	OwnFooter     bool
+	ViewerIsAdmin bool
 	// NothingMatches distinguishes an empty filter from having answered
 	// everything. Congratulating somebody for an empty result is misleading.
 	NothingMatches bool

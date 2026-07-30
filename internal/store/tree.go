@@ -110,6 +110,7 @@ func (s *Store) TreePeople(ctx context.Context) ([]*TreePerson, error) {
 // TreeRoot is the person a line is drawn from, and the line's name.
 type TreeRoot struct {
 	PersonID   int64
+	FamilySlug string
 	FamilyName string
 }
 
@@ -123,7 +124,7 @@ type TreeRoot struct {
 // line's own root; the fallback keeps a family with no recorded parents drawable.
 func (s *Store) RootPeople(ctx context.Context) ([]TreeRoot, error) {
 	rows, err := s.q(ctx).Query(ctx, `
-		SELECT DISTINCT ON (m.family_id) m.person_id, f.display_name
+		SELECT DISTINCT ON (m.family_id) m.person_id, f.slug, f.display_name
 		  FROM core.family_members m
 		  JOIN core.families f ON f.id = m.family_id
 		  JOIN family.people p ON p.id = m.person_id
@@ -141,7 +142,7 @@ func (s *Store) RootPeople(ctx context.Context) ([]TreeRoot, error) {
 	var out []TreeRoot
 	for rows.Next() {
 		var r TreeRoot
-		if err := rows.Scan(&r.PersonID, &r.FamilyName); err != nil {
+		if err := rows.Scan(&r.PersonID, &r.FamilySlug, &r.FamilyName); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
@@ -201,21 +202,31 @@ func (s *Store) StoriesAboutSubject(ctx context.Context, subjectID, viewerID int
 }
 
 // SubjectProgressBySlug is the header for a subject page.
-func (s *Store) SubjectProgressBySlug(ctx context.Context, slug string) (*SubjectProgress, error) {
+//
+// familySlug disambiguates: a subject slug is unique inside a line and not across
+// them, so every line has a "further-back" and a lookup by slug alone returned
+// whichever row came back first. Empty means any line the viewer belongs to,
+// which is right for somebody in one and a coin toss for somebody in four -- so
+// every link that can name the line does.
+func (s *Store) SubjectProgressBySlug(ctx context.Context, slug, familySlug string) (*SubjectProgress, error) {
 	var p SubjectProgress
 	err := s.q(ctx).QueryRow(ctx, `
 		SELECT s.id, s.slug, s.kind, s.display_name, s.sort_order,
+		       f.slug, f.display_name,
 		       count(q.id), count(owner.id)
 		FROM family.subjects s
+		JOIN core.families f ON f.id = s.family_id
 		LEFT JOIN family.questions q
 		       ON q.subject_id = s.id AND q.archived_at IS NULL
 		LEFT JOIN family.entries owner
 		       ON owner.question_id = q.id
 		      AND owner.author_user_id = q.asked_of_user_id
 		      AND owner.is_draft = false
-		WHERE s.slug = $1
-		GROUP BY s.id, s.slug, s.kind, s.display_name, s.sort_order`, slug).
-		Scan(&p.ID, &p.Slug, &p.Kind, &p.DisplayName, &p.SortOrder, &p.Total, &p.Answered)
+		WHERE s.slug = $1 AND ($2 = '' OR f.slug = $2)
+		GROUP BY s.id, s.slug, s.kind, s.display_name, s.sort_order,
+		         f.slug, f.display_name`, slug, familySlug).
+		Scan(&p.ID, &p.Slug, &p.Kind, &p.DisplayName, &p.SortOrder,
+			&p.FamilySlug, &p.FamilyName, &p.Total, &p.Answered)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}

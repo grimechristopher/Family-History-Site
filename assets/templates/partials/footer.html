@@ -1,0 +1,19 @@
+{{/* One line, quietly, at the end of whatever the reader has been scrolling.
+
+     Where it goes depends on the page. Most pages scroll as a whole and it sits
+     after the content. The questions and cards pages do not: they are a
+     viewport-height column that scrolls inside itself, so a footer after them
+     never moves and reads as pinned to the bottom of the screen. Those pages
+     place it inside their own scrolling column instead, and set OwnFooter so it
+     is not also drawn here. */}}
+{{define "site-footer"}}
+{{if .User}}
+<footer class="footer">
+  <p>
+    Need something added or changed? Ask me!
+    <a href="mailto:chris@chrisgrime.com">chris@chrisgrime.com</a>
+    or text <a href="tel:+16266468324">6266468324</a>
+  </p>
+</footer>
+{{end}}
+{{end}}

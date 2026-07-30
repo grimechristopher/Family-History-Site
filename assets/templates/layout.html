@@ -47,15 +47,7 @@
 
 {{/* Only for people who are signed in: a stranger who lands on the login page has
      no business with Chris's mobile number. */}}
-{{if .User}}
-<footer class="footer">
-  <p>
-    Stuck, or something looks wrong? Ask me &mdash;
-    <a href="mailto:chris@chrisgrime.com">chris@chrisgrime.com</a>
-    or text <a href="tel:+16266468324">626&nbsp;646&nbsp;8324</a>.
-  </p>
-</footer>
-{{end}}
+{{if not .OwnFooter}}{{template "site-footer" .}}{{end}}
 
 <script src="/static/js/htmx.min.js?v={{.AssetVersion}}" defer></script>
 {{block "scripts" .}}{{end}}

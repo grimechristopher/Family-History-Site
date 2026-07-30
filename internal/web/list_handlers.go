@@ -87,14 +87,45 @@ func (s *Server) handleQuestions(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
+
+	// Only people something has actually been recorded about. Importing the
+	// brothers, sisters and cousins put ninety names in this list, most of them
+	// 0/0, and finding the four people you can actually answer for meant reading
+	// past all of them.
+	//
+	// They are not lost: everybody is on the chart, and opening one there gives a
+	// page that takes a question or a story. Doing either puts them here.
+	//
+	// The test is whether anything exists about them at all, not whether anything
+	// exists for the person being filtered on. Using the narrowed count emptied the
+	// whole list for a member with no questions of their own yet -- which is
+	// everybody on their first day, and exactly when they most need to see who
+	// there is to write about.
+	withSomething := subjects[:0]
+	for _, sub := range subjects {
+		if sub.AnyTotal > 0 || sub.Stories > 0 || sub.Slug == filter.SubjectSlug {
+			withSomething = append(withSomething, sub)
+		}
+	}
+	subjects = withSomething
+
 	data := s.newPageData(r, "All questions")
 	data.Nav = "questions"
 	data.Show = show
+	// This page is a viewport-height column that scrolls inside itself, so a footer
+	// after it would never move. It goes at the end of the column instead.
+	data.OwnFooter = true
 	data.Groups = store.GroupQuestions(items)
 	data.Counts = &counts
 	data.SubjectProgress = subjects
 	data.Contributors = contributors
 	data.FilterSubject = filter.SubjectSlug
+	for _, sub := range subjects {
+		if sub.Slug == filter.SubjectSlug {
+			data.FilterSubjectName = sub.DisplayName
+			break
+		}
+	}
 	data.FilterAskedOf = filter.AskedOfName
 	// Only worth naming the line when more than one is in view: inside a chosen
 	// line there is nothing to tell apart.
@@ -322,7 +353,7 @@ func (s *Server) handleAskQuestion(w http.ResponseWriter, r *http.Request) {
 	u := auth.User(r.Context())
 	slug := r.PathValue("slug")
 
-	subject, err := s.Store.SubjectBySlug(r.Context(), slug)
+	subject, err := s.Store.SubjectBySlug(r.Context(), slug, r.FormValue("family"))
 	if errors.Is(err, store.ErrNotFound) {
 		http.NotFound(w, r)
 		return

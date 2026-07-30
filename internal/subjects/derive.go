@@ -34,6 +34,9 @@ const (
 	RelationAncestor = "ancestor"
 	RelationSibling  = "sibling"
 	RelationCousin   = "cousin"
+	// A nibling is a niece or nephew. There is no everyday word covering both, and
+	// the headings say "Nieces and nephews" -- this is only the internal name.
+	RelationNibling = "nibling"
 )
 
 // Subject is a thing questions can be about: one person, a married couple, or a
@@ -161,9 +164,17 @@ func Derive(f *gedcom.File, opts Options) (*Tree, error) {
 			window[id] = gen
 			relation[id] = RelationSibling
 		}
-		for id := range kids {
-			window[id] = 1
-			relation[id] = RelationCousin
+		for id, sibGen := range kids {
+			// The child of a sibling at generation g. Somebody's own sibling's
+			// child is a niece or nephew; a parent's sibling's child is a cousin.
+			// Both sit one generation below the sibling, which is where the chart
+			// wants them.
+			window[id] = sibGen - 1
+			if sibGen == 0 {
+				relation[id] = RelationNibling
+			} else {
+				relation[id] = RelationCousin
+			}
 		}
 	}
 
@@ -354,7 +365,26 @@ func (t *Tree) buildSubjects(f *gedcom.File) []Subject {
 
 	// Generations 0 through 2 are individuals: Mom and Dad, their parents, and
 	// their grandparents. There are real memories of these people.
+	//
+	// And the generations below zero, which is where the nieces and nephews are:
+	// they are a generation younger than the roots, so a loop that started at zero
+	// walked straight past all of them and they were imported as people with no
+	// subject and therefore no page. Listed after the ancestors so the roots keep
+	// the first sort order and the family still reads oldest-outward.
+	gens := make([]int, 0, 4)
 	for gen := 0; gen <= 2 && gen <= t.generations; gen++ {
+		gens = append(gens, gen)
+	}
+	var below []int
+	for gen := range t.byGen {
+		if gen < 0 {
+			below = append(below, gen)
+		}
+	}
+	sort.Sort(sort.Reverse(sort.IntSlice(below)))
+	gens = append(gens, below...)
+
+	for _, gen := range gens {
 		for _, id := range t.byGen[gen] {
 			p := t.People[id]
 			order++

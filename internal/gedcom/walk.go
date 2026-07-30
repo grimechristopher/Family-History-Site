@@ -138,7 +138,11 @@ func (f *File) Collaterals(window map[string]int, sibsUpTo int, withChildren boo
 	if !withChildren {
 		return siblings, children
 	}
-	for sib := range siblings {
+	// Each child is recorded at the generation of the sibling they belong to, not
+	// at zero. That distinction is the difference between a niece and a cousin: the
+	// child of your sister is one, the child of your mother's sister is the other,
+	// and flattening both to zero called them all cousins.
+	for sib, gen := range siblings {
 		for _, child := range f.Children(sib) {
 			if _, isAncestor := window[child]; isAncestor {
 				continue
@@ -146,7 +150,7 @@ func (f *File) Collaterals(window map[string]int, sibsUpTo int, withChildren boo
 			if _, isSibling := siblings[child]; isSibling {
 				continue
 			}
-			children[child] = 0
+			children[child] = gen
 		}
 	}
 	return siblings, children

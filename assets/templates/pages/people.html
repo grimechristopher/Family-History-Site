@@ -1,6 +1,18 @@
 {{define "content"}}
 <h1>Who&rsquo;s here</h1>
 
+{{/* A person belongs to a line, not to the site, so this page is about one line
+     at a time. Somebody in four of them needs to say which before adding anyone,
+     and the list below has to be the members of that one. */}}
+{{if gt (len .Families) 1}}
+  <p class="line-picker">
+    {{range .Families}}
+      <a class="line-button" href="/people?family={{.Slug}}"
+         {{if eq $.ShownFamily .Slug}}aria-pressed="true"{{end}}>{{.DisplayName}}</a>
+    {{end}}
+  </p>
+{{end}}
+
 {{if .Added}}
   <div class="banner banner-quiet">
     <strong>{{.Added}}</strong> is in. Tell them to go to this site and sign in with
@@ -24,9 +36,17 @@
   <p>
     Anyone here can add a family member. Once they&rsquo;re on this list, they sign
     in with their own email like everybody else &mdash; no invitation to accept.
+    {{if gt (len .Families) 1}}
+      They&rsquo;ll be added to <strong>{{.ShownFamilyName}}</strong>.
+    {{end}}
   </p>
 
+  {{/* Which line, carried on the form rather than assumed. The handler refuses
+       any line the person sending it does not belong to, so this is a
+       convenience and never the check. Without it the form could not be
+       submitted at all once somebody was in more than one family. */}}
   <form method="post" action="/people">
+    <input type="hidden" name="family" value="{{.ShownFamily}}">
     <label for="display_name">Their name</label>
     <input id="display_name" name="display_name" type="text" required
            autocomplete="off" placeholder="Aunt Jane">

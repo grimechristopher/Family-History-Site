@@ -110,10 +110,28 @@
         </section>
       {{end}}
     {{else if .NothingMatches}}
+      {{/* Say which two filters found nothing between them. The old sentence
+           named the person and then trailed off -- "Lori Grime isn't asked
+           anything about that person" -- which named neither of them properly and
+           read as a fragment when nobody was chosen at all. */}}
       <div class="panel panel-empty">
-        <p class="lede">No questions match this. {{if .FilterSubject}}{{.FilterAskedOf}} isn&rsquo;t asked anything about that person.{{end}}</p>
+        <p class="lede">
+          {{if and .FilterSubjectName .FilterAskedOf}}
+            Nothing has been asked of {{.FilterAskedOf}} about
+            {{.FilterSubjectName}}.
+          {{else if .FilterSubjectName}}
+            Nothing has been asked about {{.FilterSubjectName}} yet.
+          {{else if .FilterAskedOf}}
+            There&rsquo;s nothing here for {{.FilterAskedOf}}.
+          {{else}}
+            Nothing matches this.
+          {{end}}
+        </p>
+        {{if .FilterSubjectName}}
+          <p>You can add one on <a class="link" href="/subjects/{{.FilterSubject}}">{{.FilterSubjectName}}&rsquo;s page</a>.</p>
+        {{end}}
         <div class="btn-row">
-          <a class="btn btn-quiet" href="/questions{{if .FilterAskedOf}}?asked_of={{.FilterAskedOf}}{{end}}">Show all
+          <a class="btn btn-quiet" href="/questions{{if .FilterFamily}}?family={{.FilterFamily}}{{if .FilterAskedOf}}&asked_of={{.FilterAskedOf}}{{end}}{{else if .FilterAskedOf}}?asked_of={{.FilterAskedOf}}{{end}}">Show all
             {{if .FilterAskedOf}}of {{.FilterAskedOf}}&rsquo;s{{end}} questions</a>
         </div>
       </div>
@@ -124,6 +142,7 @@
         <p class="lede">Every one of these has an answer. That&rsquo;s a real achievement.</p>
       </div>
     {{end}}
+    {{template "site-footer" .}}
   </div>
 </div>
 {{end}}

@@ -1640,8 +1640,15 @@ func TestEmptyFilterExplainsItselfRatherThanCongratulating(t *testing.T) {
 	if strings.Contains(body, "real achievement") {
 		t.Error("an empty filter must not be reported as having answered everything")
 	}
-	if !strings.Contains(body, "No questions match") {
-		t.Error("expected an explanation of why the list is empty")
+	// Both filters are set, so the sentence names both of them. It used to read
+	// "No questions match this. Dad isn't asked anything about that person",
+	// which named one and pointed vaguely at the other.
+	if !strings.Contains(body, "Nothing has been asked of Dad about") ||
+		!strings.Contains(body, "Someone Else") {
+		t.Error("expected the empty state to name the person asked and the person asked about")
+	}
+	if strings.Contains(body, "that person") {
+		t.Error("the empty state should name who it means, not say \"that person\"")
 	}
 	if !strings.Contains(body, `href="/questions?asked_of=Dad"`) {
 		t.Error("expected a way back to all of Dad's questions")
@@ -1649,7 +1656,7 @@ func TestEmptyFilterExplainsItselfRatherThanCongratulating(t *testing.T) {
 
 	// A filter that does match still shows its questions.
 	body = h.get("/questions?asked_of=Dad&subject=peter-samuel-hale", dad).Body.String()
-	if strings.Contains(body, "No questions match") {
+	if strings.Contains(body, "Nothing has been asked of") {
 		t.Error("a filter with questions should not report an empty result")
 	}
 	if !strings.Contains(body, "What kind of cars did he have?") {

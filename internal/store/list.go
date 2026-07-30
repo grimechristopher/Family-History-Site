@@ -236,6 +236,15 @@ type SubjectProgress struct {
 	FamilyName string
 	Total      int
 	Answered   int
+	// Stories written about them, drafts included. A draft counts because
+	// somebody has started writing: dropping them out of the list at that moment
+	// takes away the page being written on.
+	Stories int
+	// AnyTotal counts every live question about them, whoever is asked. Total is
+	// narrowed to the person being filtered on and is what the page shows; this is
+	// what decides whether they are worth listing at all. The two differ for
+	// somebody who has questions, just not for the person you are looking at.
+	AnyTotal int
 }
 
 // SubjectsWithProgress lists subjects and how much has been said about them.
@@ -249,7 +258,10 @@ func (s *Store) SubjectsWithProgress(ctx context.Context, askedOf, familySlug st
 		SELECT s.id, s.slug, s.kind, s.display_name, s.sort_order, s.generation, s.relation,
 		       f.slug, f.display_name,
 		       count(q.id),
-		       count(owner_answer.id)
+		       count(owner_answer.id),
+		       (SELECT count(*) FROM family.entries e WHERE e.subject_id = s.id),
+		       (SELECT count(*) FROM family.questions aq
+		         WHERE aq.subject_id = s.id AND aq.archived_at IS NULL)
 		FROM family.subjects s
 		JOIN core.families f ON f.id = s.family_id
 		LEFT JOIN core.users asked
@@ -276,7 +288,7 @@ func (s *Store) SubjectsWithProgress(ctx context.Context, askedOf, familySlug st
 		var p SubjectProgress
 		if err := rows.Scan(&p.ID, &p.Slug, &p.Kind, &p.DisplayName, &p.SortOrder,
 			&p.Generation, &p.Relation, &p.FamilySlug, &p.FamilyName,
-			&p.Total, &p.Answered); err != nil {
+			&p.Total, &p.Answered, &p.Stories, &p.AnyTotal); err != nil {
 			return nil, err
 		}
 		out = append(out, p)

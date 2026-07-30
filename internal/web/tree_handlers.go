@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"sort"
 
 	"github.com/grimechristopher/family-history-site/internal/auth"
 	"github.com/grimechristopher/family-history-site/internal/store"
@@ -14,8 +15,11 @@ type treeNode struct {
 	Person     *store.TreePerson
 	Generation int
 	Parents    []*treeNode
-	// FamilyName names the line, for the switcher above the chart.
+	// FamilyName names the line, for the switcher above the chart, and FamilySlug
+	// puts it on every link out of the chart: a subject slug is unique inside a
+	// line and not across them.
 	FamilyName string
+	FamilySlug string
 }
 
 // buildTree assembles pedigrees rooted at each contributor. Depth is bounded so
@@ -57,6 +61,7 @@ func buildTree(people []*store.TreePerson, roots []store.TreeRoot, maxDepth int)
 	for _, r := range roots {
 		if node := build(r.PersonID, 0, map[int64]bool{}); node != nil {
 			node.FamilyName = r.FamilyName
+			node.FamilySlug = r.FamilySlug
 			out = append(out, node)
 		}
 	}
@@ -128,7 +133,7 @@ func (s *Server) handleSubject(w http.ResponseWriter, r *http.Request) {
 	u := auth.User(r.Context())
 	slug := r.PathValue("slug")
 
-	subject, err := s.Store.SubjectProgressBySlug(r.Context(), slug)
+	subject, err := s.Store.SubjectProgressBySlug(r.Context(), slug, r.URL.Query().Get("family"))
 	if errors.Is(err, store.ErrNotFound) {
 		http.NotFound(w, r)
 		return
@@ -144,15 +149,19 @@ func (s *Server) handleSubject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Scoped to the line the subject was resolved in, taken from the row itself
+	// rather than from the query string. Without it the four subjects called
+	// "further-back" all matched and every one of these pages listed the same
+	// twenty-one questions drawn from all four lines.
 	unanswered, err := s.Store.ListQuestions(r.Context(), u.ID, store.QuestionFilter{
-		SubjectSlug: slug, OnlyUnanswered: true,
+		SubjectSlug: slug, FamilySlug: subject.FamilySlug, OnlyUnanswered: true,
 	})
 	if err != nil {
 		s.serverError(w, r, err)
 		return
 	}
 	answered, err := s.Store.ListQuestions(r.Context(), u.ID, store.QuestionFilter{
-		SubjectSlug: slug, OnlyAnswered: true,
+		SubjectSlug: slug, FamilySlug: subject.FamilySlug, OnlyAnswered: true,
 	})
 	if err != nil {
 		s.serverError(w, r, err)
@@ -194,7 +203,7 @@ func (s *Server) handleSubject(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleFocusSubject(w http.ResponseWriter, r *http.Request) {
 	u := auth.User(r.Context())
 
-	sub, err := s.Store.SubjectBySlug(r.Context(), r.PathValue("slug"))
+	sub, err := s.Store.SubjectBySlug(r.Context(), r.PathValue("slug"), r.FormValue("family"))
 	if errors.Is(err, store.ErrNotFound) {
 		http.NotFound(w, r)
 		return
@@ -218,6 +227,9 @@ type pedigreeNode struct {
 	Label string `json:"label,omitempty"`
 	Years string `json:"years,omitempty"`
 	Slug  string `json:"slug,omitempty"`
+	// Family is the line this box belongs to, so a link out of the chart lands on
+	// the right person: every line has a subject called "further-back".
+	Family string `json:"family,omitempty"`
 	// Members is set for a couple, which the great-grandparent generation is
 	// drawn as: one box for the pair, since that is how their questions are
 	// asked and how the book's chapters are organised.
@@ -228,6 +240,16 @@ type pedigreeNode struct {
 	Answered int             `json:"answered"`
 	Gen      int             `json:"gen"`
 	Parents  []*pedigreeNode `json:"parents,omitempty"`
+
+	// Kin is this person's children, each carrying their own children in turn.
+	// A pedigree has no room for them -- every box has exactly two parents above
+	// it and nothing beside it -- so they are sent along and drawn only when
+	// somebody opens a person up.
+	Kin []*pedigreeNode `json:"kin,omitempty"`
+	// OnLine marks the child who is already on the pedigree, so opening a
+	// grandparent reads as "your dad, and his brother and sister" rather than as
+	// three strangers.
+	OnLine bool `json:"onLine,omitempty"`
 }
 
 // pedigreeMember is one person inside a couple's box.
@@ -272,8 +294,49 @@ func (s *Server) handleTreeJSON(w http.ResponseWriter, r *http.Request) {
 		return x != nil && y != nil && *x == *y
 	}
 
-	var convert func(n *treeNode) *pedigreeNode
-	convert = func(n *treeNode) *pedigreeNode {
+	childrenOf := childIndex(people)
+
+	// kinOf is a person's children with their children under them: two generations,
+	// which from a grandparent is the aunts and uncles and then the cousins. Two
+	// because that is the whole of what the collateral walk imports, and because a
+	// third would be a chart nobody could read.
+	//
+	// onLine is whoever is already drawn on the pedigree above this person, so the
+	// opened chart can say which of the children you came in through.
+	var kinOf func(ids []int64, onLine int64, depth int) []*pedigreeNode
+	kinOf = func(ids []int64, onLine int64, depth int) []*pedigreeNode {
+		if depth == 0 {
+			return nil
+		}
+		var out []*pedigreeNode
+		seen := map[int64]bool{}
+		for _, id := range ids {
+			for _, c := range childrenOf[id] {
+				if seen[c.ID] {
+					// Both parents are on the chart, so every child of the marriage
+					// is reached twice.
+					continue
+				}
+				seen[c.ID] = true
+				out = append(out, &pedigreeNode{
+					Name:     c.FullName(),
+					Years:    c.Lifespan(),
+					Total:    c.QuestionCount,
+					Answered: c.AnsweredCount,
+					Slug:     link(c),
+					OnLine:   c.ID == onLine,
+					Kin:      kinOf([]int64{c.ID}, 0, depth-1),
+				})
+			}
+		}
+		return out
+	}
+
+	// onLine is the person directly below this one on the pedigree -- the child you
+	// came in through -- so opening a box can mark them among their brothers and
+	// sisters.
+	var convert func(n *treeNode, onLine int64) *pedigreeNode
+	convert = func(n *treeNode, onLine int64) *pedigreeNode {
 		p := n.Person
 		out := &pedigreeNode{
 			Name:     p.FullName(),
@@ -282,6 +345,7 @@ func (s *Server) handleTreeJSON(w http.ResponseWriter, r *http.Request) {
 			Answered: p.AnsweredCount,
 			Gen:      n.Generation,
 			Slug:     link(p),
+			Kin:      kinOf([]int64{p.ID}, onLine, 2),
 		}
 
 		if len(n.Parents) == 2 && sameSubject(n.Parents[0], n.Parents[1]) {
@@ -304,12 +368,15 @@ func (s *Server) handleTreeJSON(w http.ResponseWriter, r *http.Request) {
 			if a.SubjectName != nil {
 				couple.Name = *a.SubjectName
 			}
+			// The children of the marriage, gathered from both of them so a child
+			// recorded under only one parent is not lost.
+			couple.Kin = kinOf([]int64{a.ID, b.ID}, p.ID, 2)
 			out.Parents = append(out.Parents, couple)
 			return out
 		}
 
 		for _, parent := range n.Parents {
-			out.Parents = append(out.Parents, convert(parent))
+			out.Parents = append(out.Parents, convert(parent, p.ID))
 		}
 		return out
 	}
@@ -317,8 +384,9 @@ func (s *Server) handleTreeJSON(w http.ResponseWriter, r *http.Request) {
 	roots := buildTree(people, rootIDs, 4)
 	out := make([]*pedigreeNode, 0, len(roots))
 	for _, root := range roots {
-		node := convert(root)
+		node := convert(root, 0)
 		node.Label = root.FamilyName
+		stampFamily(node, root.FamilySlug)
 		out = append(out, node)
 	}
 
@@ -326,5 +394,52 @@ func (s *Server) handleTreeJSON(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if err := json.NewEncoder(w).Encode(out); err != nil {
 		s.Log.Error("encode pedigree", "err", err)
+	}
+}
+
+// childIndex maps a person to their children, so the chart can be opened downward
+// as well as read upward.
+//
+// Built from the same rows the pedigree is built from rather than queried again:
+// the walk that imports a line brings in the brothers and sisters and their
+// children, so everything needed is already here.
+func childIndex(people []*store.TreePerson) map[int64][]*store.TreePerson {
+	byParent := map[int64][]*store.TreePerson{}
+	for _, p := range people {
+		for _, parent := range []*int64{p.FatherID, p.MotherID} {
+			if parent != nil {
+				byParent[*parent] = append(byParent[*parent], p)
+			}
+		}
+	}
+	// Eldest first, which is how a family lists itself.
+	for _, kids := range byParent {
+		sort.SliceStable(kids, func(i, j int) bool {
+			a, b := kids[i].BirthYear, kids[j].BirthYear
+			switch {
+			case a != nil && b != nil:
+				return *a < *b
+			case a != nil:
+				return true
+			case b != nil:
+				return false
+			}
+			return kids[i].ID < kids[j].ID
+		})
+	}
+	return byParent
+}
+
+// stampFamily marks every box in one line's chart with that line, including the
+// children hanging off it. Done in one pass afterwards rather than threaded
+// through the conversion, because every node in a chart is in the same line by
+// construction -- the walk only ever follows links within one.
+func stampFamily(n *pedigreeNode, slug string) {
+	n.Family = slug
+	for _, p := range n.Parents {
+		stampFamily(p, slug)
+	}
+	for _, k := range n.Kin {
+		stampFamily(k, slug)
 	}
 }

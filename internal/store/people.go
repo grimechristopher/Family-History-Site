@@ -110,11 +110,17 @@ func SetSubjectMembers(ctx context.Context, db DBTX, subjectID int64, personIDs 
 	return nil
 }
 
-func (s *Store) SubjectBySlug(ctx context.Context, slug string) (*Subject, error) {
+// familySlug picks which line, because a subject slug is unique inside one and
+// not across them. Empty means any the viewer belongs to, which is unambiguous
+// for somebody in a single family and arbitrary for anybody else.
+func (s *Store) SubjectBySlug(ctx context.Context, slug, familySlug string) (*Subject, error) {
 	var sub Subject
 	err := s.q(ctx).QueryRow(ctx,
-		`SELECT id, slug, kind, display_name, sort_order FROM family.subjects WHERE slug = $1`,
-		slug).Scan(&sub.ID, &sub.Slug, &sub.Kind, &sub.DisplayName, &sub.SortOrder)
+		`SELECT sub.id, sub.slug, sub.kind, sub.display_name, sub.sort_order
+		   FROM family.subjects sub
+		   JOIN core.families f ON f.id = sub.family_id
+		  WHERE sub.slug = $1 AND ($2 = '' OR f.slug = $2)`,
+		slug, familySlug).Scan(&sub.ID, &sub.Slug, &sub.Kind, &sub.DisplayName, &sub.SortOrder)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}

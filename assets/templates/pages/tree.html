@@ -11,11 +11,17 @@
 {{if .SubjectProgress}}
   <h2>Also in the family</h2>
   <p class="lede">Not on the direct line, but there are questions about them.</p>
+  {{/* The line is named on every row, because this list gathers all of them and
+       four of the rows are the catch-all called "Further Back" -- one per line,
+       indistinguishable without it. It is on the link too: a subject slug is
+       unique inside a line and not across them. */}}
   <ul class="slist">
     {{range .SubjectProgress}}
       <li class="srow">
-        <a class="srow-name" href="/subjects/{{.Slug}}">{{.DisplayName}}</a>
-        <p class="srow-meta">{{.Answered}} of {{.Total}} answered</p>
+        <a class="srow-name" href="/subjects/{{.Slug}}?family={{.FamilySlug}}">{{.DisplayName}}</a>
+        <p class="srow-meta">
+          {{if gt (len $.Families) 1}}{{.FamilyName}} &middot; {{end}}{{.Answered}} of {{.Total}} answered
+        </p>
       </li>
     {{end}}
   </ul>
