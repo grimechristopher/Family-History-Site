@@ -1258,33 +1258,35 @@ a.pnode-hit:focus-visible .pnode-box { stroke: var(--teal); stroke-width: 3; }
 
 /* ---------- The note on the home page -------------------------------- */
 
-.note { margin-top: var(--s7); background: var(--sheet-warm); }
+/* Set as a letter rather than as instructions: no headings, one voice, signed at
+   the end. The italic is Atkinson's own -- the only real italic face here, and the
+   reason not to set this in Newsreader, which would have to be slanted by the
+   browser. Italics cost some legibility, so this is a step larger than body text
+   with the line-height opened up to pay it back. */
 
-.note-head {
+.note {
+  margin-top: var(--s7);
+  background: var(--sheet-warm);
+  border-left: 3px solid var(--apricot);
+}
+
+.note p {
+  font-style: italic;
+  font-size: var(--t-lead);
+  line-height: 1.75;
+  color: var(--ink-mid);
+  max-width: var(--measure);
+  text-wrap: pretty;
+}
+
+.note p:last-child { margin-bottom: 0; }
+
+/* Upright and darker, so the signature reads as a hand rather than more of the
+   same sentence. */
+.note p.note-sign {
+  font-style: normal;
   font-family: var(--wordmark);
   font-size: var(--t-h3);
-  font-weight: 600;
-  margin: 0 0 var(--s3);
-  padding: 0;
-  border: 0;
-  display: block;
-}
-
-.note h3.note-head { margin-top: var(--s6); }
-
-.note p { max-width: var(--measure); }
-
-.note-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: var(--s4);
-  max-width: var(--measure);
-}
-
-.note-list li {
-  padding-left: var(--s4);
-  border-left: 3px solid var(--apricot);
-  line-height: 1.65;
+  color: var(--ink);
+  margin-top: var(--s5);
 }

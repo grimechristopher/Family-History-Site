@@ -13,11 +13,12 @@
   <a class="btn" href="/cards">{{if .Progress}}{{if gt .Progress.Answered 0}}Keep going{{else}}Start answering{{end}}{{else}}Start answering{{end}}</a>
 </div>
 
-{{/* Only the people being asked need this. Chris wrote it. */}}
+{{/*
+  A note from Chris to whoever is answering, so it reads in his voice rather than
+  the site's. Shown only to the people being asked -- hence .Progress.
+*/}}
 {{if .Progress}}
-<section class="panel note">
-  <h2 class="note-head">Why we&rsquo;re doing this</h2>
-
+<section class="panel note" aria-label="A note from Chris">
   <p>
     None of this is written down anywhere. What you remember is the only copy, and
     once it&rsquo;s gone it&rsquo;s gone.
@@ -27,28 +28,21 @@
     it&rsquo;s for me &mdash; I never met most of the people in these questions, and
     this is how I get to know them.
   </p>
-
-  <h3 class="note-head">How to answer</h3>
-  <ul class="note-list">
-    <li>
-      <strong>Go on as long as you like.</strong> Longer is better. There is no such
-      thing as too much.
-    </li>
-    <li>
-      <strong>Wander off the question.</strong> If you start on one thing and
-      remember another, put it all in the same answer. I would much rather have it
-      than have it tidy.
-    </li>
-    <li>
-      <strong>Don&rsquo;t decide what&rsquo;s worth keeping.</strong> Say it anyway,
-      even if you&rsquo;re not sure it matters. The small things are usually the ones
-      we&rsquo;d never have known otherwise.
-    </li>
-    <li>
-      <strong>Nothing has to be finished.</strong> It saves as you go, so you can
-      stop halfway and come back.
-    </li>
-  </ul>
+  <p>
+    So go on as long as you like. Longer is better, and there&rsquo;s no such thing
+    as too much. If you start on one thing and remember another, put it all in the
+    same answer &mdash; I&rsquo;d much rather have it than have it tidy.
+  </p>
+  <p>
+    Don&rsquo;t stop to work out whether something&rsquo;s worth keeping. Say it
+    anyway. The small things turn out to be the ones we&rsquo;d never have known
+    otherwise.
+  </p>
+  <p>
+    And nothing has to be finished. It saves as you go, so you can stop halfway and
+    come back whenever you like.
+  </p>
+  <p class="note-sign">Love you, Chris</p>
 </section>
 {{end}}
 {{end}}
