@@ -140,6 +140,9 @@ func run(gedPath, promptsPath, databaseURL, dadEmail, momEmail, adminEmail strin
 	fmt.Printf("subjects:  %d\n", res.Subjects)
 	fmt.Printf("users:     %d\n", res.Users)
 	fmt.Printf("questions: %d\n", res.Questions)
+	if res.Generic > 0 {
+		fmt.Printf("  of which %d are generic questions for the great-grandparent couples\n", res.Generic)
+	}
 	for _, label := range sortedKeys(res.PerPerson) {
 		fmt.Printf("  %-6s %d\n", label, res.PerPerson[label])
 	}

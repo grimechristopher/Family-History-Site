@@ -456,3 +456,45 @@ func slugify(s string) string {
 	}
 	return strings.Trim(b.String(), "-")
 }
+
+// LineageOf returns every person reachable upward from a root, so a subject can
+// be attributed to whichever parent's side of the family it sits on.
+func (t *Tree) LineageOf(rootID string) map[string]bool {
+	seen := map[string]bool{}
+	var walk func(id string)
+	walk = func(id string) {
+		if id == "" || seen[id] {
+			return
+		}
+		p := t.People[id]
+		if p == nil {
+			return
+		}
+		seen[id] = true
+		walk(p.FatherID)
+		walk(p.MotherID)
+	}
+	walk(rootID)
+	return seen
+}
+
+// CouplesByLineage groups couple subjects by the root whose line they belong to.
+// A shared ancestor appearing on both sides is listed under both.
+func (t *Tree) CouplesByLineage() map[string][]Subject {
+	out := map[string][]Subject{}
+	for _, rootID := range t.RootIDs {
+		lineage := t.LineageOf(rootID)
+		for _, s := range t.Subjects {
+			if s.Kind != KindCouple {
+				continue
+			}
+			for _, memberID := range s.MemberIDs {
+				if lineage[memberID] {
+					out[rootID] = append(out[rootID], s)
+					break
+				}
+			}
+		}
+	}
+	return out
+}

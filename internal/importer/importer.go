@@ -30,6 +30,9 @@ type Admin struct {
 	Email string
 }
 
+// GenericQuestions is what every great-grandparent couple is asked.
+var GenericQuestions = subjects.GenericCoupleQuestions
+
 type Options struct {
 	Tree         subjects.Options
 	Contributors []Contributor
@@ -43,6 +46,7 @@ type Result struct {
 	Subjects  int
 	Users     int
 	Questions int
+	Generic   int
 	Archived  int64
 	Matched   int
 	PerPerson map[string]int
@@ -215,6 +219,42 @@ func Run(ctx context.Context, db store.DBTX, ged *gedcom.File, qs []prompts.Ques
 		keys = append(keys, key)
 		res.Questions++
 		res.PerPerson[q.Person]++
+	}
+
+	// 5. A handful of generic questions for each great-grandparent couple. The
+	//    markdown covers those generations as surname lines rather than as people,
+	//    so the couples themselves arrive with nothing to answer.
+	//
+	//    Keyed in their own namespace, so editing the markdown never renumbers
+	//    them and they are archived only if this list itself changes.
+	byLineage := tree.CouplesByLineage()
+	for _, c := range opts.Contributors {
+		rootGedcomID, err := ged.FindByName(c.GedcomName)
+		if err != nil {
+			return nil, err
+		}
+		for _, sub := range byLineage[rootGedcomID] {
+			subjectID, ok := subjectIDs[sub.Slug]
+			if !ok {
+				continue
+			}
+			for i, body := range GenericQuestions {
+				key := prompts.ImportKey(c.Label, sub.Slug, "generic", i+1)
+				if _, err := store.UpsertImportedQuestion(ctx, db, store.ImportedQuestion{
+					SubjectID:     subjectID,
+					AskedOfUserID: userIDs[c.Label],
+					Body:          body,
+					SortOrder:     10000 + i, // after everything from the markdown
+					ImportKey:     key,
+				}); err != nil {
+					return nil, err
+				}
+				keys = append(keys, key)
+				res.Questions++
+				res.Generic++
+				res.PerPerson[c.Label]++
+			}
+		}
 	}
 
 	archived, err := store.ArchiveImportedQuestionsNotIn(ctx, db, keys)
