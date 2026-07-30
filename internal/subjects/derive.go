@@ -430,6 +430,10 @@ func (t *Tree) PeopleAtGeneration(gen int) []string {
 	return t.byGen[gen]
 }
 
+// Slugify turns a name into the form used in addresses. Exported so the importer
+// can make a subject for somebody who is not in the tree.
+func Slugify(s string) string { return slugify(s) }
+
 func slugify(s string) string {
 	var b strings.Builder
 	lastDash := true

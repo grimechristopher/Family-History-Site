@@ -20,8 +20,11 @@ import (
 // Contributor is a person who will be asked questions. Label must match the "#"
 // heading used in the prompts markdown.
 type Contributor struct {
-	Label      string // "Dad", "Mom"
-	Email      string
+	Label string // the "# ..." heading in the prompts file: "Dad", "Frank"
+	Email string
+	// GedcomName may be empty. A sibling who has not been added to the tree yet is
+	// still somebody questions are asked of -- they simply have no person to link
+	// to and are not a root of the ancestor walk.
 	GedcomName string // "Peter John /Hale/"
 }
 
@@ -145,7 +148,37 @@ func Run(ctx context.Context, db store.DBTX, ged *gedcom.File, qs []prompts.Ques
 	//    labels can later be computed per viewer.
 	userIDs := map[string]int64{}
 	rootLabels := map[string]string{}
+	// Contributors with no record in the tree, and the subject made for each.
+	offTree := map[string]string{}
 	for _, c := range opts.Contributors {
+		// Somebody who is not in the tree yet: no person to link, no name to take,
+		// but still asked questions.
+		if c.GedcomName == "" {
+			uid, err := store.UpsertUser(ctx, db, c.Email, c.Label)
+			if err != nil {
+				return nil, err
+			}
+			if err := store.AddMemberTx(ctx, db, store.FamilyFrom(ctx), uid, store.RoleContributor); err != nil {
+				return nil, err
+			}
+			userIDs[c.Label] = uid
+
+			// Their own questions -- "About You" -- need a subject to hang from, and
+			// the tree has none for them. One is made from their name, so a sibling
+			// missing from the tree is still somebody the site can ask about.
+			slug := subjects.Slugify(c.Label)
+			sid, err := store.UpsertSubject(ctx, db, store.Subject{
+				Slug: slug, Kind: "individual", DisplayName: c.Label,
+				SortOrder: 900 + len(offTree),
+			})
+			if err != nil {
+				return nil, err
+			}
+			subjectIDs[slug] = sid
+			offTree[c.Label] = slug
+			continue
+		}
+
 		gid, err := ged.FindByName(c.GedcomName)
 		if err != nil {
 			return nil, fmt.Errorf("contributor %s: %w", c.Label, err)
@@ -196,6 +229,11 @@ func Run(ctx context.Context, db store.DBTX, ged *gedcom.File, qs []prompts.Ques
 	personSubjects, err := tree.PersonSubjects(rootLabels)
 	if err != nil {
 		return nil, err
+	}
+	// Contributors who are not in the tree carry their own subject rather than one
+	// derived from it.
+	for label, slug := range offTree {
+		personSubjects[label] = slug
 	}
 	headings, _ := prompts.Headings(qs)
 	matches, ambiguities := tree.MatchHeadings(headings, personSubjects, opts.Overrides)
@@ -276,6 +314,12 @@ func Run(ctx context.Context, db store.DBTX, ged *gedcom.File, qs []prompts.Ques
 	//    them and they are archived only if this list itself changes.
 	byLineage := tree.CouplesByLineage()
 	for _, c := range opts.Contributors {
+		// Generic questions are attributed by lineage, and somebody who is not in
+		// the tree has no lineage to attribute them to. Their siblings who are in it
+		// already cover those couples.
+		if c.GedcomName == "" {
+			continue
+		}
 		rootGedcomID, err := ged.FindByName(c.GedcomName)
 		if err != nil {
 			return nil, err

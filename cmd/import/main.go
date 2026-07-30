@@ -44,6 +44,12 @@ func main() {
 			"step-parent (defaults to $EXTRA_GEDCOM_NAMES)")
 	generations := fs.Int("generations", 3, "generations above the two roots to import")
 	familySlug := fs.String("family", "home", "slug of the family to import into")
+	var people personList
+	fs.Var(&people, "person",
+		`somebody questions are asked of, as "Heading=email=GEDCOM name". Repeatable.
+	The heading is the "# ..." line in the prompts file. The GEDCOM name may be left
+	off for somebody not in the tree yet, who is then asked questions but is not a
+	root of the ancestor walk. Overrides -dad-name and -mom-name entirely.`)
 	adminLabel := fs.String("admin-label", envOr("ADMIN_LABEL", "Admin"),
 		"how the admin is named on the site (defaults to $ADMIN_LABEL)")
 	dryRun := fs.Bool("dry-run", false, "parse and match, then roll back without committing")
@@ -60,11 +66,11 @@ func main() {
 		"-gedcom":       *gedPath,
 		"-prompts":      *promptsPath,
 		"-database-url": *databaseURL,
-		"-dad-email":    *dadEmail,
-		"-mom-email":    *momEmail,
 		"-admin-email":  *adminEmail,
-		"-dad-name":     *dadName,
-		"-mom-name":     *momName,
+	}
+	if len(people) == 0 {
+		missing["-dad-name"] = *dadName
+		missing["-mom-name"] = *momName
 	}
 	var absent []string
 	for name, value := range missing {
@@ -86,11 +92,23 @@ func main() {
 		}
 	}
 
+	// -person, when given, replaces the two-parent shape entirely: a family may be
+	// one parent, or four siblings, and nothing about the import needs there to be
+	// exactly two of them.
+	contributors := []importer.Contributor(people)
+	if len(contributors) == 0 {
+		contributors = []importer.Contributor{
+			{Label: "Dad", Email: *dadEmail, GedcomName: *dadName},
+			{Label: "Mom", Email: *momEmail, GedcomName: *momName},
+		}
+	}
+
 	cfg := importConfig{
 		GedPath: *gedPath, PromptsPath: *promptsPath, DatabaseURL: *databaseURL,
 		DadEmail: *dadEmail, MomEmail: *momEmail, AdminEmail: *adminEmail,
 		DadName: *dadName, MomName: *momName, AdminLabel: *adminLabel, Family: *familySlug,
 		ExtraNames: extras, Generations: *generations, DryRun: *dryRun,
+		Contributors: contributors,
 	}
 	if err := run(cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "\nimport failed: %v\n", err)
@@ -111,6 +129,27 @@ type importConfig struct {
 	ExtraNames  []string
 	Generations int
 	DryRun      bool
+	// Contributors are everybody questions are asked of. A family may have one, two
+	// or several: two parents, or four siblings recording their own parents.
+	Contributors []importer.Contributor
+}
+
+// personList collects repeated -person flags.
+type personList []importer.Contributor
+
+func (p *personList) String() string { return "" }
+
+func (p *personList) Set(v string) error {
+	parts := strings.SplitN(v, "=", 3)
+	if len(parts) < 2 || parts[0] == "" || parts[1] == "" {
+		return fmt.Errorf(`want "Heading=email" or "Heading=email=GEDCOM name", got %q`, v)
+	}
+	c := importer.Contributor{Label: strings.TrimSpace(parts[0]), Email: strings.TrimSpace(parts[1])}
+	if len(parts) == 3 {
+		c.GedcomName = strings.TrimSpace(parts[2])
+	}
+	*p = append(*p, c)
+	return nil
 }
 
 // envOr reads an environment variable, falling back to a default that names
@@ -160,17 +199,26 @@ func run(cfg importConfig) error {
 	}
 	fmt.Println("schema up to date")
 
+	// The roots are whoever is actually in the tree. A family may have one -- a
+	// widow, or one side of a couple whose in-laws are a family of their own.
+	var roots []string
+	for _, c := range cfg.Contributors {
+		if c.GedcomName != "" {
+			roots = append(roots, c.GedcomName)
+		}
+	}
+	if len(roots) == 0 {
+		return fmt.Errorf("no contributor names anybody in the tree, so there is nothing to walk from")
+	}
+
 	opts := importer.Options{
 		Tree: subjects.Options{
-			RootNames:   []string{cfg.DadName, cfg.MomName},
+			RootNames:   roots,
 			Generations: cfg.Generations,
 			ExtraNames:  cfg.ExtraNames,
 		},
-		Contributors: []importer.Contributor{
-			{Label: "Dad", Email: cfg.DadEmail, GedcomName: cfg.DadName},
-			{Label: "Mom", Email: cfg.MomEmail, GedcomName: cfg.MomName},
-		},
-		Admins: []importer.Admin{{Label: cfg.AdminLabel, Email: cfg.AdminEmail}},
+		Contributors: cfg.Contributors,
+		Admins:       []importer.Admin{{Label: cfg.AdminLabel, Email: cfg.AdminEmail}},
 	}
 
 	s := store.New(pool)
