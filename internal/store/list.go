@@ -225,24 +225,33 @@ func (s *Store) ListCounts(ctx context.Context, f QuestionFilter) (ListCounts, e
 	return c, nil
 }
 
-// SubjectProgress is a subject with how much has been said about them.
+// SubjectProgress is a subject with how much has been said about them, and which
+// line they belong to.
+//
+// The line matters because somebody in four of them sees four people called
+// "Further Back", and the name alone cannot tell them apart.
 type SubjectProgress struct {
 	Subject
-	Total    int
-	Answered int
+	FamilySlug string
+	FamilyName string
+	Total      int
+	Answered   int
 }
 
 // SubjectsWithProgress lists subjects and how much has been said about them.
 //
 // askedOf narrows the counts to one contributor, so filtering to Dad shows only
 // the people Dad has questions about — offering a person with nothing to answer
-// is a dead end.
-func (s *Store) SubjectsWithProgress(ctx context.Context, askedOf string) ([]SubjectProgress, error) {
+// is a dead end. familySlug narrows to one line; empty means every line this
+// person belongs to.
+func (s *Store) SubjectsWithProgress(ctx context.Context, askedOf, familySlug string) ([]SubjectProgress, error) {
 	rows, err := s.q(ctx).Query(ctx, `
 		SELECT s.id, s.slug, s.kind, s.display_name, s.sort_order, s.generation, s.relation,
+		       f.slug, f.display_name,
 		       count(q.id),
 		       count(owner_answer.id)
 		FROM family.subjects s
+		JOIN core.families f ON f.id = s.family_id
 		LEFT JOIN core.users asked
 		       ON $1 <> '' AND asked.display_name = $1
 		LEFT JOIN family.questions q
@@ -253,8 +262,10 @@ func (s *Store) SubjectsWithProgress(ctx context.Context, askedOf string) ([]Sub
 		       ON owner_answer.question_id = q.id
 		      AND owner_answer.author_user_id = q.asked_of_user_id
 		      AND owner_answer.is_draft = false
-		GROUP BY s.id, s.slug, s.kind, s.display_name, s.sort_order, s.generation, s.relation
-		ORDER BY s.sort_order, s.slug`, askedOf)
+		WHERE $2 = '' OR f.slug = $2
+		GROUP BY s.id, s.slug, s.kind, s.display_name, s.sort_order, s.generation, s.relation,
+		         f.slug, f.display_name
+		ORDER BY f.slug, s.sort_order, s.slug`, askedOf, familySlug)
 	if err != nil {
 		return nil, fmt.Errorf("subjects with progress: %w", err)
 	}
@@ -264,7 +275,8 @@ func (s *Store) SubjectsWithProgress(ctx context.Context, askedOf string) ([]Sub
 	for rows.Next() {
 		var p SubjectProgress
 		if err := rows.Scan(&p.ID, &p.Slug, &p.Kind, &p.DisplayName, &p.SortOrder,
-			&p.Generation, &p.Relation, &p.Total, &p.Answered); err != nil {
+			&p.Generation, &p.Relation, &p.FamilySlug, &p.FamilyName,
+			&p.Total, &p.Answered); err != nil {
 			return nil, err
 		}
 		out = append(out, p)

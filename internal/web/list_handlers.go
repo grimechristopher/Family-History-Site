@@ -31,6 +31,33 @@ func (s *Server) handleQuestions(w http.ResponseWriter, r *http.Request) {
 		FamilySlug:  r.URL.Query().Get("family"),
 	}
 
+	// Who answers in this line. Fetched before anything is counted, because it
+	// decides whether the person filter still means anything.
+	contributors, err := s.Store.Contributors(r.Context(), filter.FamilySlug)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+
+	// Choosing a line can strand the person filter: Frank answers only in the
+	// Lucero line, so keeping him selected while looking at the Grime line shows a
+	// blank page and no clue why. Drop the filter instead of the questions.
+	//
+	// Only for an admin, because for a contributor the filter is not a choice --
+	// it is set to them above and pins the page to their own questions.
+	if filter.AskedOfName != "" && u.Role == store.RoleAdmin {
+		found := false
+		for _, c := range contributors {
+			if c.DisplayName == filter.AskedOfName {
+				found = true
+				break
+			}
+		}
+		if !found {
+			filter.AskedOfName = ""
+		}
+	}
+
 	// One section at a time. With 151 waiting, stacking both meant scrolling past
 	// all of them to reach the single answered one.
 	show := r.URL.Query().Get("show")
@@ -55,17 +82,11 @@ func (s *Server) handleQuestions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Scoped to the active person filter, so empty people drop out.
-	subjects, err := s.Store.SubjectsWithProgress(r.Context(), filter.AskedOfName)
+	subjects, err := s.Store.SubjectsWithProgress(r.Context(), filter.AskedOfName, filter.FamilySlug)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
 	}
-	contributors, err := s.Store.Contributors(r.Context())
-	if err != nil {
-		s.serverError(w, r, err)
-		return
-	}
-
 	data := s.newPageData(r, "All questions")
 	data.Nav = "questions"
 	data.Show = show
@@ -75,7 +96,10 @@ func (s *Server) handleQuestions(w http.ResponseWriter, r *http.Request) {
 	data.Contributors = contributors
 	data.FilterSubject = filter.SubjectSlug
 	data.FilterAskedOf = filter.AskedOfName
-	data.SubjectGroups = groupSubjects(data.SubjectProgress)
+	// Only worth naming the line when more than one is in view: inside a chosen
+	// line there is nothing to tell apart.
+	data.SubjectGroups = groupSubjects(data.SubjectProgress,
+		filter.FamilySlug == "" && len(FamiliesOf(r.Context())) > 1)
 	data.FilterFamily = filter.FamilySlug
 	data.ViewerIsAdmin = u.Role == store.RoleAdmin
 	data.NothingMatches = counts.Unanswered == 0 && counts.Answered == 0
@@ -317,7 +341,7 @@ func (s *Server) handleAskQuestion(w http.ResponseWriter, r *http.Request) {
 	// Who it is for. Must be a contributor: asking a question of somebody who is
 	// never shown a card stack would bury it.
 	askedOf := r.FormValue("asked_of")
-	contributors, err := s.Store.Contributors(r.Context())
+	contributors, err := s.Store.Contributors(r.Context(), "")
 	if err != nil {
 		s.serverError(w, r, err)
 		return

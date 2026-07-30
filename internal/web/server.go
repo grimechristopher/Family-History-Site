@@ -89,7 +89,11 @@ type subjectGroup struct {
 // groupSubjects splits subjects by generation. The labels are how a family talks
 // about itself -- "Grandparents", not "generation 2" -- and anything that is not a
 // person on the direct line falls into the last group.
-func groupSubjects(subs []store.SubjectProgress) []subjectGroup {
+// showLine is true when more than one line is on screen. The catch-all subject is
+// called "Further Back" in every line, so somebody in four of them otherwise sees
+// four identical rows and cannot tell which is whose. Named by line, they read as
+// what they are.
+func groupSubjects(subs []store.SubjectProgress, showLine bool) []subjectGroup {
 	// Ancestors read as generations -- Parents, Grandparents. The people beside the
 	// line do not: an aunt is one generation up but calling her a grandparent would
 	// be worse than leaving her out, so relation decides the heading first.
@@ -105,6 +109,9 @@ func groupSubjects(subs []store.SubjectProgress) []subjectGroup {
 		case s.Relation == "sibling":
 			bySibGen[s.Generation] = append(bySibGen[s.Generation], s)
 		case s.Kind == "group":
+			if showLine {
+				s.DisplayName = s.FamilyName
+			}
 			other = append(other, s)
 		case s.Generation >= 0 && s.Generation < len(ancestors):
 			byGen[s.Generation] = append(byGen[s.Generation], s)

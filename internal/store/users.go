@@ -72,18 +72,22 @@ func (s *Store) UserByDisplayName(ctx context.Context, name string) (*User, erro
 // the other side of the family is a member here so she can read her husband's
 // answers, but nothing is asked of her here -- offering her under "whose
 // questions" leads to an empty page.
-func (s *Store) Contributors(ctx context.Context) ([]*User, error) {
+// familySlug narrows to the people who answer in one line. Frank belongs only to
+// the Lucero line, so choosing the Grime line should not go on offering him.
+func (s *Store) Contributors(ctx context.Context, familySlug string) ([]*User, error) {
 	rows, err := s.q(ctx).Query(ctx, `
 		SELECT DISTINCT `+prefixed(userColumns, "u.")+`
 		  FROM core.users u
 		  JOIN core.family_members m ON m.user_id = u.id
+		  JOIN core.families f ON f.id = m.family_id
 		 WHERE m.family_id = ANY($1) AND m.role = 'contributor'
+		   AND ($2 = '' OR f.slug = $2)
 		   AND EXISTS (SELECT 1 FROM family.questions q
 		                WHERE q.asked_of_user_id = u.id
 		                  AND q.family_id = m.family_id
 		                  AND q.archived_at IS NULL)
 		 GROUP BY u.id, u.email, u.supabase_user_id, u.display_name
-		 ORDER BY u.display_name`, FamilyIDsFrom(ctx))
+		 ORDER BY u.display_name`, FamilyIDsFrom(ctx), familySlug)
 	if err != nil {
 		return nil, err
 	}

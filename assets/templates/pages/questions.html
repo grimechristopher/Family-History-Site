@@ -14,12 +14,12 @@
     {{if .Counts}}
       <p class="segmented" role="group" aria-label="Which questions to show">
         <a class="segment" aria-pressed="{{eq .Show "waiting"}}"
-           href="/questions?show=waiting{{if .FilterAskedOf}}&asked_of={{.FilterAskedOf}}{{end}}{{if .FilterSubject}}&subject={{.FilterSubject}}{{end}}">
+           href="/questions?show=waiting{{if .FilterFamily}}&family={{.FilterFamily}}{{end}}{{if .FilterAskedOf}}&asked_of={{.FilterAskedOf}}{{end}}{{if .FilterSubject}}&subject={{.FilterSubject}}{{end}}">
           <span class="seg-long">Still waiting</span><span class="seg-short">Waiting</span>
           <span class="segment-count">{{.Counts.Unanswered}}</span>
         </a>
         <a class="segment" aria-pressed="{{eq .Show "answered"}}"
-           href="/questions?show=answered{{if .FilterAskedOf}}&asked_of={{.FilterAskedOf}}{{end}}{{if .FilterSubject}}&subject={{.FilterSubject}}{{end}}">
+           href="/questions?show=answered{{if .FilterFamily}}&family={{.FilterFamily}}{{end}}{{if .FilterAskedOf}}&asked_of={{.FilterAskedOf}}{{end}}{{if .FilterSubject}}&subject={{.FilterSubject}}{{end}}">
           Answered <span class="segment-count">{{.Counts.Answered}}</span>
         </a>
       </p>
@@ -39,12 +39,15 @@
         {{if gt (len .Families) 1}}
           <details class="side-group" open>
             <summary>Family <span class="side-count">{{len .Families}}</span></summary>
+            {{/* The outer filter. Choosing a line clears the person and the
+                 person it is about, because Frank answers only in the Lucero line
+                 and carrying him into the Grime line lands on an empty page. */}}
             <ul class="side-list">
               <li><a class="side-link" {{if eq .FilterFamily ""}}aria-current="true"{{end}}
-                     href="/questions?show={{.Show}}{{if .FilterAskedOf}}&asked_of={{.FilterAskedOf}}{{end}}">All</a></li>
+                     href="/questions?show={{.Show}}">All</a></li>
               {{range .Families}}
                 <li><a class="side-link" {{if eq $.FilterFamily .Slug}}aria-current="true"{{end}}
-                       href="/questions?family={{.Slug}}&show={{$.Show}}{{if $.FilterAskedOf}}&asked_of={{$.FilterAskedOf}}{{end}}">
+                       href="/questions?family={{.Slug}}&show={{$.Show}}">
                   {{.DisplayName}}</a></li>
               {{end}}
             </ul>
@@ -56,13 +59,13 @@
           <ul class="side-list">
             {{range .Contributors}}
               <li><a class="side-link" {{if eq $.FilterAskedOf .DisplayName}}aria-current="true"{{end}}
-                     href="/questions?asked_of={{.DisplayName}}{{if eq $.Show "answered"}}&show=answered{{end}}">
+                     href="/questions?asked_of={{.DisplayName}}{{if $.FilterFamily}}&family={{$.FilterFamily}}{{end}}{{if eq $.Show "answered"}}&show=answered{{end}}">
                 {{.DisplayName}}{{if eq $.User.DisplayName .DisplayName}} <span class="side-count">you</span>{{end}}
               </a></li>
             {{end}}
             {{if .ViewerIsAdmin}}
               <li><a class="side-link" {{if eq .FilterAskedOf ""}}aria-current="true"{{end}}
-                     href="/questions?asked_of=everyone{{if eq .Show "answered"}}&show=answered{{end}}">Everyone</a></li>
+                     href="/questions?asked_of=everyone{{if .FilterFamily}}&family={{.FilterFamily}}{{end}}{{if eq .Show "answered"}}&show=answered{{end}}">Everyone</a></li>
             {{end}}
           </ul>
         </details>
@@ -75,7 +78,7 @@
         <p class="side-heading">Who it&rsquo;s about</p>
         <ul class="side-list">
           <li><a class="side-link" {{if eq .FilterSubject ""}}aria-current="true"{{end}}
-                 href="/questions?show={{.Show}}{{if .FilterAskedOf}}&asked_of={{.FilterAskedOf}}{{end}}">Anyone</a></li>
+                 href="/questions?show={{.Show}}{{if .FilterFamily}}&family={{.FilterFamily}}{{end}}{{if .FilterAskedOf}}&asked_of={{.FilterAskedOf}}{{end}}">Anyone</a></li>
         </ul>
 
         {{range .SubjectGroups}}
@@ -85,7 +88,7 @@
               {{range .Subjects}}
                 <li>
                   <a class="side-link" {{if eq $.FilterSubject .Slug}}aria-current="true"{{end}}
-                     href="/questions?subject={{.Slug}}&show={{$.Show}}{{if $.FilterAskedOf}}&asked_of={{$.FilterAskedOf}}{{end}}">
+                     href="/questions?subject={{.Slug}}&family={{.FamilySlug}}&show={{$.Show}}{{if $.FilterAskedOf}}&asked_of={{$.FilterAskedOf}}{{end}}">
                     <span class="side-name">{{.DisplayName}}</span>
                     <span class="side-count">{{.Answered}}/{{.Total}}</span>
                   </a>
