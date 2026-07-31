@@ -174,7 +174,13 @@ func PruneSubjectsNotIn(ctx context.Context, db DBTX, slugs []string) (deleted, 
 			       -- something somebody wrote counts.
 			       EXISTS (SELECT 1 FROM family.questions q
 			                WHERE q.subject_id = s.id AND q.archived_at IS NULL) AS has_questions,
-			       EXISTS (SELECT 1 FROM family.entries e WHERE e.subject_id = s.id) AS has_entries
+			       EXISTS (SELECT 1 FROM family.entries e WHERE e.subject_id = s.id) AS has_entries,
+			       -- Somebody who is only in a photograph is still somebody. The
+			       -- boy on the end of a team photograph has no questions and never
+			       -- will, and deleting him on the next import would take the only
+			       -- record that he was there.
+			       EXISTS (SELECT 1 FROM family.photo_subjects ps
+			                WHERE ps.subject_id = s.id) AS in_photos
 			  FROM family.subjects s
 			 WHERE s.family_id = $2 AND NOT (s.slug = ANY($1::text[]))
 		),
@@ -182,16 +188,18 @@ func PruneSubjectsNotIn(ctx context.Context, db DBTX, slugs []string) (deleted, 
 		-- leaving orphans behind is what made the counts confusing.
 		gone_questions AS (
 			DELETE FROM family.questions
-			 WHERE subject_id IN (SELECT id FROM stale WHERE NOT has_questions AND NOT has_entries)
+			 WHERE subject_id IN (SELECT id FROM stale
+			                       WHERE NOT has_questions AND NOT has_entries AND NOT in_photos)
 			RETURNING 1
 		),
 		gone AS (
 			DELETE FROM family.subjects
-			 WHERE id IN (SELECT id FROM stale WHERE NOT has_questions AND NOT has_entries)
+			 WHERE id IN (SELECT id FROM stale
+			               WHERE NOT has_questions AND NOT has_entries AND NOT in_photos)
 			RETURNING 1
 		)
 		SELECT (SELECT count(*) FROM gone),
-		       (SELECT count(*) FROM stale WHERE has_questions OR has_entries)`,
+		       (SELECT count(*) FROM stale WHERE has_questions OR has_entries OR in_photos)`,
 		slugs, FamilyFrom(ctx))
 	if err := row.Scan(&deleted, &kept); err != nil {
 		return 0, 0, fmt.Errorf("prune subjects: %w", err)

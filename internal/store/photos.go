@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
+	"github.com/grimechristopher/family-history-site/internal/subjects"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -272,6 +274,50 @@ func (s *Store) FamilyOfSubject(ctx context.Context, subjectID int64) (int64, er
 	}
 	if err != nil {
 		return 0, fmt.Errorf("family of subject: %w", err)
+	}
+	return id, nil
+}
+
+// CreatePhotoSubject makes a subject for somebody who is in a photograph and not in
+// the tree.
+//
+// A team photograph has fifteen boys in it and two of them are family; the other
+// thirteen are the friends, teammates and neighbours who were there, and being able
+// to write down that the boy on the end was Russ is most of what makes the picture
+// worth keeping. They are not ancestors and get no questions -- they are people in
+// a photograph, which is a thing worth being.
+func (s *Store) CreatePhotoSubject(ctx context.Context, familyID int64, name string) (int64, error) {
+	// The importer's own slugifier, so a name typed in here and the same name
+	// arriving from a GEDCOM land on one subject instead of two.
+	slug := subjects.Slugify(name)
+	if slug == "" {
+		return 0, fmt.Errorf("create photo subject: %q has no name in it", name)
+	}
+	var id int64
+	err := s.q(ctx).QueryRow(ctx, `
+		INSERT INTO family.subjects
+		  (slug, kind, display_name, sort_order, generation, relation, family_id)
+		VALUES ($1, 'individual', $2,
+		        coalesce((SELECT max(sort_order) + 1 FROM family.subjects WHERE family_id = $3), 0),
+		        0, 'other', $3)
+		ON CONFLICT (family_id, slug) DO UPDATE SET display_name = EXCLUDED.display_name
+		RETURNING id`, slug, name, familyID).Scan(&id)
+	if err != nil {
+		return 0, fmt.Errorf("create photo subject %q: %w", name, err)
+	}
+	return id, nil
+}
+
+// FamilyOfPhoto is which line a photograph belongs to.
+func (s *Store) FamilyOfPhoto(ctx context.Context, photoID int64) (int64, error) {
+	var id int64
+	err := s.q(ctx).QueryRow(ctx,
+		`SELECT family_id FROM family.attachments WHERE id = $1`, photoID).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, ErrNotFound
+	}
+	if err != nil {
+		return 0, fmt.Errorf("family of photo: %w", err)
 	}
 	return id, nil
 }

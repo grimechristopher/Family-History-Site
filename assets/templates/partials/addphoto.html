@@ -18,6 +18,7 @@
 
     <fieldset class="askees">
       <legend>Who is in it?</legend>
+      <div class="askees-scroll">
       {{range .SubjectProgress}}
         <label class="askee">
           <input type="checkbox" name="subject_id" value="{{.ID}}"
@@ -25,6 +26,7 @@
           <span>{{.DisplayName}}</span>
         </label>
       {{end}}
+      </div>
     </fieldset>
 
     <div class="btn-row"><button class="btn" type="submit">Add this picture</button></div>

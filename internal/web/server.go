@@ -104,7 +104,7 @@ func groupSubjects(subs []store.SubjectProgress, showLine bool) []subjectGroup {
 	ancestors := []string{"This generation", "Parents", "Grandparents", "Great-grandparents"}
 	byGen := map[int][]store.SubjectProgress{}
 	bySibGen := map[int][]store.SubjectProgress{}
-	var cousins, niblings, other []store.SubjectProgress
+	var cousins, niblings, others, other []store.SubjectProgress
 
 	for _, s := range subs {
 		switch {
@@ -112,6 +112,10 @@ func groupSubjects(subs []store.SubjectProgress, showLine bool) []subjectGroup {
 			cousins = append(cousins, s)
 		case s.Relation == "nibling":
 			niblings = append(niblings, s)
+		case s.Relation == "other":
+			// Somebody who turned up in a photograph rather than in the tree: a
+			// teammate, a neighbour, a friend who was there.
+			others = append(others, s)
 		case s.Relation == "sibling":
 			bySibGen[s.Generation] = append(bySibGen[s.Generation], s)
 		case s.Kind == "group":
@@ -148,6 +152,7 @@ func groupSubjects(subs []store.SubjectProgress, showLine bool) []subjectGroup {
 		}
 	}
 	add("Further back", other)
+	add("Others in the pictures", others)
 	return out
 }
 

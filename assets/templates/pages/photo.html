@@ -95,12 +95,20 @@
       <p class="hint" id="tag-where" hidden></p>
 
       <label for="tag-subject">Who is it?</label>
-      <select id="tag-subject" name="subject_id" required aria-describedby="tag-hint">
-        <option value="">Choose somebody</option>
+      <select id="tag-subject" name="subject_id" aria-describedby="tag-hint">
+        <option value="">Somebody not in the family</option>
         {{range .SubjectProgress}}
           <option value="{{.ID}}">{{.DisplayName}}</option>
         {{end}}
       </select>
+
+      {{/* Most of the faces in a team photograph are not family. Writing down that
+           the boy on the end was Russ is most of what makes the picture worth
+           keeping, so a name is enough -- they do not have to be in the tree, and
+           they get no questions. */}}
+      <label for="tag-name">&hellip; or type their name</label>
+      <input id="tag-name" name="new_name" type="text" autocomplete="off"
+             placeholder="Russ, a teammate">
 
       <div class="btn-row"><button class="btn" type="submit">Save who that is</button></div>
     </form>

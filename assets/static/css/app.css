@@ -1620,6 +1620,16 @@ a.pnode-hit:focus-visible .pnode-box { stroke: var(--teal); stroke-width: 3; }
   border-radius: var(--r-sm);
 }
 
+/* A whole line's worth of people is twenty-five names, which is a wall rather than
+   a list. Capped and scrolled, with the cap in rem so it holds at any text size.
+   The legend stays put while the names move under it. */
+.askees-scroll {
+  max-height: 17rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: var(--s2);
+}
+
 .askees legend {
   padding: 0 var(--s2);
   font: 700 var(--t-small)/1.3 var(--sans);

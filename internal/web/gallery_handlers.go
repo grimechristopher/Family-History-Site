@@ -252,9 +252,34 @@ func (s *Server) handleTagPhotoPerson(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	subjectID, err := strconv.ParseInt(r.FormValue("subject_id"), 10, 64)
-	if err != nil {
-		http.Error(w, "Choose who that is.", http.StatusBadRequest)
+	// Either somebody already known, or a name for somebody who is not. Most of
+	// the faces in a team photograph are teammates and neighbours rather than
+	// family, and recording who they were is much of the point.
+	var subjectID int64
+	if raw := r.FormValue("subject_id"); raw != "" {
+		subjectID, err = strconv.ParseInt(raw, 10, 64)
+		if err != nil {
+			http.Error(w, "Choose who that is.", http.StatusBadRequest)
+			return
+		}
+	} else if name := strings.TrimSpace(r.FormValue("new_name")); name != "" {
+		photo, err := s.Store.Photo(r.Context(), photoID)
+		if err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+		familyID, err := s.Store.FamilyOfPhoto(r.Context(), photo.ID)
+		if err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+		subjectID, err = s.Store.CreatePhotoSubject(r.Context(), familyID, name)
+		if err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+	} else {
+		http.Error(w, "Choose who that is, or type their name.", http.StatusBadRequest)
 		return
 	}
 
