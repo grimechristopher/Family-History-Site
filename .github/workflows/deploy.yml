@@ -1,0 +1,51 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      # Fails fast, before anything touches the running container.
+      - name: Build & vet
+        run: |
+          go vet ./...
+          go build ./...
+
+      - name: Write production .env
+        run: |
+          cat > .env << EOF
+          DATABASE_URL=${{ secrets.DATABASE_URL }}
+          SUPABASE_URL=${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_JWT_SECRET=${{ secrets.SUPABASE_JWT_SECRET }}
+          SUPABASE_JWT_ISSUER=${{ secrets.SUPABASE_JWT_ISSUER }}
+          BASE_URL=${{ secrets.BASE_URL }}
+          SUPABASE_PHOTO_BUCKET=${{ secrets.SUPABASE_PHOTO_BUCKET }}
+          SUPABASE_AUDIO_BUCKET=${{ secrets.SUPABASE_AUDIO_BUCKET }}
+          SUPPORT_EMAIL=${{ secrets.SUPPORT_EMAIL }}
+          SUPPORT_PHONE=${{ secrets.SUPPORT_PHONE }}
+          EOF
+
+      - name: Deploy
+        run: ./deploy-production.sh
+
+      - name: Clean up .env
+        if: always()
+        run: rm -f .env
+
+      - name: Show container status
+        run: docker-compose ps

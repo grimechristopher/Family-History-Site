@@ -16,6 +16,8 @@ services:
       - BASE_URL=${BASE_URL}
       - SUPABASE_PHOTO_BUCKET=${SUPABASE_PHOTO_BUCKET}
       - SUPABASE_AUDIO_BUCKET=${SUPABASE_AUDIO_BUCKET}
+      - SUPPORT_EMAIL=${SUPPORT_EMAIL}
+      - SUPPORT_PHONE=${SUPPORT_PHONE}
       - ADDR=:8080
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
