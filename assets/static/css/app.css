@@ -1090,7 +1090,17 @@ a.tperson:hover { border-color: var(--teal); background: var(--teal-wash); }
 
   .qgroup-head { top: 4.75rem; }   /* clears the pinned controls row */
 
-  /* The panel drops below the row rather than squeezing into it. */
+  /* The panel drops below the row rather than squeezing into it.
+     
+     And it scrolls. It is positioned against the controls row, which is sticky, so
+     it travels with that row and stays near the top of the screen -- which means
+     scrolling the page can never bring the rest of it into view. With four lines in
+     it the panel is 1050px tall on a 844px phone, so the last 500px of it, from
+     Grandparents down, could not be reached by any gesture at all.
+     
+     The max-height here is the floor, deliberately conservative so it is always
+     scrollable even if the script below never runs; display.js measures the space
+     actually available and relaxes it. */
   .side-toggle[open] .side {
     position: absolute;
     left: 0;
@@ -1098,6 +1108,12 @@ a.tperson:hover { border-color: var(--teal); background: var(--teal-wash); }
     z-index: 29;
     margin-top: var(--s2);
     box-shadow: var(--lift-3);
+    max-height: 60dvh;
+    overflow-y: auto;
+    /* Reaching the end of the list must not start scrolling the questions behind
+       it, which on a touchscreen reads as the panel jumping away. */
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
   }
   .side-toggle { position: static; }
 }

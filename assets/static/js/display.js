@@ -120,3 +120,41 @@
 
   field.addEventListener('input', function () { delete field.dataset.fromTree; });
 })();
+
+// How tall the filter panel may be.
+//
+// On a narrow screen the panel is positioned against the controls row, and that
+// row is sticky -- so the panel travels with it and stays near the top of the
+// screen. Scrolling the page cannot bring the bottom of it into view, and with
+// four lines in it the panel is taller than the phone it is on. The CSS gives it a
+// conservative 60dvh so it is always scrollable; this measures the room actually
+// there and gives it the rest.
+(function () {
+  'use strict';
+  var toggle = document.querySelector('.side-toggle');
+  if (!toggle) return;
+  var panel = toggle.querySelector('.side');
+  if (!panel) return;
+
+  function fit() {
+    // Only while it is behaving as a drawer. On a wide screen the rail is an
+    // ordinary column and sizing it against the viewport would cut it off.
+    if (!toggle.open || getComputedStyle(panel).position !== 'absolute') {
+      panel.style.maxHeight = '';
+      return;
+    }
+    panel.style.maxHeight = '';
+    var top = panel.getBoundingClientRect().top;
+    var room = window.innerHeight - top - 16;
+    // Never smaller than a couple of rows: if the measurement comes out absurd,
+    // the stylesheet's own limit is the better answer.
+    if (room > 120) panel.style.maxHeight = Math.round(room) + 'px';
+  }
+
+  toggle.addEventListener('toggle', fit);
+  window.addEventListener('resize', fit);
+  window.addEventListener('orientationchange', fit);
+  // The row it hangs from is sticky, so its position can change as the page moves.
+  window.addEventListener('scroll', fit, { passive: true });
+  fit();
+})();
