@@ -15,7 +15,11 @@ import (
 // not anybody's name. Ids are made from the names rather than kept as xrefs, because
 // "@I372728977243@" tells a reader nothing and "louis-j-lucero" tells them who they
 // are looking at.
-func FromGedcom(f *gedcom.File) *File {
+// keep names the xrefs to include, or is nil for everybody. Filtering happens here
+// rather than afterwards because the ids in the JSON are readable names, not the
+// xrefs a window is expressed in -- comparing the two silently kept nobody.
+func FromGedcom(f *gedcom.File, keep map[string]bool) *File {
+	wanted := func(xref string) bool { return keep == nil || keep[xref] }
 	ids := make(map[string]string, len(f.Individuals))
 	taken := map[string]bool{}
 
@@ -28,6 +32,9 @@ func FromGedcom(f *gedcom.File) *File {
 	sort.Strings(xrefs)
 
 	for _, xref := range xrefs {
+		if !wanted(xref) {
+			continue
+		}
 		ind := f.Individuals[xref]
 		base := slug(NormaliseName(ind.Given) + " " + NormaliseName(ind.Surname))
 		if base == "" {
@@ -46,8 +53,11 @@ func FromGedcom(f *gedcom.File) *File {
 		ids[xref] = id
 	}
 
-	out := &File{People: make([]Person, 0, len(xrefs))}
+	out := &File{People: make([]Person, 0, len(ids))}
 	for _, xref := range xrefs {
+		if !wanted(xref) {
+			continue
+		}
 		ind := f.Individuals[xref]
 		p := Person{
 			ID:      ids[xref],
@@ -64,10 +74,12 @@ func FromGedcom(f *gedcom.File) *File {
 			if fam == nil {
 				continue
 			}
-			if fam.HusbandID != "" {
+			// A link to somebody outside the window is dropped rather than left
+			// dangling: the file must never name a person it does not contain.
+			if wanted(fam.HusbandID) {
 				p.Father = ids[fam.HusbandID]
 			}
-			if fam.WifeID != "" {
+			if wanted(fam.WifeID) {
 				p.Mother = ids[fam.WifeID]
 			}
 		}
@@ -91,7 +103,7 @@ func FromGedcom(f *gedcom.File) *File {
 				}
 				other = ""
 			}
-			if other == "" {
+			if other == "" || !wanted(other) {
 				continue
 			}
 			p.Marriages = append(p.Marriages, Marriage{

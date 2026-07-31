@@ -102,7 +102,7 @@ func TestConvertingAGedcomKeepsTheFamily(t *testing.T) {
 		t.Fatalf("gedcom.Parse: %v", err)
 	}
 
-	doc := FromGedcom(parsed)
+	doc := FromGedcom(parsed, nil)
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(doc); err != nil {
 		t.Fatalf("encode: %v", err)
@@ -161,5 +161,92 @@ func TestNormaliseNameLeavesWhatItShould(t *testing.T) {
 		if got := NormaliseName(in); got != want {
 			t.Errorf("NormaliseName(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// The file should hold what the site reads and nothing else. An Ancestry export has
+// thousands of people in it reached through fifth cousins and their in-laws, and a
+// file nobody can read is a file nobody will correct -- which was the whole reason
+// for moving off the GEDCOM.
+func TestOnlyTheFamilyTheSiteActuallyReads(t *testing.T) {
+	// A root, three generations of ancestors, a sibling, and a stranger reached only
+	// through somebody's in-laws.
+	const ged = `0 HEAD
+0 @ROOT@ INDI
+1 NAME Robert /Lucero/
+1 BIRT
+2 DATE 1958
+1 FAMC @F1@
+0 @SIB@ INDI
+1 NAME Frank /Lucero/
+1 FAMC @F1@
+0 @DAD@ INDI
+1 NAME Louis /Lucero/
+1 FAMS @F1@
+1 FAMC @F2@
+0 @MUM@ INDI
+1 NAME Raquel /Holguin/
+1 FAMS @F1@
+0 @GRAN@ INDI
+1 NAME Ignacio /Lucero/
+1 FAMS @F2@
+0 @STRANGER@ INDI
+1 NAME Someone /Unrelated/
+1 FAMS @F9@
+0 @ALSOSTRANGER@ INDI
+1 NAME Another /Stranger/
+1 FAMS @F9@
+0 @F1@ FAM
+1 HUSB @DAD@
+1 WIFE @MUM@
+1 CHIL @ROOT@
+1 CHIL @SIB@
+0 @F2@ FAM
+1 HUSB @GRAN@
+1 CHIL @DAD@
+0 @F9@ FAM
+1 HUSB @STRANGER@
+1 WIFE @ALSOSTRANGER@
+0 TRLR
+`
+	parsed, err := gedcom.Parse(strings.NewReader(ged))
+	if err != nil {
+		t.Fatalf("gedcom.Parse: %v", err)
+	}
+
+	root, err := parsed.FindByName("Robert /Lucero/")
+	if err != nil {
+		t.Fatalf("FindByName: %v", err)
+	}
+	keep := Window(parsed, []string{root}, 2, 1, true, nil)
+	doc := FromGedcom(parsed, keep)
+
+	got := map[string]bool{}
+	for _, p := range doc.People {
+		got[p.ID] = true
+	}
+	for _, want := range []string{"robert-lucero", "frank-lucero", "louis-lucero",
+		"raquel-holguin", "ignacio-lucero"} {
+		if !got[want] {
+			t.Errorf("%s should be in the file and is not", want)
+		}
+	}
+	for _, unwanted := range []string{"someone-unrelated", "another-stranger"} {
+		if got[unwanted] {
+			t.Errorf("%s is somebody else's family and should not be in the file", unwanted)
+		}
+	}
+
+	// And it must still build a working tree: a link pointing at somebody who was
+	// left out would be worse than including them.
+	f, err := doc.Build()
+	if err != nil {
+		t.Fatalf("the window does not build: %v", err)
+	}
+	if sibs := f.Siblings("robert-lucero"); len(sibs) != 1 || sibs[0] != "frank-lucero" {
+		t.Errorf("Robert's siblings came out as %v", sibs)
+	}
+	if window := f.Ancestors([]string{"robert-lucero"}, 2); len(window) != 4 {
+		t.Errorf("the walk found %v", window)
 	}
 }

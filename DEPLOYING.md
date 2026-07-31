@@ -61,8 +61,18 @@ and no password. Leave the variable out entirely.
    corrected by hand:
 
    ```sh
-   go run ./cmd/treejson -gedcom "export.ged" -out tree/one.json
+   go run ./cmd/treejson -gedcom "export.ged" -out tree/one.json \
+     -root "James Andrew /Grime/" -root "Lori Ann /Ayres/" \
+     -extra-names "Lela /Wisehaupt/"
    ```
+
+   Name the people each line is drawn from and it keeps only what the import reads:
+   their ancestors, their brothers and sisters, those siblings' children, and the
+   spouses of all of them. That is seventy-two people out of two thousand for the
+   Grime and Ayres lines. Without `-root` it writes the whole export, which is
+   thousands of records reached through fifth cousins and their in-laws -- a file
+   nobody can read is a file nobody will correct, which was the reason for moving off
+   the GEDCOM in the first place.
 
    It normalises the shouting on the way through and folds any duplicate records,
    saying which. A `.ged` path still works in `lines.conf` if you would rather import
