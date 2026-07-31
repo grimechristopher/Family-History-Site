@@ -95,20 +95,28 @@
       <p class="hint" id="tag-where" hidden></p>
 
       <label for="tag-subject">Who is it?</label>
-      <select id="tag-subject" name="subject_id" aria-describedby="tag-hint">
-        <option value="">Somebody not in the family</option>
+      <select id="tag-subject" name="subject_id" required aria-describedby="tag-hint"
+              data-reveals="tag-new-name" data-reveals-on="new">
+        <option value="" selected>Choose somebody</option>
+        <option value="new">Somebody not in the family&hellip;</option>
         {{range .TagChoices}}
           <option value="{{.ID}}">{{.DisplayName}}</option>
         {{end}}
       </select>
 
-      {{/* Most of the faces in a team photograph are not family. Writing down that
-           the boy on the end was Russ is most of what makes the picture worth
-           keeping, so a name is enough -- they do not have to be in the tree, and
-           they get no questions. */}}
-      <label for="tag-name">&hellip; or type their name</label>
-      <input id="tag-name" name="new_name" type="text" autocomplete="off"
-             placeholder="Russ, a teammate">
+      {{/* Only asked for once "somebody not in the family" is chosen. Most of the
+           faces in a team photograph are teammates and neighbours, and writing down
+           that the boy on the end was Russ is much of what makes the picture worth
+           keeping -- but a box for it standing open beside a list of the family
+           invited the question of which one you were meant to use.
+
+           Shown regardless where there is no scripting, since then nothing can
+           reveal it. */}}
+      <div id="tag-new-name" class="reveal" hidden>
+        <label for="tag-name">Their name</label>
+        <input id="tag-name" name="new_name" type="text" autocomplete="off"
+               placeholder="Russ, a teammate">
+      </div>
 
       <div class="btn-row"><button class="btn" type="submit">Save who that is</button></div>
     </form>

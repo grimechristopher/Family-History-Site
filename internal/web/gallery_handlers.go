@@ -259,8 +259,11 @@ func (s *Server) handleTagPhotoPerson(w http.ResponseWriter, r *http.Request) {
 	// Either somebody already known, or a name for somebody who is not. Most of
 	// the faces in a team photograph are teammates and neighbours rather than
 	// family, and recording who they were is much of the point.
+	// "new" is the choice that means somebody the tree has never heard of, and the
+	// name comes from the field it reveals.
 	var subjectID int64
-	if raw := r.FormValue("subject_id"); raw != "" {
+	raw := r.FormValue("subject_id")
+	if raw != "" && raw != "new" {
 		subjectID, err = strconv.ParseInt(raw, 10, 64)
 		if err != nil {
 			http.Error(w, "Choose who that is.", http.StatusBadRequest)

@@ -328,3 +328,36 @@
     });
   });
 })();
+
+// A field that only matters once a particular choice is made.
+//
+// The name box for somebody outside the family stood open beside a list of the
+// family, which invited the question of which one you were meant to fill in. It
+// appears when the choice that needs it is made.
+(function () {
+  'use strict';
+  document.querySelectorAll('select[data-reveals]').forEach(function (pick) {
+    var target = document.getElementById(pick.dataset.reveals);
+    if (!target) return;
+    var when = pick.dataset.revealsOn;
+
+    var sync = function () {
+      var wanted = pick.value === when;
+      target.hidden = !wanted;
+      var field = target.querySelector('input, textarea');
+      if (field) {
+        // Required only while it is the thing being asked for, or the form cannot
+        // be submitted at all once it is hidden.
+        if (wanted) {
+          field.required = true;
+          field.focus();
+        } else {
+          field.required = false;
+          field.value = '';
+        }
+      }
+    };
+    pick.addEventListener('change', sync);
+    sync();
+  });
+})();

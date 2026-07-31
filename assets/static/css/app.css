@@ -1939,3 +1939,7 @@ html:not(.js) .sheet-close-row { display: none; }
 /* A brother or sister of the person the chart is about. Same box, quieter edge:
    they are beside the line rather than on it. */
 .pnode-sibling .pnode-box { stroke-dasharray: 5 3; }
+
+/* Revealed by a choice above it. Without scripting nothing can reveal it, so it is
+   simply there -- a field you might not need beats a field you cannot reach. */
+html:not(.js) .reveal[hidden] { display: block; }
