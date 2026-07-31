@@ -520,23 +520,37 @@ func TestLogoutRevokesTheSession(t *testing.T) {
 	}
 }
 
-// An unknown address must look identical to a known one, so the page never
-// reveals who is on the family list.
-func TestLoginDoesNotRevealWhoIsOnTheAllowlist(t *testing.T) {
+// An unknown address is refused, and only a real one provokes an email.
+//
+// This deliberately replaces a test that asserted the opposite. The original made an
+// unknown address answer exactly like a known one, so the page could not be used to
+// discover who is on the family list. That is the right instinct for a site with
+// strangers at the door, and the wrong trade for this one: nine accounts, all of them
+// relatives, and the cost of the discretion was that a typo of your own address sent
+// you to a screen asking for a code from an email nobody had sent. Chris watched it
+// happen and asked for it changed.
+//
+// What must not change is the email: a stranger's address still provokes nothing.
+func TestLoginRefusesAnAddressThatLeadsNowhere(t *testing.T) {
 	h := newHarness(t)
 
 	known := h.post("/login", url.Values{"email": {"dad@example.com"}}, nil)
 	unknown := h.post("/login", url.Values{"email": {"stranger@example.com"}}, nil)
 
-	if known.Code != http.StatusOK || unknown.Code != http.StatusOK {
-		t.Fatalf("statuses = %d and %d", known.Code, unknown.Code)
+	if known.Code != http.StatusOK {
+		t.Errorf("a family member got %d", known.Code)
 	}
-	for _, rec := range []*httptest.ResponseRecorder{known, unknown} {
-		if !strings.Contains(rec.Body.String(), "Check your email") {
-			t.Error("both outcomes must say the same thing")
-		}
+	if unknown.Code != http.StatusForbidden {
+		t.Errorf("a stranger got %d, want 403", unknown.Code)
 	}
-	// Only the allowlisted address should actually provoke an email.
+	if !strings.Contains(known.Body.String(), "Check your email") {
+		t.Error("a family member should be told to check their email")
+	}
+	if strings.Contains(unknown.Body.String(), "Check your email") {
+		t.Error("a stranger is still being told to wait for an email")
+	}
+
+	// The part that matters either way: no mail to strangers.
 	if len(h.sentEmails) != 1 || h.sentEmails[0] != "dad@example.com" {
 		t.Errorf("emails sent = %v, want only dad@example.com", h.sentEmails)
 	}
@@ -1931,4 +1945,55 @@ func TestNamesOnTheQuestionsPageLinkToThePerson(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), "Ask something about") {
 		t.Error("the page it reaches is not the person's page")
 	}
+}
+
+// An address that leads nowhere is told so, rather than being sent to a screen
+// asking for a code out of an email nobody sent.
+//
+// This used to answer "check your email" whatever you typed, so as not to reveal who
+// is on the list. That reads as discretion and behaves as a trap: somebody mistyping
+// their own address waits for a message that was never sent, and the next thing they
+// see asks for the code from it.
+func TestAnAddressThatLeadsNowhereIsToldSo(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+
+	t.Run("never on the list", func(t *testing.T) {
+		rec := h.post("/login", url.Values{"email": {"stranger@example.com"}}, nil)
+		if rec.Code != http.StatusForbidden {
+			t.Errorf("status %d, want 403", rec.Code)
+		}
+		body := rec.Body.String()
+		if !strings.Contains(body, "just for family") {
+			t.Error("did not say the address is not on the list")
+		}
+		if strings.Contains(body, "one-time") || strings.Contains(body, "the code") {
+			t.Error("still asking for a code out of an email nobody sent")
+		}
+	})
+
+	// Known, and in no family: added and then removed from the only line they were
+	// in, or created before anybody put them in one. Signing in would work and show
+	// an empty site.
+	t.Run("known but in no family", func(t *testing.T) {
+		err := h.store.InTx(ctx, func(db store.DBTX) error {
+			_, err := store.UpsertUser(ctx, db, "orphan@example.com", "Orphan")
+			return err
+		})
+		if err != nil {
+			t.Fatalf("seed: %v", err)
+		}
+		rec := h.post("/login", url.Values{"email": {"orphan@example.com"}}, nil)
+		if rec.Code != http.StatusForbidden {
+			t.Errorf("status %d, want 403 for somebody in no family", rec.Code)
+		}
+	})
+
+	// And somebody real still gets the code screen.
+	t.Run("a family member", func(t *testing.T) {
+		rec := h.post("/login", url.Values{"email": {"dad@example.com"}}, nil)
+		if rec.Code == http.StatusForbidden {
+			t.Fatalf("a family member was refused: %s", rec.Body.String())
+		}
+	})
 }

@@ -26,3 +26,6 @@ static/css/tailwind.css
 # in Postgres and the family's details should stay with them. Kept on disk,
 # stripped from history.
 /docs/
+
+# Database dumps: the family's answers and their photographs.
+/backups/

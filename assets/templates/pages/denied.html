@@ -1,12 +1,21 @@
 {{define "content"}}
+{{/* Reached two ways: asking for a link with an address that leads nowhere, and
+     completing a Supabase sign-in that turns out not to be on the list. It must not
+     claim either happened, so it says what is true of both. */}}
 <h1>This site is just for family</h1>
 <p class="lede">
-  You signed in successfully, but <strong>{{.Email}}</strong> isn&rsquo;t on the list for this site.
+  <strong>{{.Email}}</strong> isn&rsquo;t on the list for this site, so there is
+  nothing here to sign in to and no email has been sent.
 </p>
 <p class="lede">
-  If you think it should be, ask Chris to add you.
+  If it should be on the list &mdash; or if that was a typo &mdash; ask me and
+  I&rsquo;ll sort it out.
+  {{if .SupportEmail}}
+    <a class="link" href="mailto:{{.SupportEmail}}">{{.SupportEmail}}</a>{{if .SupportPhone}},
+    or text <a class="link" href="tel:{{.SupportPhone}}">{{.SupportPhone}}</a>{{end}}.
+  {{end}}
 </p>
 <div class="btn-row">
-  <a class="btn btn-quiet" href="/login">Try a different address</a>
+  <a class="btn" href="/login">Try a different address</a>
 </div>
 {{end}}

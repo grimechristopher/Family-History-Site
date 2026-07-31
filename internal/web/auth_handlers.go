@@ -82,19 +82,44 @@ func (s *Server) handleLoginSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check the allowlist before asking Supabase for anything. A family-only site
-	// should not send email to strangers, and it should not reveal who is on the
-	// list either — so an unknown address gets the same "check your email"
-	// response as a known one.
-	_, err := s.Store.UserByEmail(r.Context(), email)
+	// Check the allowlist before asking Supabase for anything: a family-only site
+	// should not send email to strangers.
+	//
+	// This used to answer "check your email" either way, so as not to reveal who is
+	// on the list. That reads as discretion and behaves as a trap -- no email ever
+	// arrives, and the next screen asks for a code out of that email. Somebody
+	// mistyping their own address sits there waiting for a message nobody sent. For
+	// a site with nine accounts, all of them relatives, saying so plainly is worth
+	// more than hiding which addresses exist.
+	deny := func(reason string) {
+		s.Log.Warn("login refused", "email", email, "why", reason)
+		denied := s.newPageData(r, "Not on the list")
+		denied.Email = email
+		w.WriteHeader(http.StatusForbidden)
+		s.render(w, r, "denied", denied)
+	}
+
+	user, err := s.Store.UserByEmail(r.Context(), email)
 	switch {
 	case errors.Is(err, store.ErrNotFound):
-		s.Log.Warn("login attempt for unknown address", "email", email)
-		data.Sent = true
-		s.render(w, r, "login", data)
+		deny("no such address")
 		return
 	case err != nil:
 		s.serverError(w, r, err)
+		return
+	}
+
+	// An address can be known and still lead nowhere: an account added and then
+	// removed from the only line it was in, or one created before anybody put it in
+	// a family. Signing in would work and show an empty site, so it is refused here
+	// with an explanation instead.
+	families, err := s.Store.FamiliesOf(r.Context(), user.ID)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	if len(families) == 0 {
+		deny("in no family")
 		return
 	}
 
