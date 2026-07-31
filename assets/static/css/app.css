@@ -1943,3 +1943,69 @@ html:not(.js) .sheet-close-row { display: none; }
 /* Revealed by a choice above it. Without scripting nothing can reveal it, so it is
    simply there -- a field you might not need beats a field you cannot reach. */
 html:not(.js) .reveal[hidden] { display: block; }
+
+/* ---------- Who is in a picture --------------------------------------
+   One line rather than a stack. Each name used to take a heading's worth of
+   vertical space for itself and a remove button, with the form for pointing out a
+   face standing open underneath -- most of a screen before anything anybody had
+   written about the picture.
+   ------------------------------------------------------------------ */
+
+.photo-who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2) var(--s3);
+  max-width: none;
+  margin: 0 0 var(--s5);
+}
+
+.photo-who-label {
+  font: 700 var(--t-micro)/1.4 var(--sans);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.photo-who-person {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  padding: var(--s1) var(--s1) var(--s1) var(--s3);
+  border: 1px solid var(--rule-firm);
+  border-radius: var(--r-pill);
+  background: var(--sheet);
+  font: 700 var(--t-small)/1.3 var(--sans);
+}
+.photo-who-person a { color: var(--ink); text-decoration: none; }
+.photo-who-person a:hover, .photo-who-person a:focus-visible { text-decoration: underline; }
+.photo-who-person form { margin: 0; display: inline; }
+.photo-who-person button {
+  min-width: 1.75rem; min-height: 1.75rem;
+  border: 0; border-radius: var(--r-pill);
+  background: transparent; color: var(--ink-soft);
+  font: 400 1.125rem/1 var(--sans); cursor: pointer;
+}
+.photo-who-person button:hover, .photo-who-person button:focus-visible {
+  background: var(--rust-wash); color: var(--rust);
+}
+
+/* Somebody recorded as being in it whose face nobody has pointed out yet. */
+.photo-who-loose { border-style: dashed; }
+.photo-who-loose a { color: var(--ink-mid); }
+
+.photo-who-none { font-size: var(--t-small); color: var(--ink-soft); }
+
+.photo-who-add {
+  min-height: var(--tap);
+  padding: var(--s1) var(--s4);
+  border: 2px dashed var(--rule-firm);
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--ink-mid);
+  font: 700 var(--t-small)/1.2 var(--sans);
+  cursor: pointer;
+}
+.photo-who-add:hover, .photo-who-add:focus-visible {
+  border-color: var(--teal); color: var(--teal); background: var(--teal-wash);
+}

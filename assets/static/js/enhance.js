@@ -266,8 +266,8 @@
   frame.addEventListener('pointerup', endDrag);
   frame.addEventListener('pointercancel', endDrag);
 
-  var panel = document.getElementById('tag-panel');
-  if (!panel) return;
+  var sheet = document.getElementById('tag-sheet');
+  if (!sheet) return;
 
   var fx = document.getElementById('tag-x');
   var fy = document.getElementById('tag-y');
@@ -297,8 +297,9 @@
     marker.style.top = y.toFixed(2) + '%';
 
     where.hidden = false;
-    where.textContent = 'Face picked. Now choose who it is.';
-    panel.open = true;
+    where.textContent = 'Face picked. Now say who it is.';
+    // Straight into the question, since that is what clicking a face was asking.
+    if (typeof sheet.showModal === 'function' && !sheet.open) sheet.showModal();
     var pick = document.getElementById('tag-subject');
     if (pick) pick.focus();
   });
