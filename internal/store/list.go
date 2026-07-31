@@ -317,11 +317,17 @@ type SubjectProgress struct {
 	// somebody has started writing: dropping them out of the list at that moment
 	// takes away the page being written on.
 	Stories int
-	// AnyTotal counts every live question about them, whoever is asked. Total is
-	// narrowed to the person being filtered on and is what the page shows; this is
-	// what decides whether they are worth listing at all. The two differ for
-	// somebody who has questions, just not for the person you are looking at.
-	AnyTotal int
+	// AnyTotal and AnyAnswered count every live question about them and every
+	// answer to one, whoever was asked. These are what the rail shows.
+	//
+	// "Who it's about" is a map of the family, so it says the same thing whoever
+	// you happen to be reading. Narrowed to one person it showed Inez three of the
+	// eleven people her line has questions about, and hid four great-grandparent
+	// couples because those questions had been put to her brother -- which is not
+	// what "who it's about" means, and made half the family unreachable from the
+	// page built for reaching them.
+	AnyTotal    int
+	AnyAnswered int
 }
 
 // SubjectsWithProgress lists subjects and how much has been said about them.
@@ -338,7 +344,13 @@ func (s *Store) SubjectsWithProgress(ctx context.Context, askedOf, familySlug st
 		       count(owner_answer.id),
 		       (SELECT count(*) FROM family.entries e WHERE e.subject_id = s.id),
 		       (SELECT count(*) FROM family.questions aq
-		         WHERE aq.subject_id = s.id AND aq.archived_at IS NULL)
+		         WHERE aq.subject_id = s.id AND aq.archived_at IS NULL),
+		       (SELECT count(*) FROM family.questions aq
+		         JOIN family.entries ae ON ae.question_id = aq.id AND ae.is_draft = false
+		        WHERE aq.subject_id = s.id AND aq.archived_at IS NULL
+		          AND EXISTS (SELECT 1 FROM family.question_askees aa
+		                       WHERE aa.question_id = aq.id
+		                         AND aa.user_id = ae.author_user_id))
 		FROM family.subjects s
 		JOIN core.families f ON f.id = s.family_id
 		LEFT JOIN core.users asked
@@ -369,7 +381,7 @@ func (s *Store) SubjectsWithProgress(ctx context.Context, askedOf, familySlug st
 		var p SubjectProgress
 		if err := rows.Scan(&p.ID, &p.Slug, &p.Kind, &p.DisplayName, &p.SortOrder,
 			&p.Generation, &p.Relation, &p.FamilySlug, &p.FamilyName,
-			&p.Total, &p.Answered, &p.Stories, &p.AnyTotal); err != nil {
+			&p.Total, &p.Answered, &p.Stories, &p.AnyTotal, &p.AnyAnswered); err != nil {
 			return nil, err
 		}
 		out = append(out, p)

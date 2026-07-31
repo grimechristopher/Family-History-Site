@@ -90,30 +90,22 @@ func (s *Server) handleQuestions(w http.ResponseWriter, r *http.Request) {
 
 	// Only people something has actually been recorded about. Importing the
 	// brothers, sisters and cousins put ninety names in this list, most of them
-	// 0/0, and finding the four people you can actually answer for meant reading
-	// past all of them.
+	// with nothing to read, and finding the people you could actually answer for
+	// meant reading past all of them.
 	//
 	// They are not lost: everybody is on the chart, and opening one there gives a
 	// page that takes a question or a story. Doing either puts them here.
 	//
-	// The test is whether anything exists about them at all, not whether anything
-	// exists for the person being filtered on. Using the narrowed count emptied the
-	// whole list for a member with no questions of their own yet -- which is
-	// everybody on their first day, and exactly when they most need to see who
-	// there is to write about.
+	// Counted across everybody rather than narrowed to whoever is selected. This is
+	// a map of the family and should say the same thing whoever is reading it -- the
+	// narrowed count showed Inez three of the eleven people her line has questions
+	// about and hid four great-grandparent couples, because those questions had been
+	// put to her brother.
 	var withSomething []store.SubjectProgress
 	for _, sub := range subjects {
-		if sub.Total > 0 || sub.Stories > 0 || sub.Slug == filter.SubjectSlug {
+		if sub.AnyTotal > 0 || sub.Stories > 0 || sub.Slug == filter.SubjectSlug {
+			sub.Total, sub.Answered = sub.AnyTotal, sub.AnyAnswered
 			withSomething = append(withSomething, sub)
-		}
-	}
-	if len(withSomething) == 0 {
-		// Nothing is asked of this person yet. Rather than an empty list, show who
-		// there is to write about at all.
-		for _, sub := range subjects {
-			if sub.AnyTotal > 0 || sub.Stories > 0 {
-				withSomething = append(withSomething, sub)
-			}
 		}
 	}
 	subjects = withSomething
@@ -153,6 +145,14 @@ func (s *Server) handleQuestions(w http.ResponseWriter, r *http.Request) {
 	data.ViewerIsAdmin = u.Role == store.RoleAdmin
 	data.NothingMatches = counts.Unanswered == 0 && counts.Answered == 0
 
+	// Choosing somebody in the rail asks for the questions alone, so the rail keeps
+	// its scroll position and whichever groups were open. Only when the request
+	// really is for that fragment: an htmx request from anywhere else still gets a
+	// whole page.
+	if r.Header.Get("HX-Request") == "true" && r.Header.Get("HX-Target") == "question-list" {
+		s.renderNamed(w, r, "questions", "question-list", data)
+		return
+	}
 	s.render(w, r, "questions", data)
 }
 

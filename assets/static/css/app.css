@@ -484,7 +484,12 @@ details[open] > summary::after { content: "–"; }
 
 /* ---------- Display settings --------------------------------------- */
 
-.display-settings { position: relative; }
+/* The panel is positioned against the whole tools group rather than against the
+   button, so its right edge lines up with the edge of the bar. Anchored to the
+   button it ran off the left of a phone: the button sits 100px in from the right,
+   the panel is 336px wide, and 336 from there is 46px past the screen -- the word
+   "Text size" arrived as "t size" with the Normal button cut in half. */
+.bar-tools { position: relative; }
 /* The disclosure triangle is a ::marker, not an ::after, and hiding the wrong one
    left it holding space at the start of the pill so the label sat right of centre.
    A summary only stops generating a marker once it is no longer display: list-item,
@@ -515,6 +520,9 @@ details[open] > summary::after { content: "–"; }
 .display-panel {
   position: absolute; right: 0; top: calc(100% + var(--s2)); z-index: 40;
   width: min(21rem, calc(100vw - 2rem));
+  /* Belt as well as braces: whatever it is anchored to, it never starts left of
+     the screen. */
+  max-width: calc(100vw - var(--s4) * 2);
   padding: var(--s4);
   border: 1px solid var(--rule); border-radius: var(--r);
   background: var(--sheet); box-shadow: var(--lift-3);
@@ -1518,13 +1526,39 @@ a.pnode-hit:focus-visible .pnode-box { stroke: var(--teal); stroke-width: 3; }
 
 /* The "who it's about" heading, which is a label rather than a collapsible group:
    the groups underneath are the things that open and close. */
+/* Kept for anywhere else that wants a plain label in the rail. "Who it's about"
+   is a collapsible group now, like the two above it. */
 .side-heading {
-  font-family: var(--sans);
-  font-size: var(--t-small);
-  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
   margin: 0 0 var(--s2);
+  padding-bottom: var(--s2);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--sans);
+  font-size: var(--t-micro);
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
   color: var(--ink-mid);
 }
+
+/* The generations, which belong to the heading above them. Indented, in sentence
+   case, and with a rule that stops short of the edge -- a level down rather than
+   another one across. */
+.side-section { margin-bottom: var(--s3); }
+
+.side-subgroup { margin-left: var(--s3); }
+
+.side-subgroup > summary {
+  font-size: var(--t-micro);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-soft);
+  border-bottom-color: color-mix(in srgb, var(--rule) 60%, transparent);
+}
+.side-subgroup > summary:hover { color: var(--ink); }
+.side-subgroup[open] > summary { color: var(--ink-mid); }
 
 /* A count beside a group name, so a collapsed group still says how much is in it,
    pushed to the far edge where the eye can run down it. */

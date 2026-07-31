@@ -34,13 +34,6 @@
         <span class="side-toggle-label">Filters</span>
       </summary>
       <aside class="side" aria-label="Filters">
-        {{/* Three lists stacked on top of each other, and nothing said that they
-             narrow one another. Said once, at the top, rather than explained three
-             times or left to be worked out. Only where there is more than one
-             thing to combine. */}}
-        {{if or (gt (len .Families) 1) (gt (len .Contributors) 1)}}
-          <p class="side-note">Each of these narrows the list further.</p>
-        {{end}}
         {{/* Only worth showing to somebody in more than one line. For everybody
              else there is nothing to choose between. */}}
         {{if gt (len .Families) 1}}
@@ -82,19 +75,24 @@
              takes a story, and a question can be added to them. Grouped by how far
              back they are, because two dozen names in one list is unusable, and
              collapsed except the nearest generation. */}}
-        <p class="side-heading">Who it&rsquo;s about</p>
-        <ul class="side-list">
-          <li><a class="side-link" {{if eq .FilterSubject ""}}aria-current="true"{{end}}
-                 href="/questions?show={{.Show}}{{if .FilterFamily}}&family={{.FilterFamily}}{{end}}{{if .FilterAskedOf}}&asked_of={{.FilterAskedOf}}{{end}}">Anyone</a></li>
-        </ul>
+        {{/* One heading, at the same level as Family and Whose questions above it,
+             with the generations nested under it. They used to be drawn as headings
+             themselves, so a list that is one filter with eight groups inside it
+             read as nine filters in a row. */}}
+        <details class="side-group side-section" open>
+          <summary>Who it&rsquo;s about</summary>
+          <ul class="side-list">
+            <li><a class="side-link" data-swaps-list {{if eq .FilterSubject ""}}aria-current="true"{{end}}
+                   href="/questions?show={{.Show}}{{if .FilterFamily}}&family={{.FilterFamily}}{{end}}{{if .FilterAskedOf}}&asked_of={{.FilterAskedOf}}{{end}}">Anyone</a></li>
+          </ul>
 
         {{range .SubjectGroups}}
-          <details class="side-group"{{if .Open}} open{{end}}>
+          <details class="side-group side-subgroup"{{if .Open}} open{{end}}>
             <summary>{{.Label}} <span class="side-count">{{len .Subjects}}</span></summary>
             <ul class="side-list">
               {{range .Subjects}}
                 <li>
-                  <a class="side-link" {{if eq $.FilterSubject .Slug}}aria-current="true"{{end}}
+                  <a class="side-link" data-swaps-list {{if eq $.FilterSubject .Slug}}aria-current="true"{{end}}
                      href="/questions?subject={{.Slug}}&family={{.FamilySlug}}&show={{$.Show}}{{if $.FilterAskedOf}}&asked_of={{$.FilterAskedOf}}{{end}}">
                     <span class="side-name">{{.DisplayName}}</span>
                     <span class="side-count">{{.Answered}}/{{.Total}}</span>
@@ -104,11 +102,22 @@
             </ul>
           </details>
         {{end}}
+        </details>
       </aside>
     </details>
   </div>
 
   <div class="with-side-main">
+    {{template "question-list" .}}
+  </div>
+</div>
+{{end}}
+
+{{/* Just the questions. Choosing somebody in the rail swaps this and nothing else,
+     so the rail keeps its scroll position and whichever groups were open. Reloading
+     the whole page threw all of that away and put you back at the top. */}}
+{{define "question-list"}}
+<div id="question-list">
     {{if .Groups}}
       {{range .Groups}}
         <section class="qgroup">
@@ -150,6 +159,5 @@
       </div>
     {{end}}
     {{template "site-footer" .}}
-  </div>
 </div>
 {{end}}

@@ -50,6 +50,9 @@
 {{if not .OwnFooter}}{{template "site-footer" .}}{{end}}
 
 <script src="/static/js/htmx.min.js?v={{.AssetVersion}}" defer></script>
+<!-- After htmx, and deferred: everything in here needs the document, and some of
+     it needs htmx. -->
+<script src="/static/js/enhance.js?v={{.AssetVersion}}" defer></script>
 {{block "scripts" .}}{{end}}
 </body>
 </html>{{end}}
