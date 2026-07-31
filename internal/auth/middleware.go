@@ -79,7 +79,8 @@ func (s *Sessions) Require(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c, err := r.Cookie(SessionCookie)
 		if err != nil {
-			redirectToLogin(w, r)
+			// No cookie: this is somebody arriving, not somebody being turned out.
+			redirectToLogin(w, r, false)
 			return
 		}
 		u, err := s.Store.UserBySessionToken(r.Context(), c.Value)
@@ -88,7 +89,9 @@ func (s *Sessions) Require(next http.Handler) http.Handler {
 				http.Error(w, "something went wrong on our end", http.StatusInternalServerError)
 				return
 			}
-			redirectToLogin(w, r)
+			// A cookie that no longer works: they were signed in until now, so the
+			// page owes them an explanation.
+			redirectToLogin(w, r, true)
 			return
 		}
 		next.ServeHTTP(w, r.WithContext(withUser(r.Context(), u)))
@@ -107,13 +110,24 @@ func (s *Sessions) Optional(next http.Handler) http.Handler {
 	})
 }
 
-func redirectToLogin(w http.ResponseWriter, r *http.Request) {
+// redirectToLogin sends somebody to the sign-in page.
+//
+// expired distinguishes the two ways of arriving there, which are not the same thing
+// to the person reading the page. A session that ran out deserves "you were signed
+// out, what you wrote was saved". Somebody opening the site for the first time has
+// not been signed out of anything and has written nothing -- telling them their work
+// was saved invites them to wonder what they lost.
+func redirectToLogin(w http.ResponseWriter, r *http.Request, expired bool) {
+	to := "/login"
+	if expired {
+		to += "?expired=1"
+	}
 	// htmx needs an explicit instruction; a 302 would be swallowed into the
 	// swap target and the login page would appear inside the card.
 	if r.Header.Get("HX-Request") == "true" {
-		w.Header().Set("HX-Redirect", "/login?expired=1")
+		w.Header().Set("HX-Redirect", to)
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-	http.Redirect(w, r, "/login?expired=1", http.StatusSeeOther)
+	http.Redirect(w, r, to, http.StatusSeeOther)
 }

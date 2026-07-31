@@ -1997,3 +1997,34 @@ func TestAnAddressThatLeadsNowhereIsToldSo(t *testing.T) {
 		}
 	})
 }
+
+// The first page anybody sees must not tell them they were signed out.
+//
+// redirectToLogin sent everybody to /login?expired=1, so opening the site for the
+// first time greeted you with "You were signed out. Anything you had written was
+// saved." -- neither true, and the second half invites somebody who has written
+// nothing to wonder what they lost. It is the first thing the family sees.
+func TestArrivingForTheFirstTimeIsNotToldTheyWereSignedOut(t *testing.T) {
+	h := newHarness(t)
+
+	// No cookie at all: somebody who has just been sent the link.
+	rec := h.get("/questions", nil)
+	loc := rec.Header().Get("Location")
+	if strings.Contains(loc, "expired") {
+		t.Errorf("a first visit is redirected to %q", loc)
+	}
+	if body := h.get(loc, nil).Body.String(); strings.Contains(body, "You were signed out") {
+		t.Error("the sign-in page claims they were signed out")
+	}
+
+	// A session that really did run out still gets the explanation, and the
+	// reassurance that goes with it -- that is the case the message is for.
+	stale := &http.Cookie{Name: auth.SessionCookie, Value: "a-token-that-no-longer-exists"}
+	rec = h.get("/questions", stale)
+	if loc := rec.Header().Get("Location"); !strings.Contains(loc, "expired=1") {
+		t.Fatalf("an expired session redirected to %q, want expired=1", loc)
+	}
+	if body := h.get("/login?expired=1", nil).Body.String(); !strings.Contains(body, "You were signed out") {
+		t.Error("an expired session is given no explanation")
+	}
+}
