@@ -273,6 +273,12 @@ type pedigreeNode struct {
 	// grandparent reads as "your dad, and his brother and sister" rather than as
 	// three strangers.
 	OnLine bool `json:"onLine,omitempty"`
+
+	// Siblings is set on the person a line is drawn from. They stand beside them on
+	// the chart rather than behind a badge on their parents: Robert appeared alone
+	// with no sign that Frank, Ines and Tony existed, when the three of them are
+	// answering the same questions he is.
+	Siblings []*pedigreeNode `json:"siblings,omitempty"`
 }
 
 // pedigreeMember is one person inside a couple's box.
@@ -409,6 +415,23 @@ func (s *Server) handleTreeJSON(w http.ResponseWriter, r *http.Request) {
 	for _, root := range roots {
 		node := convert(root, 0)
 		node.Label = root.FamilyName
+
+		// Their brothers and sisters: the children of their parents, minus
+		// themselves. Taken from both parents so a half-sibling recorded under one
+		// of them is not missed.
+		var parentIDs []int64
+		for _, id := range []*int64{root.Person.FatherID, root.Person.MotherID} {
+			if id != nil {
+				parentIDs = append(parentIDs, *id)
+			}
+		}
+		for _, sib := range kinOf(parentIDs, root.Person.ID, 1) {
+			if sib.OnLine {
+				continue // that is the person the chart is about
+			}
+			node.Siblings = append(node.Siblings, sib)
+		}
+
 		stampFamily(node, root.FamilySlug)
 		out = append(out, node)
 	}
@@ -464,5 +487,8 @@ func stampFamily(n *pedigreeNode, slug string) {
 	}
 	for _, k := range n.Kin {
 		stampFamily(k, slug)
+	}
+	for _, sib := range n.Siblings {
+		stampFamily(sib, slug)
 	}
 }

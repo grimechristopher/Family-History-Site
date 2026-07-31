@@ -13,8 +13,8 @@
 <p class="eyebrow">Pictures</p>
 <h1>{{.Subject.DisplayName}}</h1>
 
-{{if .Photos}}
-  <ul class="collage">
+<ul class="collage">
+  {{if .Photos}}
     {{range .Photos}}
       <li class="collage-item">
         <a href="/photos/{{.ID}}">
@@ -33,11 +33,18 @@
         {{end}}
       </li>
     {{end}}
-  </ul>
-{{else}}
-  <div class="panel panel-empty">
-    <p class="lede">No pictures of them yet.</p>
-  </div>
+  {{end}}
+  {{/* Sits with the pictures rather than under them, because adding one is the same
+       kind of act as looking at one. */}}
+  <li class="collage-item collage-add">
+    <button class="collage-add-btn" type="button" data-opens="add-photo">
+      <span class="collage-add-mark" aria-hidden="true">+</span>
+      <span>Add a picture</span>
+    </button>
+  </li>
+</ul>
+{{if not .Photos}}
+  <p class="lede">No pictures of them yet.</p>
 {{end}}
 
 {{template "add-photo-form" .}}

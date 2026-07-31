@@ -12,6 +12,11 @@
   var KEYS = { size: 'fhs-size' };
   var root = document.documentElement;
 
+  // Says scripting is available, so a thing that only works with it can be shown
+  // and its fallback hidden. Set here rather than later because this file runs in
+  // the head without defer, which means it happens before anything is painted.
+  root.classList.add('js');
+
   function read(key) {
     try { return localStorage.getItem(key); } catch (e) { return null; }
   }

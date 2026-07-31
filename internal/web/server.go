@@ -229,6 +229,11 @@ type pageData struct {
 	Photos []store.Photo
 	// PhotoCount is how many pictures this person is in, for the link by their name.
 	PhotoCount int
+	// TagChoices is who a pin may name: the family, and also the ad-hoc names
+	// already used on a photograph. Saying who a picture is *of* is a narrower
+	// question -- that list is the family only, or a teammate ends up offered
+	// alongside somebody's grandmother.
+	TagChoices []store.SubjectProgress
 
 	// question detail
 	Question        *store.QuestionDetail

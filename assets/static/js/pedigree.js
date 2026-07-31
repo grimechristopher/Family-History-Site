@@ -371,6 +371,42 @@
         }
       });
 
+      // The brothers and sisters of the person the chart is about, stacked under
+      // them in their own column.
+      //
+      // A pedigree has one box in that column and a great deal of empty space
+      // beneath it, and Robert was standing in it alone with no sign that Frank,
+      // Ines and Tony exist -- when the three of them are answering the same
+      // questions he is. They were reachable only by opening the badge on one of
+      // his parents, which is a thing you have to know to do.
+      var siblings = rootData.siblings || [];
+      if (siblings.length) {
+        var rootNode = nodes[0];
+        var rx = rootNode.px + PAD;
+        var ry = rootNode.py + shiftY - boxH(rootData) / 2;
+        var spine = rx + 18;
+        var top = ry + boxH(rootData);
+
+        siblings.forEach(function (sib, i) {
+          var sy = top + GAP_Y + i * (NODE_H + GAP_Y);
+          // An elbow down from under the root and across, so they read as beside
+          // them rather than below them in time.
+          linkLayer.appendChild(el('path', {
+            d: 'M' + spine + ',' + top + 'V' + (sy + NODE_H / 2) + 'H' + rx
+          }));
+          svg.appendChild(drawBox(sib, rx, sy, 'pnode-sibling', false));
+        });
+
+        // Grow the canvas if the stack runs past the bottom of it, so nothing is
+        // cut off on a family with several children.
+        var needed = top + GAP_Y + siblings.length * (NODE_H + GAP_Y) + PAD;
+        if (needed > height) {
+          height = needed;
+          svg.setAttribute('height', height);
+          svg.setAttribute('viewBox', '0 0 ' + width + ' ' + height);
+        }
+      }
+
       scroller.appendChild(svg);
       figure.appendChild(scroller);
 

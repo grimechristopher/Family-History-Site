@@ -1868,3 +1868,74 @@ a.pnode-hit:focus-visible .pnode-box { stroke: var(--teal); stroke-width: 3; }
 
 .inline-form { display: inline; }
 .inline-form button { font-size: var(--t-micro); }
+
+/* ---------- A tile that adds a picture -------------------------------
+   Sits with the pictures rather than under them, because adding one is the same
+   kind of act as looking at one. Dotted, so it reads as a space for something
+   rather than as something.
+   ------------------------------------------------------------------ */
+
+.collage-add-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  width: 100%;
+  height: 12rem;              /* the height of a thumbnail */
+  border: 2px dashed var(--rule-firm);
+  border-radius: var(--r-sm);
+  background: var(--sheet-warm);
+  color: var(--ink-soft);
+  font: 700 var(--t-small)/1.3 var(--sans);
+  cursor: pointer;
+}
+.collage-add-btn:hover, .collage-add-btn:focus-visible {
+  border-color: var(--teal); color: var(--teal); background: var(--teal-wash);
+}
+.collage-add-mark { font-size: 2rem; line-height: 1; font-weight: 400; }
+
+/* Without scripting the tile does nothing, so it is not offered; the form is
+   already on the page as a panel instead. */
+html:not(.js) .collage-add { display: none; }
+
+/* ---------- A sheet ---------------------------------------------------
+   A modal where scripting is available. Where it is not, the same markup renders
+   as the panel it used to be, so the only way to add a picture is never lost to a
+   nicer button.
+   ------------------------------------------------------------------ */
+
+dialog.sheet {
+  width: min(34rem, calc(100vw - 2rem));
+  max-height: min(85dvh, 48rem);
+  overflow-y: auto;
+  padding: var(--s5);
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  background: var(--sheet);
+  color: var(--ink);
+  box-shadow: var(--lift-4);
+}
+dialog.sheet::backdrop { background: rgba(36, 28, 20, .45); }
+
+.sheet-close-row { display: flex; justify-content: flex-end; margin: 0; }
+.sheet-close {
+  min-width: var(--tap); min-height: var(--tap);
+  border: 0; border-radius: var(--r-pill);
+  background: transparent; color: var(--ink-soft);
+  font: 400 1.75rem/1 var(--sans); cursor: pointer;
+}
+.sheet-close:hover, .sheet-close:focus-visible { background: var(--oat-deep); color: var(--ink); }
+
+html:not(.js) dialog.sheet {
+  display: block;
+  position: static;
+  margin: var(--s6) 0 0;
+  max-height: none;
+  box-shadow: none;
+}
+html:not(.js) .sheet-close-row { display: none; }
+
+/* A brother or sister of the person the chart is about. Same box, quieter edge:
+   they are beside the line rather than on it. */
+.pnode-sibling .pnode-box { stroke-dasharray: 5 3; }

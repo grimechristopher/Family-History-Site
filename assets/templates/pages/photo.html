@@ -97,7 +97,7 @@
       <label for="tag-subject">Who is it?</label>
       <select id="tag-subject" name="subject_id" aria-describedby="tag-hint">
         <option value="">Somebody not in the family</option>
-        {{range .SubjectProgress}}
+        {{range .TagChoices}}
           <option value="{{.ID}}">{{.DisplayName}}</option>
         {{end}}
       </select>

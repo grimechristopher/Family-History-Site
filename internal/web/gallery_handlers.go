@@ -43,7 +43,8 @@ func (s *Server) handleGallery(w http.ResponseWriter, r *http.Request) {
 	}
 	s.signPhotos(r, photos)
 
-	// Everybody in this line, for the "who is in it" pickers.
+	// Who a picture can be said to be of: the family, not the ad-hoc names somebody
+	// typed against a face in another photograph.
 	people, err := s.Store.SubjectsWithProgress(r.Context(), "", subject.FamilySlug)
 	if err != nil {
 		s.serverError(w, r, err)
@@ -54,7 +55,7 @@ func (s *Server) handleGallery(w http.ResponseWriter, r *http.Request) {
 	data.Nav = "tree"
 	data.Subject = subject
 	data.Photos = photos
-	data.SubjectProgress = people
+	data.SubjectProgress = family(people)
 	s.render(w, r, "gallery", data)
 }
 
@@ -105,7 +106,10 @@ func (s *Server) handlePhoto(w http.ResponseWriter, r *http.Request) {
 	data := s.newPageData(r, "A photograph")
 	data.Nav = "tree"
 	data.Photo = photo
-	data.SubjectProgress = people
+	// A pin may name anybody, including a teammate somebody typed in before. Saying
+	// who a picture is of is the narrower question and gets the family only.
+	data.TagChoices = people
+	data.SubjectProgress = family(people)
 	for _, st := range written {
 		data.Stories = append(data.Stories, storyView{
 			Story:         st,
@@ -357,4 +361,17 @@ func (s *Server) signPhotos(r *http.Request, photos []store.Photo) {
 		}
 		photos[i].SignedURL = url
 	}
+}
+
+// family drops the people who exist only because somebody typed their name against
+// a face. They belong on a pin -- that is what they are -- and not in a list of who
+// a photograph is of, where a teammate would stand beside somebody's grandmother.
+func family(all []store.SubjectProgress) []store.SubjectProgress {
+	out := make([]store.SubjectProgress, 0, len(all))
+	for _, s := range all {
+		if s.Relation != "other" {
+			out = append(out, s)
+		}
+	}
+	return out
 }

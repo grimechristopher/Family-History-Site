@@ -303,3 +303,28 @@
     if (pick) pick.focus();
   });
 })();
+
+// Anything that opens a dialog.
+//
+// A button carrying data-opens names the dialog it belongs to. Kept generic because
+// this is the second thing on the site that wants a modal and will not be the last.
+(function () {
+  'use strict';
+  document.querySelectorAll('[data-opens]').forEach(function (trigger) {
+    var sheet = document.getElementById(trigger.dataset.opens);
+    if (!sheet || typeof sheet.showModal !== 'function') return;
+
+    trigger.addEventListener('click', function () {
+      sheet.showModal();
+      // Straight to the first thing they came to do.
+      var first = sheet.querySelector('input, select, textarea, button');
+      if (first) first.focus();
+    });
+
+    // Clicking the darkened area outside closes it, which is what everybody
+    // expects and what a keyboard user gets from Escape for free.
+    sheet.addEventListener('click', function (event) {
+      if (event.target === sheet) sheet.close();
+    });
+  });
+})();
