@@ -1899,3 +1899,36 @@ func TestUserQuestionsSurviveAReimport(t *testing.T) {
 		t.Error("a question written on the site must not be archived by a re-import")
 	}
 }
+
+// A name on the questions page is the way to that person's page: everything said
+// about them, their stories, and the form for adding another question. It was plain
+// text, so the only route in was the filter rail.
+//
+// The line has to be on the link. A subject slug is unique inside a line and not
+// across them, so "further-back" on its own reaches whichever of the four the
+// database returns first.
+func TestNamesOnTheQuestionsPageLinkToThePerson(t *testing.T) {
+	h := newHarness(t)
+	dad := h.signIn("dad@example.com")
+
+	body := h.get("/questions?asked_of=everyone", dad).Body.String()
+
+	links := regexp.MustCompile(`<a class="qrow-subject" href="([^"]+)"`).FindAllStringSubmatch(body, -1)
+	if len(links) == 0 {
+		t.Fatal("no name on any row links anywhere")
+	}
+	for _, l := range links {
+		if !strings.Contains(l[1], "family=") {
+			t.Fatalf("link %q does not say which line it means", l[1])
+		}
+	}
+
+	// And it goes somewhere real.
+	rec := h.get(links[0][1], dad)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("following a name gave %d for %s", rec.Code, links[0][1])
+	}
+	if !strings.Contains(rec.Body.String(), "Ask something about") {
+		t.Error("the page it reaches is not the person's page")
+	}
+}

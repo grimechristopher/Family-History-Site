@@ -15,7 +15,13 @@
          person is named. Decided by who they are in the tree, not by comparing the
          names: the same person is written differently in each. */}}
     {{$said := false}}
-    {{if not .AboutAskedOf}}<span class="qrow-subject">{{.SubjectName}}</span>{{$said = true}}{{end}}
+    {{/* Their name is the way to their page: everything said about them, the
+         stories, and the form for adding another question. It was plain text, so
+         the only route in was the filter rail. */}}
+    {{if not .AboutAskedOf}}
+      <a class="qrow-subject" href="/subjects/{{.SubjectSlug}}?family={{.FamilySlug}}"
+         >{{.SubjectName}}</a>{{$said = true}}
+    {{end}}
 
     {{/* A question put to several people is one question in several hands: the
          four Lucero siblings are asked the same ten about their parents. They each

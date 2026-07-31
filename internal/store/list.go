@@ -13,8 +13,12 @@ type QuestionListItem struct {
 	Topic       *string
 	SubjectName string
 	// AboutAskedOf marks a question about the person being asked it.
-	AboutAskedOf  bool
-	SubjectSlug   string
+	AboutAskedOf bool
+	SubjectSlug  string
+	// FamilySlug goes on the link to their page. A slug is unique inside a line and
+	// not across them, so "further-back" on its own reaches whichever of the four
+	// the database returns first.
+	FamilySlug    string
 	AskedOfName   string
 	AskedOfUserID int64
 	IsProposed    bool
@@ -110,7 +114,7 @@ func (s *Store) ListQuestions(ctx context.Context, viewerID int64, f QuestionFil
 	offsetPos := len(args)
 
 	query := `
-		SELECT q.id, q.body, q.topic, s.display_name, s.slug,
+		SELECT q.id, q.body, q.topic, s.display_name, s.slug, fam.slug,
 		       asked.display_name, q.asked_of_user_id, q.is_proposed,
 		       -- Whether the question is about the very person being asked it, which
 		       -- reads as a mistake if both names are printed: "Lori Ann (Ayres)
@@ -138,6 +142,7 @@ func (s *Store) ListQuestions(ctx context.Context, viewerID int64, f QuestionFil
 		       shared.names, coalesce(shared.answered, 0)
 		FROM family.questions q
 		JOIN family.subjects s   ON s.id = q.subject_id
+		JOIN core.families fam   ON fam.id = q.family_id
 		JOIN core.users asked  ON asked.id = q.asked_of_user_id
 		LEFT JOIN family.entries owner_answer
 		       ON owner_answer.question_id = q.id
@@ -195,7 +200,7 @@ func (s *Store) ListQuestions(ctx context.Context, viewerID int64, f QuestionFil
 	for rows.Next() {
 		var q QuestionListItem
 		if err := rows.Scan(&q.ID, &q.Body, &q.Topic, &q.SubjectName, &q.SubjectSlug,
-			&q.AskedOfName, &q.AskedOfUserID, &q.IsProposed, &q.AboutAskedOf,
+			&q.FamilySlug, &q.AskedOfName, &q.AskedOfUserID, &q.IsProposed, &q.AboutAskedOf,
 			&q.Answered, &q.OtherAnswers, &q.ReplyCount, &q.ViewerAnswered,
 			&q.SharedWith, &q.SharedAnswered); err != nil {
 			return nil, err
@@ -214,6 +219,10 @@ func (s *Store) ListQuestions(ctx context.Context, viewerID int64, f QuestionFil
 type QuestionGroup struct {
 	Label string
 	Items []QuestionListItem
+	// Subject and Family are set when the heading is a person rather than a topic,
+	// so the heading can be a link to them as well as the rows underneath.
+	Subject string
+	Family  string
 }
 
 // GroupQuestions gathers a list into headed groups, keeping the order it arrived
@@ -234,7 +243,13 @@ func GroupQuestions(items []QuestionListItem) []QuestionGroup {
 			continue
 		}
 		index[label] = len(groups)
-		groups = append(groups, QuestionGroup{Label: label, Items: []QuestionListItem{q}})
+		group := QuestionGroup{Label: label, Items: []QuestionListItem{q}}
+		// A heading taken from the topic is a period of somebody's life and has no
+		// page; one taken from the subject is a person and does.
+		if label == q.SubjectName {
+			group.Subject, group.Family = q.SubjectSlug, q.FamilySlug
+		}
+		groups = append(groups, group)
 	}
 	return groups
 }

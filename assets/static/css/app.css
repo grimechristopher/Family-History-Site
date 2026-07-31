@@ -560,7 +560,15 @@ details[open] > summary::after { content: "–"; }
 .qrow-body:hover { color: var(--teal); text-decoration: underline; text-underline-offset: .2em; }
 
 .qrow-meta { margin: 0; max-width: none; font-size: var(--t-small); line-height: 1.55; color: var(--ink-soft); }
-.qrow-subject { color: var(--apricot); font-weight: 700; }
+/* Their name, and the way to their page. Underlined only on hover: at 174 rows a
+   permanent underline turns the list into a page of links, and the name is a label
+   first and a route second. */
+.qrow-subject { color: var(--apricot); font-weight: 700; text-decoration: none; }
+a.qrow-subject:hover, a.qrow-subject:focus-visible { text-decoration: underline; }
+
+/* Same on the group heading above them. */
+.qgroup-head a { color: inherit; text-decoration: none; }
+.qgroup-head a:hover, .qgroup-head a:focus-visible { text-decoration: underline; }
 .qrow-done .qrow-meta { color: var(--sage); font-weight: 600; }
 
 /* ---------- Answers ------------------------------------------------- */

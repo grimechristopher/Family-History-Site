@@ -121,7 +121,14 @@
     {{if .Groups}}
       {{range .Groups}}
         <section class="qgroup">
-          <h3 class="qgroup-head">{{.Label}} <span class="count">{{len .Items}}</span></h3>
+          {{/* A heading that names a person links to them; one that names a period
+               of their life has nowhere to go. */}}
+          <h3 class="qgroup-head">
+            {{if .Subject}}
+              <a href="/subjects/{{.Subject}}?family={{.Family}}">{{.Label}}</a>
+            {{else}}{{.Label}}{{end}}
+            <span class="count">{{len .Items}}</span>
+          </h3>
           <ul class="qlist">{{range .Items}}{{template "qrow" .}}{{end}}</ul>
         </section>
       {{end}}
