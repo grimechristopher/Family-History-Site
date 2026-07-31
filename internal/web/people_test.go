@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -417,5 +418,89 @@ func TestNameComesFromTheTree(t *testing.T) {
 	}, chris)
 	if rec.Code != 400 {
 		t.Errorf("adding somebody with no name and no tree person: status %d, want 400", rec.Code)
+	}
+}
+
+// The aunts, uncles and cousins are imported with nothing asked about them on
+// purpose: the family writes their own questions for the people they actually
+// remember. That makes this path the whole design, not a nicety -- reach somebody
+// from the chart, ask something, and they join the lists.
+//
+// It also has to offer the right people to ask. Rosemary is an Ayres great-aunt,
+// and her page was offering Frank, Tony, Inez, Robert and Violeta from Ashley's
+// side; the handler behind the form then refused them.
+func TestAddingToSomebodyNobodyHasAskedAbout(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	chris := h.signIn("chris@example.com")
+
+	// A subject with nothing recorded about it, which is what a collateral is.
+	fam, err := h.store.FamilyBySlug(ctx, "home")
+	if err != nil {
+		t.Fatalf("FamilyBySlug: %v", err)
+	}
+	famCtx := store.WithFamily(ctx, fam.ID)
+	err = h.store.InTx(famCtx, func(db store.DBTX) error {
+		_, err := store.UpsertSubject(famCtx, db, store.Subject{
+			Slug: "great-aunt-may", Kind: "individual",
+			DisplayName: "May (Hale) Corbett", SortOrder: 90,
+			Relation: "sibling", Generation: 1,
+		})
+		return err
+	})
+	if err != nil {
+		t.Fatalf("seed subject: %v", err)
+	}
+
+	page := h.get("/subjects/great-aunt-may", chris).Body.String()
+	if !strings.Contains(page, "Ask something about May (Hale) Corbett") {
+		t.Error("no way to ask about somebody with nothing recorded yet")
+	}
+	if !strings.Contains(page, "Add a story about May (Hale) Corbett") {
+		t.Error("no way to write a story about them either")
+	}
+
+	// Only people who answer in this line, or the form offers a choice the handler
+	// will reject.
+	offered := regexp.MustCompile(`name="asked_of" value="([^"]+)"`).FindAllStringSubmatch(page, -1)
+	if len(offered) == 0 {
+		t.Fatal("nobody is offered to answer")
+	}
+	contributors, err := h.store.Contributors(store.WithFamilies(ctx, []int64{fam.ID}), "home")
+	if err != nil {
+		t.Fatalf("Contributors: %v", err)
+	}
+	allowed := map[string]bool{}
+	for _, c := range contributors {
+		allowed[c.DisplayName] = true
+	}
+	for _, m := range offered {
+		if !allowed[m[1]] {
+			t.Errorf("the form offers %q, who does not answer in this line", m[1])
+		}
+	}
+
+	// Asking puts them in the lists, which is the point.
+	rec := h.post("/subjects/great-aunt-may/questions", url.Values{
+		"asked_of": {offered[0][1]},
+		"body":     {"What do you remember about her?"},
+	}, chris)
+	if rec.Code != 303 {
+		t.Fatalf("asking about her: status %d, body %s", rec.Code, rec.Body.String())
+	}
+
+	subjects, err := h.store.SubjectsWithProgress(
+		store.WithFamilies(ctx, []int64{fam.ID}), "", "home")
+	if err != nil {
+		t.Fatalf("SubjectsWithProgress: %v", err)
+	}
+	var found bool
+	for _, s := range subjects {
+		if s.Slug == "great-aunt-may" && s.AnyTotal == 1 {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("she is still not in the list of people something is recorded about")
 	}
 }

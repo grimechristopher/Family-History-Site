@@ -1526,23 +1526,6 @@ a.pnode-hit:focus-visible .pnode-box { stroke: var(--teal); stroke-width: 3; }
 
 /* The "who it's about" heading, which is a label rather than a collapsible group:
    the groups underneath are the things that open and close. */
-/* Kept for anywhere else that wants a plain label in the rail. "Who it's about"
-   is a collapsible group now, like the two above it. */
-.side-heading {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-  margin: 0 0 var(--s2);
-  padding-bottom: var(--s2);
-  border-bottom: 1px solid var(--rule);
-  font-family: var(--sans);
-  font-size: var(--t-micro);
-  font-weight: 700;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-  color: var(--ink-mid);
-}
-
 /* The generations, which belong to the heading above them. Indented, in sentence
    case, and with a rule that stops short of the edge -- a level down rather than
    another one across. */

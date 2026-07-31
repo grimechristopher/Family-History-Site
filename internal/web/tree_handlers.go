@@ -185,7 +185,11 @@ func (s *Server) handleSubject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	contributors, err := s.Store.Contributors(r.Context(), "")
+	// The people who answer in this person's line, not everybody the viewer can
+	// see. Unscoped, Rosemary's page -- an Ayres great-aunt -- offered Frank, Tony,
+	// Inez, Robert and Violeta from Ashley's side, and the handler behind the form
+	// then refused them with "Choose who the question is for."
+	contributors, err := s.Store.Contributors(r.Context(), subject.FamilySlug)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
