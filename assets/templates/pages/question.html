@@ -8,7 +8,53 @@
     <span class="chip chip-asked">Asked of {{.Question.AskedOfName}}</span>
     {{if .PrimaryAnswers}}<span class="chip chip-done">Answered</span>{{end}}
     {{if .OtherAnswers}}<span class="chip">{{len .OtherAnswers}} from others</span>{{end}}
+    {{if .Question.Edited}}<span class="chip">reworded</span>{{end}}
   </p>
+
+  {{/* Folded away: this page is read far more often than it is changed, and a row of
+       controls under every question turns a page you skim into a page you have to be
+       careful on.
+
+       Admins of this line only. Anybody may add a question and anybody may answer
+       one, but rewording somebody else's changes what they were asked -- and if they
+       have already answered, what their answer is an answer to. */}}
+  {{if .ViewerRunsLine}}
+    <details class="member-edit">
+      <summary>Change this question</summary>
+      <div class="member-edit-body">
+        <form method="post" action="/questions/{{.Question.ID}}/edit">
+          <label for="q-body">What it asks</label>
+          <textarea id="q-body" name="body" rows="4" required>{{.Question.Body}}</textarea>
+
+          <label for="q-topic">Under which heading (optional)</label>
+          <input id="q-topic" name="topic" type="text" placeholder="Childhood"
+                 value="{{if .Question.Topic}}{{.Question.Topic}}{{end}}">
+          <p class="hint">
+            A rewording sticks. The next import leaves it alone rather than putting
+            the prompts file&rsquo;s version back.
+          </p>
+          <div class="btn-row"><button class="btn btn-quiet" type="submit">Save the wording</button></div>
+        </form>
+
+        <form method="post" action="/questions/{{.Question.ID}}/delete">
+          <p class="hint">
+            {{if .PrimaryAnswers}}
+              This has been answered. Removing the question takes it off the site and
+              leaves what was written &mdash; an answer is the thing this is for, and a
+              badly worded question is no reason to lose one.
+            {{else}}
+              Nothing has been written against this, so removing it takes nothing with
+              it. It stays gone through future imports.
+            {{end}}
+          </p>
+          <div class="btn-row">
+            <button class="btn btn-danger" type="submit"
+                    data-confirm="Take this question off the site?">Take it off the site</button>
+          </div>
+        </form>
+      </div>
+    </details>
+  {{end}}
 </article>
 
 <div id="answers">

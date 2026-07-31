@@ -2,7 +2,10 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // ImportedQuestion is a question sourced from the prompts markdown.
@@ -29,10 +32,18 @@ func UpsertImportedQuestion(ctx context.Context, db DBTX, q ImportedQuestion) (i
 		  subject_id       = EXCLUDED.subject_id,
 		  asked_of_user_id = EXCLUDED.asked_of_user_id,
 		  topic            = EXCLUDED.topic,
-		  body             = EXCLUDED.body,
 		  sort_order       = EXCLUDED.sort_order,
 		  is_proposed      = EXCLUDED.is_proposed,
-		  archived_at      = NULL
+		  -- A question reworded by hand keeps its wording. The prompts file is where
+		  -- it came from; somebody deciding it asked the wrong thing is more
+		  -- specific than that, and having the file overwrite them would be the
+		  -- import quietly undoing a person.
+		  body = CASE WHEN family.questions.edited_at IS NULL
+		              THEN EXCLUDED.body ELSE family.questions.body END,
+		  -- And one removed by hand stays removed, rather than coming back every
+		  -- time the import runs.
+		  archived_at = CASE WHEN family.questions.deleted_at IS NULL
+		                     THEN NULL ELSE family.questions.archived_at END
 		RETURNING id`,
 		q.SubjectID, q.AskedOfUserID, q.Topic, q.Body, q.SortOrder, q.IsProposed, q.ImportKey,
 		FamilyFrom(ctx)).Scan(&id)
@@ -169,4 +180,73 @@ func PruneAskeesNotIn(ctx context.Context, db DBTX, keep []Askee) (int64, error)
 // AskAlso puts an existing question to one more person.
 func (s *Store) AskAlso(ctx context.Context, questionID, userID int64) error {
 	return AddAskee(ctx, s.q(ctx), questionID, userID)
+}
+
+// EditQuestion changes what a question asks.
+//
+// Marked as edited, which is what stops the next import putting the prompts file's
+// wording back. The import key is left alone: it identifies which line of the file
+// this row came from, and that has not changed just because the words have.
+func (s *Store) EditQuestion(ctx context.Context, questionID, byUserID int64, body string, topic *string) error {
+	tag, err := s.q(ctx).Exec(ctx, `
+		UPDATE family.questions
+		   SET body = $3, topic = $4, edited_at = now(), edited_by_user_id = $2
+		 WHERE id = $1 AND deleted_at IS NULL`, questionID, byUserID, body, topic)
+	if err != nil {
+		return fmt.Errorf("edit question: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// DeleteQuestion takes a question off the site and leaves any answers to it alone.
+//
+// Not a delete. Somebody may already have answered, and an answer is the thing this
+// site exists to collect -- destroying one because the question was badly worded
+// would be the wrong way round. The row is archived, which every page already
+// filters on, so it disappears from the lists, the card stacks and the counts. What
+// was written stays attached to it.
+func (s *Store) DeleteQuestion(ctx context.Context, questionID, byUserID int64) error {
+	tag, err := s.q(ctx).Exec(ctx, `
+		UPDATE family.questions
+		   SET archived_at = coalesce(archived_at, now()),
+		       deleted_at = now(), deleted_by_user_id = $2
+		 WHERE id = $1`, questionID, byUserID)
+	if err != nil {
+		return fmt.Errorf("delete question: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// AnswerCountFor is how much would be orphaned by removing a question, so the page
+// can say before anybody presses anything.
+func (s *Store) AnswerCountFor(ctx context.Context, questionID int64) (int, error) {
+	var n int
+	err := s.q(ctx).QueryRow(ctx,
+		`SELECT count(*) FROM family.entries WHERE question_id = $1 AND is_draft = false`,
+		questionID).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("answers for question: %w", err)
+	}
+	return n, nil
+}
+
+// FamilyOfQuestion is which line a question belongs to, so a handler can ask whether
+// this person runs that line.
+func (s *Store) FamilyOfQuestion(ctx context.Context, questionID int64) (int64, error) {
+	var id int64
+	err := s.q(ctx).QueryRow(ctx,
+		`SELECT family_id FROM family.questions WHERE id = $1`, questionID).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, ErrNotFound
+	}
+	if err != nil {
+		return 0, fmt.Errorf("family of question: %w", err)
+	}
+	return id, nil
 }

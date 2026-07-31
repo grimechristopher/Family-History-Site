@@ -3,6 +3,7 @@ package web
 import (
 	"errors"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -254,6 +255,14 @@ func (s *Server) questionData(r *http.Request, id int64) (pageData, error) {
 	}
 
 	data.ViewerIsAskedOf = q.AskedOfUserID == u.ID
+	// Whether they run the line this question belongs to, which is what changing or
+	// removing it requires. The handlers check it again -- hiding a control is a
+	// courtesy, not a permission.
+	runs, err := s.runsThisLine(r, id)
+	if err != nil {
+		return data, err
+	}
+	data.ViewerRunsLine = runs
 	return data, nil
 }
 
@@ -442,4 +451,111 @@ func (s *Server) handleAskQuestion(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	http.Redirect(w, r, "/questions/"+strconv.FormatInt(id, 10), http.StatusSeeOther)
+}
+
+// runsThisLine reports whether the person making the request is an admin of the line
+// a question belongs to.
+//
+// Read from their membership of that line rather than the role on the user, which is
+// true if they are an admin of any family they belong to. Being an admin of your own
+// parents' line is not authority over your in-laws'.
+func (s *Server) runsThisLine(r *http.Request, questionID int64) (bool, error) {
+	familyID, err := s.Store.FamilyOfQuestion(r.Context(), questionID)
+	if err != nil {
+		return false, err
+	}
+	return s.adminOf(r, familyID), nil
+}
+
+// handleEditQuestion changes what a question asks.
+//
+// Admins only. Anybody may add a question and anybody may answer one, but rewording
+// somebody else's question changes what they were asked -- and if they have already
+// answered, it changes what their answer is an answer to.
+func (s *Server) handleEditQuestion(w http.ResponseWriter, r *http.Request) {
+	u := auth.User(r.Context())
+	id, err := questionID(r)
+	if err != nil {
+		http.Error(w, "bad question id", http.StatusBadRequest)
+		return
+	}
+
+	if _, err := s.Store.Question(r.Context(), id); errors.Is(err, store.ErrNotFound) {
+		http.NotFound(w, r)
+		return
+	} else if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+
+	mayEdit, err := s.runsThisLine(r, id)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	if !mayEdit {
+		http.Error(w, "Only an admin can change a question.", http.StatusForbidden)
+		return
+	}
+
+	body := strings.TrimSpace(r.FormValue("body"))
+	if body == "" {
+		http.Error(w, "A question needs something in it.", http.StatusBadRequest)
+		return
+	}
+	var topic *string
+	if t := strings.TrimSpace(r.FormValue("topic")); t != "" {
+		topic = &t
+	}
+
+	if err := s.Store.EditQuestion(r.Context(), id, u.ID, body, topic); err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	s.Log.Info("question reworded", "question", id, "by", u.DisplayName)
+	http.Redirect(w, r, "/questions/"+strconv.FormatInt(id, 10), http.StatusSeeOther)
+}
+
+// handleDeleteQuestion takes a question off the site.
+func (s *Server) handleDeleteQuestion(w http.ResponseWriter, r *http.Request) {
+	u := auth.User(r.Context())
+	id, err := questionID(r)
+	if err != nil {
+		http.Error(w, "bad question id", http.StatusBadRequest)
+		return
+	}
+
+	mayDelete, err := s.runsThisLine(r, id)
+	if errors.Is(err, store.ErrNotFound) {
+		http.NotFound(w, r)
+		return
+	} else if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	if !mayDelete {
+		http.Error(w, "Only an admin can remove a question.", http.StatusForbidden)
+		return
+	}
+
+	answers, err := s.Store.AnswerCountFor(r.Context(), id)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	if err := s.Store.DeleteQuestion(r.Context(), id, u.ID); err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	s.Log.Info("question removed", "question", id, "answers_kept", answers, "by", u.DisplayName)
+
+	note := "That question is off the site."
+	if answers > 0 {
+		note += " The " + strconv.Itoa(answers) + " answer"
+		if answers != 1 {
+			note += "s"
+		}
+		note += " to it are still recorded."
+	}
+	http.Redirect(w, r, "/questions?note="+url.QueryEscape(note), http.StatusSeeOther)
 }

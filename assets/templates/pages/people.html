@@ -78,7 +78,7 @@
             </form>
 
             <form method="post" action="/people/remove"
-                  onsubmit="return confirm('Remove {{.DisplayName}} from this line?{{if .Written}} What they have written stays.{{end}}')">
+                  data-confirm="Remove {{.DisplayName}} from this line?{{if .Written}} What they have written stays.{{end}}">
               <input type="hidden" name="family" value="{{$.ShownFamily}}">
               <input type="hidden" name="user_id" value="{{.UserID}}">
               <p class="hint">

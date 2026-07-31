@@ -362,3 +362,29 @@
     sync();
   });
 })();
+
+// Ask before something that cannot be taken back.
+//
+// This has to be wired here rather than written as onsubmit="return confirm(...)" on
+// the button. script-src is 'self' with no unsafe-inline, so an inline handler never
+// runs -- the browser refuses it and says nothing, and what looks like a guarded
+// button is an unguarded one. The people page was written that way and has been
+// removing people with no confirmation at all.
+//
+// Delegated from the document so it covers markup htmx swapped in after load.
+(function () {
+  document.addEventListener('submit', function (e) {
+    var form = e.target;
+    if (!form || form.tagName !== 'FORM') return;
+    // The message can sit on the form or on the button that submitted it, since one
+    // form often has a quiet action and a destructive one.
+    var asker = (e.submitter && e.submitter.hasAttribute('data-confirm'))
+      ? e.submitter
+      : (form.hasAttribute('data-confirm') ? form : null);
+    if (!asker) return;
+    if (!window.confirm(asker.getAttribute('data-confirm'))) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  });
+})();

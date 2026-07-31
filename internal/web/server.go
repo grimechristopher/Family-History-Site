@@ -366,6 +366,8 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("GET /questions", inFamilies(s.handleQuestions))
 	mux.Handle("GET /questions/{id}", inFamilies(s.handleQuestion))
 	mux.Handle("POST /questions/{id}/answer", inFamilies(s.handleQuestionAnswer))
+	mux.Handle("POST /questions/{id}/edit", inFamilies(s.handleEditQuestion))
+	mux.Handle("POST /questions/{id}/delete", inFamilies(s.handleDeleteQuestion))
 	mux.Handle("POST /entries/{id}/replies", inFamilies(s.handleReply))
 
 	mux.Handle("GET /stories", inFamilies(s.handleStories))
