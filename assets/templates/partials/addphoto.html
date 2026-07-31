@@ -1,0 +1,33 @@
+{{/* Shared by the gallery and a person's page, because the useful moment to add a
+     picture is whenever you are looking at somebody. */}}
+{{define "add-photo-form"}}
+<section class="panel note">
+  <p class="eyebrow">Add a picture</p>
+  <p>
+    Say who is in it and it appears on all their pages. You can point out each face
+    afterwards, which is the part that will matter to somebody in fifty years who
+    does not know what any of these people looked like.
+  </p>
+  <form method="post" action="/gallery" enctype="multipart/form-data">
+    <label for="photo-file">The picture</label>
+    <input id="photo-file" name="photo" type="file" accept="image/*" required>
+
+    <label for="photo-caption">A caption</label>
+    <input id="photo-caption" name="caption" type="text"
+           placeholder="Bassett High Gymnastics!">
+
+    <fieldset class="askees">
+      <legend>Who is in it?</legend>
+      {{range .SubjectProgress}}
+        <label class="askee">
+          <input type="checkbox" name="subject_id" value="{{.ID}}"
+                 {{if and $.Subject (eq .ID $.Subject.ID)}}checked{{end}}>
+          <span>{{.DisplayName}}</span>
+        </label>
+      {{end}}
+    </fieldset>
+
+    <div class="btn-row"><button class="btn" type="submit">Add this picture</button></div>
+  </form>
+</section>
+{{end}}

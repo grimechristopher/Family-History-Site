@@ -195,9 +195,17 @@ func (s *Server) handleSubject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// How many pictures they are in, so the link by their name can say.
+	counts, err := s.Store.PhotoCounts(r.Context(), []int64{subject.ID})
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+
 	data := s.newPageData(r, subject.DisplayName)
 	data.Nav = "tree"
 	data.Subject = subject
+	data.PhotoCount = counts[subject.ID]
 	data.Contributors = contributors
 	data.Members = members
 	data.Unanswered = unanswered

@@ -1,0 +1,175 @@
+{{define "content"}}
+{{/* Where you are. A photograph is reached from somebody's gallery, so the trail
+     goes back through whoever is in it -- the first of them, since a picture of two
+     brothers has no single owner. */}}
+<nav class="crumbs" aria-label="Where you are">
+  <a class="link" href="/tree">The family</a>
+  <span class="crumbs-sep" aria-hidden="true">/</span>
+  {{if .Photo.People}}
+    {{$who := index .Photo.People 0}}
+    <a class="link" href="/subjects/{{$who.SubjectSlug}}?family={{$.Photo.FamilySlug}}">{{$who.DisplayName}}</a>
+    <span class="crumbs-sep" aria-hidden="true">/</span>
+    <a class="link" href="/subjects/{{$who.SubjectSlug}}/photos?family={{$.Photo.FamilySlug}}">Pictures</a>
+    <span class="crumbs-sep" aria-hidden="true">/</span>
+  {{end}}
+  <span class="crumbs-here">{{if .Photo.Caption}}{{.Photo.Caption}}{{else}}A photograph{{end}}</span>
+</nav>
+{{/* One photograph. The picture, who is in it and whereabouts, and what people
+     have written about it.
+
+     The pins are the point of the page. Younger generations do not know what these
+     people looked like, and a group photograph with fifteen faces in it says
+     nothing at all unless somebody wrote down which one was their grandfather. */}}
+<p class="eyebrow">A photograph</p>
+{{if .Photo.Caption}}<h1>{{.Photo.Caption}}</h1>{{else}}<h1 class="visually-hidden">A photograph</h1>{{end}}
+
+<figure class="photo-full">
+  {{if .Photo.SignedURL}}
+    {{/* The pins are positioned against this box rather than the figure, because
+         the figure includes the caption underneath and a percentage of its height
+         lands below the face it means.
+
+         Their positions arrive as data attributes and are applied by script. A
+         style attribute would be the obvious way and the Content-Security-Policy
+         forbids it -- style-src is 'self' with no unsafe-inline, which is worth
+         keeping for the sake of a feature like this. Without the script the pins
+         stay hidden and the list underneath still names everybody. */}}
+    <div class="photo-frame" id="photo-frame" data-photo="{{.Photo.ID}}">
+      <img src="{{.Photo.SignedURL}}" id="photo-image"
+           alt="{{if .Photo.Caption}}{{.Photo.Caption}}{{else}}A family photograph{{end}}">
+      {{range .Photo.People}}
+        {{if .Placed}}
+          <a class="photo-pin" hidden data-x="{{.PointX}}" data-y="{{.PointY}}"
+             data-subject="{{.SubjectID}}" data-name="{{.DisplayName}}"
+             href="/subjects/{{.SubjectSlug}}?family={{$.Photo.FamilySlug}}">
+            <span class="photo-pin-dot" aria-hidden="true"></span>
+            <span class="photo-pin-name">{{.DisplayName}}</span>
+          </a>
+        {{end}}
+      {{end}}
+    </div>
+  {{else}}
+    <p class="banner">This picture couldn&rsquo;t be loaded just now.</p>
+  {{end}}
+  <figcaption>
+    Added by {{.Photo.UploaderName}} on {{.Photo.CreatedAt.Format "2 January 2006"}}
+  </figcaption>
+</figure>
+
+<h2>Who&rsquo;s in it</h2>
+{{if .Photo.People}}
+  <ul class="note-list">
+    {{range .Photo.People}}
+      <li>
+        <a class="link" href="/subjects/{{.SubjectSlug}}?family={{$.Photo.FamilySlug}}"
+           ><strong>{{.DisplayName}}</strong></a>
+        {{if .Placed}}
+          <span class="qrow-subject">&middot; pointed out</span>
+        {{else}}
+          <span class="qrow-meta">&middot; in the picture, not yet pointed out</span>
+        {{end}}
+        <form method="post" action="/photos/{{$.Photo.ID}}/people/remove" class="inline-form">
+          <input type="hidden" name="subject_id" value="{{.SubjectID}}">
+          <button class="link" type="submit">Remove</button>
+        </form>
+      </li>
+    {{end}}
+  </ul>
+{{else}}
+  <p class="lede">Nobody has said who is in this yet.</p>
+{{end}}
+
+{{/* Click the picture and this form is filled in with where you clicked. Without
+     JavaScript it still works: choose a name and submit, and they are recorded as
+     being in the picture without a point. */}}
+<details class="new-story" id="tag-panel">
+  <summary>Point out a face</summary>
+  <div class="member-edit-body">
+    <p class="hint" id="tag-hint">
+      Tap or click the picture above where somebody&rsquo;s face is, then choose who
+      it is. If you skip the tapping they are still recorded as being in it.
+    </p>
+    <form method="post" action="/photos/{{.Photo.ID}}/people">
+      <input type="hidden" name="x" id="tag-x">
+      <input type="hidden" name="y" id="tag-y">
+      <p class="hint" id="tag-where" hidden></p>
+
+      <label for="tag-subject">Who is it?</label>
+      <select id="tag-subject" name="subject_id" required aria-describedby="tag-hint">
+        <option value="">Choose somebody</option>
+        {{range .SubjectProgress}}
+          <option value="{{.ID}}">{{.DisplayName}}</option>
+        {{end}}
+      </select>
+
+      <div class="btn-row"><button class="btn" type="submit">Save who that is</button></div>
+    </form>
+  </div>
+</details>
+
+<h2>What&rsquo;s been said about it</h2>
+{{if .Stories}}
+  {{range .Stories}}
+    <article class="answer answer-primary" id="entry-{{.ID}}">
+      {{if .Title}}<h3>{{.Title}}</h3>{{end}}
+      <p class="answer-by">
+        {{.AuthorName}}
+        <span class="answer-when">{{.CreatedAt.Format "2 January 2006"}}</span>
+        <span class="card-badge">a story</span>
+      </p>
+      <div class="answer-body">{{.Body}}</div>
+
+      {{/* Replies are ordinary replies -- they hang off an entry, and a story about
+           a photograph is an entry -- so a conversation about a picture needed no
+           new machinery at all. */}}
+      {{if .Replies}}
+        <ul class="replies">
+          {{range .Replies}}
+            <li>
+              <span class="avatar avatar-sm" aria-hidden="true">{{printf "%.1s" .AuthorName}}</span>
+              <div><span class="reply-by">{{.AuthorName}}</span>{{.Body}}</div>
+            </li>
+          {{end}}
+        </ul>
+      {{end}}
+
+      <details class="reply-form">
+        <summary>Reply</summary>
+        <form method="post" action="/entries/{{.ID}}/replies">
+          <input type="hidden" name="return_to" value="{{.ReturnTo}}">
+          <label class="visually-hidden" for="reply-{{.ID}}">Add to this</label>
+          <textarea id="reply-{{.ID}}" name="body" rows="3" placeholder="Add to this&hellip;"></textarea>
+          <div class="btn-row"><button class="btn btn-quiet" type="submit">Post reply</button></div>
+        </form>
+      </details>
+
+      {{if .IsMine}}
+        <form method="post" action="/stories/{{.ID}}/delete"
+              onsubmit="return confirm('Delete this? It cannot be undone.')">
+          <input type="hidden" name="return_to" value="{{.ReturnTo}}">
+          <button class="link" type="submit">Delete this</button>
+        </form>
+      {{end}}
+    </article>
+  {{end}}
+{{else}}
+  <p class="lede">Nothing yet. If you know something about this picture, write it down.</p>
+{{end}}
+
+<section class="panel note">
+  <p class="eyebrow">Write about this picture</p>
+  <form method="post" action="/photos/{{.Photo.ID}}/stories">
+    <label for="photo-story-title">What would you call it? (optional)</label>
+    <input id="photo-story-title" name="title" type="text" placeholder="The gymnastics team">
+
+    <label for="photo-story-body">What do you remember?</label>
+    <p class="dictate" id="dictate-photo">
+      <span class="dictate-icon" aria-hidden="true">&#127908;</span>
+      <span>Tap the microphone on your keyboard and just talk &mdash; it types for you.</span>
+    </p>
+    <textarea id="photo-story-body" name="body" rows="6" aria-describedby="dictate-photo"></textarea>
+
+    <div class="btn-row"><button class="btn" type="submit">Save this</button></div>
+  </form>
+</section>
+{{end}}

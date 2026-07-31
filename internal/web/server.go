@@ -52,7 +52,8 @@ func New(cfg config.Config, s *store.Store, log *slog.Logger, assetVersion strin
 // all at once means every page can define "content" without colliding.
 func (s *Server) parseTemplates() error {
 	pages := []string{"home", "login", "denied", "callback", "cards",
-		"questions", "question", "stories", "subjects", "subject", "tree", "families", "people"}
+		"questions", "question", "stories", "subjects", "subject", "tree", "families", "people",
+		"gallery", "photo"}
 	s.templates = make(map[string]*template.Template, len(pages))
 
 	for _, name := range pages {
@@ -218,6 +219,12 @@ type pageData struct {
 	// everything. Congratulating somebody for an empty result is misleading.
 	NothingMatches bool
 
+	// photographs
+	Photo  *store.Photo
+	Photos []store.Photo
+	// PhotoCount is how many pictures this person is in, for the link by their name.
+	PhotoCount int
+
 	// question detail
 	Question        *store.QuestionDetail
 	PrimaryAnswers  []answerView
@@ -357,6 +364,15 @@ func (s *Server) Routes() http.Handler {
 
 	mux.Handle("POST /entries/{id}/photos", inFamilies(s.handleUploadPhoto))
 	mux.Handle("POST /photos/{id}/delete", inFamilies(s.handleDeletePhoto))
+
+	// Photographs of their own, which belong to everybody in them rather than to
+	// one person's answer.
+	mux.Handle("GET /subjects/{slug}/photos", inFamilies(s.handleGallery))
+	mux.Handle("GET /photos/{id}", inFamilies(s.handlePhoto))
+	mux.Handle("POST /gallery", inFamilies(s.handleAddGalleryPhoto))
+	mux.Handle("POST /photos/{id}/people", inFamilies(s.handleTagPhotoPerson))
+	mux.Handle("POST /photos/{id}/people/remove", inFamilies(s.handleUntagPhotoPerson))
+	mux.Handle("POST /photos/{id}/stories", inFamilies(s.handlePhotoStory))
 
 	mux.Handle("GET /tree", inFamilies(s.handleTree))
 	mux.Handle("GET /tree.json", inFamilies(s.handleTreeJSON))

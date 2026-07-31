@@ -1729,3 +1729,132 @@ a.pnode-hit:focus-visible .pnode-box { stroke: var(--teal); stroke-width: 3; }
 
 .btn-danger { border-color: var(--rust); color: var(--rust); background: var(--sheet); }
 .btn-danger:hover { background: var(--rust); color: var(--sheet); border-color: var(--rust); }
+
+/* ---------- Photographs ----------------------------------------------
+   A photograph belongs to everybody in it rather than to one person's answer, so
+   it appears on all their pages. The pins are the point: younger generations do
+   not know what these people looked like, and a group photograph of fifteen faces
+   says nothing unless somebody wrote down which one was their grandfather.
+   ------------------------------------------------------------------ */
+
+/* The name and, at the far end of the same line, the way to their pictures. */
+.subject-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s4);
+}
+.subject-title h1 { margin: 0; min-width: 0; }
+
+/* An icon that is still a thumb's worth of target, with the count riding on it. */
+.icon-btn {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tap);
+  height: var(--tap);
+  border: 2px solid var(--rule-firm);
+  border-radius: var(--r-pill);
+  background: var(--sheet);
+  color: var(--ink-mid);
+}
+.icon-btn svg { width: 1.5rem; height: 1.5rem; fill: none; stroke: currentColor; stroke-width: 1.6; }
+.icon-btn:hover, .icon-btn:focus-visible {
+  border-color: var(--teal); background: var(--teal-wash); color: var(--teal);
+}
+
+.icon-badge {
+  position: absolute;
+  top: -4px; right: -4px;
+  min-width: 1.35rem;
+  padding: 0 .25rem;
+  border-radius: var(--r-pill);
+  background: var(--teal);
+  color: var(--on-teal);
+  font: 700 .8125rem/1.35rem var(--sans);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.collage {
+  list-style: none;
+  margin: 0 0 var(--s6);
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(16rem, 100%), 1fr));
+  gap: var(--s4);
+}
+
+.collage-item { margin: 0; }
+.collage-item a { display: block; border-radius: var(--r-sm); overflow: hidden; }
+.collage-item img {
+  display: block; width: 100%; height: 12rem;
+  object-fit: cover; background: var(--oat-deep);
+}
+.collage-item a:hover img, .collage-item a:focus-visible img { filter: brightness(1.06); }
+.collage-missing {
+  display: block; padding: var(--s4); text-align: center;
+  font-size: var(--t-micro); color: var(--ink-soft); background: var(--oat-deep);
+}
+.collage-caption { margin: var(--s2) 0 0; font: 700 var(--t-small)/1.3 var(--sans); }
+.collage-who { margin: 0; font: 400 var(--t-micro)/1.4 var(--typed); color: var(--ink-soft); }
+
+/* The pins are positioned against the picture, not the figure: the figure includes
+   the caption, so a percentage of its height lands below the face it means. */
+.photo-full { margin: 0 0 var(--s5); }
+.photo-frame { position: relative; display: block; }
+.photo-full img { display: block; width: 100%; height: auto; border-radius: var(--r-sm); }
+.photo-full figcaption {
+  margin-top: var(--s2); font: 400 var(--t-micro)/1.4 var(--typed); color: var(--ink-soft);
+}
+
+/* A pin sits at a percentage of the width and height, so it stays on the face
+   whatever size the picture is drawn at. */
+.photo-pin {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  text-decoration: none;
+}
+.photo-pin-dot {
+  width: 1.4rem; height: 1.4rem; border-radius: 50%;
+  border: 2px solid var(--sheet);
+  background: color-mix(in srgb, var(--teal) 75%, transparent);
+  box-shadow: 0 0 0 1px rgba(0,0,0,.35);
+}
+/* Out of the way until you look at the picture. Fifteen dots on a photograph of
+   fifteen people is a diagram, not a photograph -- so they appear when the pointer
+   is on it, when something inside it has keyboard focus, or after a tap. */
+.photo-frame .photo-pin { opacity: 0; transition: opacity 120ms var(--ease); }
+.photo-frame:hover .photo-pin,
+.photo-frame:focus-within .photo-pin,
+.photo-frame[data-show-pins="yes"] .photo-pin { opacity: 1; }
+.photo-frame .photo-pin-new { opacity: 1; }
+
+/* Dragging one moves who it points at. */
+.photo-pin[data-draggable] { cursor: grab; touch-action: none; }
+.photo-pin[data-dragging] { cursor: grabbing; }
+.photo-pin[data-dragging] .photo-pin-dot { transform: scale(1.25); }
+.photo-pin[data-saving] .photo-pin-dot { opacity: .5; }
+
+.photo-pin-name {
+  padding: 1px var(--s2);
+  border-radius: var(--r-pill);
+  background: var(--ink);
+  color: var(--sheet);
+  font: 700 .8125rem/1.35 var(--sans);
+  white-space: nowrap;
+  /* Shown on the pin you are pointing at, so fifteen names do not cover the
+     picture at once. */
+  opacity: 0; transition: opacity 120ms var(--ease);
+}
+.photo-pin:hover .photo-pin-name,
+.photo-pin:focus-visible .photo-pin-name,
+.photo-pin[data-dragging] .photo-pin-name { opacity: 1; }
+.photo-pin-new .photo-pin-dot { background: color-mix(in srgb, var(--apricot) 80%, transparent); }
+.photo-pin-new .photo-pin-name { opacity: 1; background: var(--apricot); }
+
+.inline-form { display: inline; }
+.inline-form button { font-size: var(--t-micro); }

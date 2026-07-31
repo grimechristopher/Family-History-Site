@@ -9,7 +9,23 @@
      are. The years ride along with the name. */}}
 <header class="subject-head">
   <p class="eyebrow">{{if eq .Subject.Kind "couple"}}A couple{{else if eq .Subject.Kind "group"}}Further back{{else}}In the family{{end}}</p>
-  <h1>{{.Subject.DisplayName}}</h1>
+
+  {{/* Their name, and their pictures out at the far end of the same line. A
+       photograph belongs to everybody in it, so this reaches the ones they are in
+       whoever put them up. Drawn rather than fetched: the icon is a few lines of
+       SVG, and an image file would be another request and another thing to lose. */}}
+  <div class="subject-title">
+    <h1>{{.Subject.DisplayName}}</h1>
+    <a class="icon-btn" href="/subjects/{{.Subject.Slug}}/photos?family={{.Subject.FamilySlug}}"
+       aria-label="Pictures of {{.Subject.DisplayName}}{{if .PhotoCount}} — {{.PhotoCount}} of them{{end}}">
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M4 8.5h3.2l1.3-2h7l1.3 2H20a1.5 1.5 0 0 1 1.5 1.5v8A1.5 1.5 0 0 1 20 19.5H4A1.5 1.5 0 0 1 2.5 18v-8A1.5 1.5 0 0 1 4 8.5Z"/>
+        <circle cx="12" cy="14" r="3.4"/>
+      </svg>
+      {{if .PhotoCount}}<span class="icon-badge">{{.PhotoCount}}</span>{{end}}
+    </a>
+  </div>
+
   {{if eq .Subject.Kind "individual"}}
     {{range .Members}}{{if .Lifespan}}<p class="lifespan">{{.Lifespan}}</p>{{end}}{{end}}
   {{end}}

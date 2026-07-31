@@ -155,3 +155,151 @@
     held = null;
   });
 })();
+
+// Pointing out a face.
+//
+// Click or tap the photograph and the hidden fields fill in with where, as a
+// percentage of the width and height so the pin stays on the right face at any
+// size. Then choose who it is.
+//
+// Without this the form still works: choose a name, submit, and they are recorded as
+// being in the picture with no point. That is worth having on its own -- knowing
+// somebody is in a photograph is most of the value; knowing which one they are is
+// the rest.
+(function () {
+  'use strict';
+  var frame = document.getElementById('photo-frame');
+  var image = document.getElementById('photo-image');
+  if (!frame || !image) return;
+
+  // Put the saved pins where they belong. This is done here rather than with a
+  // style attribute in the markup because the Content-Security-Policy has
+  // style-src 'self' and no unsafe-inline, so the browser ignores a style
+  // attribute entirely -- silently, which is how the pins ended up stacked in the
+  // corner. Setting it from script is not affected by that rule.
+  var photoID = frame.dataset.photo;
+  frame.querySelectorAll('.photo-pin[data-x]').forEach(function (pin) {
+    pin.style.left = pin.dataset.x + '%';
+    pin.style.top = pin.dataset.y + '%';
+    pin.hidden = false;
+    pin.dataset.draggable = 'yes';
+  });
+
+  // On a touchscreen there is no hovering, so a tap on the picture reveals the pins
+  // and a tap elsewhere puts them away again.
+  frame.addEventListener('pointerdown', function (event) {
+    if (event.pointerType === 'touch') frame.dataset.showPins = 'yes';
+  });
+  document.addEventListener('pointerdown', function (event) {
+    if (!frame.contains(event.target)) delete frame.dataset.showPins;
+  });
+
+  // Dragging a pin moves who it points at.
+  //
+  // Saved as a percentage on release rather than continuously: one write when you
+  // let go, not one per pixel. The same endpoint the form uses, which already
+  // treats a repeat as moving the point.
+  var dragging = null;
+
+  function percentFrom(event) {
+    var box = frame.getBoundingClientRect();
+    return {
+      x: Math.min(100, Math.max(0, ((event.clientX - box.left) / box.width) * 100)),
+      y: Math.min(100, Math.max(0, ((event.clientY - box.top) / box.height) * 100))
+    };
+  }
+
+  frame.addEventListener('pointerdown', function (event) {
+    var pin = event.target.closest && event.target.closest('.photo-pin[data-draggable]');
+    if (!pin) return;
+    dragging = { pin: pin, moved: false };
+    pin.dataset.dragging = 'yes';
+    pin.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  });
+
+  frame.addEventListener('pointermove', function (event) {
+    if (!dragging) return;
+    var at = percentFrom(event);
+    dragging.pin.style.left = at.x.toFixed(2) + '%';
+    dragging.pin.style.top = at.y.toFixed(2) + '%';
+    dragging.at = at;
+    dragging.moved = true;
+  });
+
+  function endDrag(event) {
+    if (!dragging) return;
+    var pin = dragging.pin;
+    delete pin.dataset.dragging;
+    var moved = dragging.moved, at = dragging.at;
+    dragging = null;
+    if (!moved || !at) return;
+
+    // The link underneath must not fire on the click that ends a drag.
+    var swallow = function (e) { e.preventDefault(); pin.removeEventListener('click', swallow, true); };
+    pin.addEventListener('click', swallow, true);
+
+    pin.dataset.saving = 'yes';
+    var body = new URLSearchParams();
+    body.set('subject_id', pin.dataset.subject);
+    body.set('x', at.x.toFixed(2));
+    body.set('y', at.y.toFixed(2));
+    fetch('/photos/' + photoID + '/people', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString()
+    }).then(function (res) {
+      delete pin.dataset.saving;
+      if (!res.ok) throw new Error('status ' + res.status);
+      pin.dataset.x = at.x.toFixed(2);
+      pin.dataset.y = at.y.toFixed(2);
+    }).catch(function (err) {
+      // Put it back where it was, so the picture never shows a position that was
+      // not saved.
+      delete pin.dataset.saving;
+      pin.style.left = pin.dataset.x + '%';
+      pin.style.top = pin.dataset.y + '%';
+      if (window.console) console.warn('could not move the pin:', err);
+    });
+  }
+  frame.addEventListener('pointerup', endDrag);
+  frame.addEventListener('pointercancel', endDrag);
+
+  var panel = document.getElementById('tag-panel');
+  if (!panel) return;
+
+  var fx = document.getElementById('tag-x');
+  var fy = document.getElementById('tag-y');
+  var where = document.getElementById('tag-where');
+  var marker = null;
+
+  image.style.cursor = 'crosshair';
+
+  image.addEventListener('click', function (event) {
+    var box = image.getBoundingClientRect();
+    var x = ((event.clientX - box.left) / box.width) * 100;
+    var y = ((event.clientY - box.top) / box.height) * 100;
+    if (x < 0 || x > 100 || y < 0 || y > 100) return;
+
+    fx.value = x.toFixed(2);
+    fy.value = y.toFixed(2);
+
+    // A provisional pin, so it is obvious what was picked before saving.
+    if (!marker) {
+      marker = document.createElement('span');
+      marker.className = 'photo-pin photo-pin-new';
+      marker.innerHTML = '<span class="photo-pin-dot" aria-hidden="true"></span>' +
+        '<span class="photo-pin-name">who is this?</span>';
+      frame.appendChild(marker);
+    }
+    marker.style.left = x.toFixed(2) + '%';
+    marker.style.top = y.toFixed(2) + '%';
+
+    where.hidden = false;
+    where.textContent = 'Face picked. Now choose who it is.';
+    panel.open = true;
+    var pick = document.getElementById('tag-subject');
+    if (pick) pick.focus();
+  });
+})();

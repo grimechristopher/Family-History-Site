@@ -1,0 +1,44 @@
+{{define "content"}}
+{{/* Rows of pictures somebody is in. Every one of them is on the pages of
+     everybody else in it too: a photograph belongs to the people in it, not to
+     whoever happened to put it up. */}}
+<nav class="crumbs" aria-label="Where you are">
+  <a class="link" href="/tree">The family</a>
+  <span class="crumbs-sep" aria-hidden="true">/</span>
+  <a class="link" href="/subjects/{{.Subject.Slug}}?family={{.Subject.FamilySlug}}">{{.Subject.DisplayName}}</a>
+  <span class="crumbs-sep" aria-hidden="true">/</span>
+  <span class="crumbs-here">Pictures</span>
+</nav>
+
+<p class="eyebrow">Pictures</p>
+<h1>{{.Subject.DisplayName}}</h1>
+
+{{if .Photos}}
+  <ul class="collage">
+    {{range .Photos}}
+      <li class="collage-item">
+        <a href="/photos/{{.ID}}">
+          {{if .SignedURL}}
+            <img src="{{.SignedURL}}" loading="lazy"
+                 alt="{{if .Caption}}{{.Caption}}{{else}}A family photograph{{end}}">
+          {{else}}
+            <span class="collage-missing">This picture couldn&rsquo;t be loaded</span>
+          {{end}}
+        </a>
+        {{if .Caption}}<p class="collage-caption">{{.Caption}}</p>{{end}}
+        {{if .People}}
+          <p class="collage-who">
+            {{range $i, $p := .People}}{{if $i}}, {{end}}{{$p.DisplayName}}{{end}}
+          </p>
+        {{end}}
+      </li>
+    {{end}}
+  </ul>
+{{else}}
+  <div class="panel panel-empty">
+    <p class="lede">No pictures of them yet.</p>
+  </div>
+{{end}}
+
+{{template "add-photo-form" .}}
+{{end}}
