@@ -44,8 +44,8 @@ and no password. Leave the variable out entirely.
    list — it silently substitutes `SITE_URL`, which looks exactly like a broken
    login and is not logged anywhere.
 
-4. **Import.** Copy `lines.example.conf` to `lines.conf`, put the GEDCOM exports in
-   `gedcom/` and the prompts in `prompts/`, then:
+4. **Import.** Copy `lines.example.conf` to `lines.conf`, put the tree files in
+   `tree/` and the prompts in `prompts/`, then:
 
    ```sh
    DATABASE_URL=<owner> ADMIN_EMAIL=you@example.com ./scripts/import.sh
@@ -53,6 +53,20 @@ and no password. Leave the variable out entirely.
 
    The importer creates, archives and deletes rows across the schema, so it runs as
    an owning role rather than as `fhs_app`.
+
+   The tree is JSON, not a GEDCOM. Nothing needs a GEDCOM to deploy: it is a 1980s
+   line format that arrives from whichever site the family happens to use, carries a
+   hundred thousand lines of sources that nothing here reads, and writes surnames in
+   capitals. Convert an export once and keep the JSON, which is readable and can be
+   corrected by hand:
+
+   ```sh
+   go run ./cmd/treejson -gedcom "export.ged" -out tree/one.json
+   ```
+
+   It normalises the shouting on the way through and folds any duplicate records,
+   saying which. A `.ged` path still works in `lines.conf` if you would rather import
+   an export directly.
 
 5. **Sign-in addresses.** The import seeds whatever `lines.conf` says. To move
    somebody to their real address without orphaning their questions:

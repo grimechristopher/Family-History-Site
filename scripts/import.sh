@@ -12,14 +12,16 @@
 #   scripts/import.sh grime            # just one
 #
 # Each line of the config is:
-#   slug | GEDCOM | prompts file | -person argument | extra GEDCOM names
+#   slug | tree file | prompts file | -person argument | extra names
 # and a line may repeat the -person field, separated by ';;', for a family where
 # several people are asked the same set of questions.
 #
-# The GEDCOM is per line and not global. Two families here come from one export
+# The tree file is per line and not global. Two families here come from one export
 # and two from another, and running them all against one file silently imported
 # fifteen fewer questions than it should have -- the names matched, so nothing
 # failed, there was simply less of the family in the file.
+#
+# JSON, produced once from a GEDCOM by cmd/treejson. A .ged path still works.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -41,7 +43,7 @@ while IFS='|' read -r slug ged prompts people extra; do
 
   ged="$(echo "$ged" | xargs)"
   [ -z "$ged" ] && ged="${GEDCOM_PATH:-}"
-  [ -f "$ged" ] || { echo "$slug: no GEDCOM at '$ged'" >&2; exit 1; }
+  [ -f "$ged" ] || { echo "$slug: no tree file at '$ged'" >&2; exit 1; }
   prompts="$(echo "$prompts" | xargs)"
   [ -f "$prompts" ] || { echo "$slug: no prompts at '$prompts'" >&2; exit 1; }
   extra="$(echo "${extra:-}" | xargs)"

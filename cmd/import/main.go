@@ -23,6 +23,7 @@ import (
 	"github.com/grimechristopher/family-history-site/internal/prompts"
 	"github.com/grimechristopher/family-history-site/internal/store"
 	"github.com/grimechristopher/family-history-site/internal/subjects"
+	"github.com/grimechristopher/family-history-site/internal/tree"
 )
 
 func main() {
@@ -179,16 +180,30 @@ func run(cfg importConfig) error {
 		return fmt.Errorf("open gedcom: %w", err)
 	}
 	defer gf.Close()
-	ged, err := gedcom.Parse(gf)
-	if err != nil {
-		return fmt.Errorf("parse gedcom: %w", err)
+	// JSON is the family's own file, readable and correctable. A GEDCOM still works
+	// so an export can be imported directly, but nothing needs one to deploy.
+	var ged *gedcom.File
+	if strings.HasSuffix(strings.ToLower(cfg.GedPath), ".json") {
+		ged, err = tree.Load(gf)
+		if err != nil {
+			return fmt.Errorf("read tree: %w", err)
+		}
+		fmt.Printf("read tree: %d people, %d families\n", len(ged.Individuals), len(ged.Families))
+	} else {
+		ged, err = gedcom.Parse(gf)
+		if err != nil {
+			return fmt.Errorf("parse gedcom: %w", err)
+		}
+		fmt.Printf("parsed gedcom: %d individuals, %d families\n", len(ged.Individuals), len(ged.Families))
 	}
-	fmt.Printf("parsed gedcom: %d individuals, %d families\n", len(ged.Individuals), len(ged.Families))
 
 	// The same person entered twice, which a tree built over years by several
 	// people always has. Reported rather than done quietly: changing the shape of
 	// somebody's family is not a thing to do in silence, and if the rule ever folds
 	// two people who are not one person, this is where it would be noticed.
+	//
+	// The JSON is written with the duplicates already folded, so this normally finds
+	// nothing there and everything in a fresh GEDCOM.
 	if merged := ged.MergeDuplicates(); len(merged) > 0 {
 		fmt.Printf("merged %d duplicate record(s):\n", len(merged))
 		for _, m := range merged {

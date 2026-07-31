@@ -19,6 +19,7 @@ static/css/tailwind.css
 /lines.conf
 /prompts/
 /gedcom/
+/tree/
 
 # Notes about the family. The spec and the plan quote real questions and name
 # real people, and none of that belongs in a code repository -- the answers live
