@@ -404,19 +404,27 @@ func (s *Store) SubjectsWithProgress(ctx context.Context, askedOf, familySlug st
 	return out, rows.Err()
 }
 
-// SharedWithSentence names everybody a question is asked of, the way a person
-// would say it: "Robert, Frank, Tony and Inez".
-func (q QuestionListItem) SharedWithSentence() string {
-	switch n := len(q.SharedWith); n {
+// NameSentence lists names the way a person would say them out loud:
+// "Robert, Frank, Tony and Inez".
+func NameSentence(names []string) string {
+	switch n := len(names); n {
 	case 0:
-		return q.AskedOfName
+		return ""
 	case 1:
-		return q.SharedWith[0]
+		return names[0]
 	case 2:
-		return q.SharedWith[0] + " and " + q.SharedWith[1]
+		return names[0] + " and " + names[1]
 	default:
-		return strings.Join(q.SharedWith[:n-1], ", ") + " and " + q.SharedWith[n-1]
+		return strings.Join(names[:n-1], ", ") + " and " + names[n-1]
 	}
+}
+
+// SharedWithSentence names everybody a question is asked of.
+func (q QuestionListItem) SharedWithSentence() string {
+	if len(q.SharedWith) == 0 {
+		return q.AskedOfName
+	}
+	return NameSentence(q.SharedWith)
 }
 
 // LineStanding is how one line is getting on, for the page an admin lands on.

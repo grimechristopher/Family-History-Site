@@ -1165,14 +1165,6 @@ a.tperson:hover { border-color: var(--teal); background: var(--teal-wash); }
 
 .pedigree-figure { margin: 0 0 var(--s6); }
 
-.pedigree-caption {
-  font: 700 var(--t-micro)/1.4 var(--sans);
-  letter-spacing: .09em;
-  text-transform: uppercase;
-  color: var(--apricot);
-  margin-bottom: var(--s3);
-}
-
 /* A pedigree is wider than any column, so it scrolls inside its own frame and
    the page never scrolls sideways. */
 .pedigree-scroll {

@@ -206,6 +206,24 @@ func (s *Server) questionData(r *http.Request, id int64) (pageData, error) {
 	}
 	data.Question = q
 
+	// Everybody the question was put to, not just the one name on the row. A
+	// question shared by four brothers has four people who might still answer it,
+	// and saying so is the whole reason the page mentions it at all.
+	askees, err := s.Store.QuestionAskees(r.Context(), id)
+	if err != nil {
+		return data, err
+	}
+	data.Askees = askees
+	asked := make(map[int64]bool, len(askees))
+	for _, a := range askees {
+		asked[a.UserID] = true
+		// Not said to the person themselves: to them it refers to them in the third
+		// person, and the form below already says the question is theirs.
+		if !a.Answered && a.UserID != u.ID {
+			data.Awaiting = append(data.Awaiting, a.Name)
+		}
+	}
+
 	entries, err := s.Store.AnswersTo(r.Context(), id)
 	if err != nil {
 		return data, err
@@ -225,15 +243,17 @@ func (s *Server) questionData(r *http.Request, id int64) (pageData, error) {
 	}
 	s.signAttachments(r, photos)
 
-	// AnswersTo already sorts the intended person first, which is what makes the
-	// primary / Others split fall out naturally.
+	// AnswersTo already sorts the people asked first, which is what makes the
+	// primary / Others split fall out naturally. Every one of them is primary --
+	// four brothers answering in their own words are four answers in their own
+	// words, not one and three bystanders.
 	for _, e := range entries {
 		view := answerView{
 			Entry:         e,
 			Replies:       replies[e.ID],
 			Photos:        photos[e.ID],
 			IsMine:        e.AuthorUserID == u.ID,
-			IsPrimary:     e.AuthorUserID == q.AskedOfUserID,
+			IsPrimary:     asked[e.AuthorUserID],
 			PhotosEnabled: s.Storage.Configured(),
 			ReturnTo:      "/questions/" + strconv.FormatInt(id, 10),
 		}
@@ -254,7 +274,7 @@ func (s *Server) questionData(r *http.Request, id int64) (pageData, error) {
 		return data, err
 	}
 
-	data.ViewerIsAskedOf = q.AskedOfUserID == u.ID
+	data.ViewerIsAskedOf = asked[u.ID]
 	// Whether they run the line this question belongs to, which is what changing or
 	// removing it requires. The handlers check it again -- hiding a control is a
 	// courtesy, not a permission.

@@ -1719,6 +1719,52 @@ func TestUnansweredNoticeIsHiddenFromThePersonAsked(t *testing.T) {
 	}
 }
 
+// A question put to several people is waiting on every one of them. The page used
+// to name only asked_of_user_id, so a question four brothers were sitting on read
+// as though it were Frank's alone.
+func TestEverybodyAskedIsNamedAsStillToAnswer(t *testing.T) {
+	h := newHarness(t)
+	dadQ := strconv.FormatInt(h.dadQuestion, 10)
+	if err := h.store.AskAlso(h.ctx, h.dadQuestion, h.momID); err != nil {
+		t.Fatalf("AskAlso: %v", err)
+	}
+
+	// Chris was asked nothing, so he is told about both of them.
+	chris := h.signIn("chris@example.com")
+	body := h.get("/questions/"+dadQ, chris).Body.String()
+	if !strings.Contains(body, "Dad and Mom haven&rsquo;t answered this one yet") {
+		t.Error("both people asked should be named as still to answer")
+	}
+	if !strings.Contains(body, "Asked of Dad and Mom") {
+		t.Error("the chip should name everybody asked, not one of them")
+	}
+
+	// Dad answers. He drops off the list, Mom stays on it, and what he wrote reads
+	// as one of the people asked rather than as a bystander.
+	dad := h.signIn("dad@example.com")
+	h.post("/questions/"+dadQ+"/answer", url.Values{"body": {"A Studebaker."}}, dad)
+	body = h.get("/questions/"+dadQ, chris).Body.String()
+	if !strings.Contains(body, "Mom hasn&rsquo;t answered this one yet") {
+		t.Error("the person who has not answered should still be named")
+	}
+	if strings.Contains(body, "Dad and Mom haven") {
+		t.Error("somebody who has answered should not be listed as still to answer")
+	}
+	if !strings.Contains(body, "their own words") {
+		t.Error("an answer from somebody asked should read as their own words")
+	}
+
+	// Mom is not told about herself.
+	mom := h.signIn("mom@example.com")
+	hers := h.get("/questions/"+dadQ, mom).Body.String()
+	if strings.Contains(hers, "answered this one yet") {
+		t.Error("the person asked should not be told they have not answered")
+	}
+	if !strings.Contains(hers, "This one was asked of you") {
+		t.Error("a question put to somebody as well should read as theirs too")
+	}
+}
+
 // Replying used to redirect, which reloaded the page and threw the reader back to
 // the top -- losing their place in a long thread every time.
 func TestReplyingSwapsInPlaceInsteadOfReloading(t *testing.T) {

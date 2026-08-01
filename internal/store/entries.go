@@ -110,6 +110,45 @@ type QuestionDetail struct {
 	Edited bool
 }
 
+// AskeeStanding is one person a question was put to, and whether they have
+// answered it yet. A question asked of four brothers has four of these, and the
+// page needs all four: naming only asked_of_user_id told a reader that Frank had
+// not answered a question three other people were also still sitting on.
+type AskeeStanding struct {
+	UserID   int64
+	Name     string
+	Answered bool
+}
+
+// QuestionAskees names everybody a question is put to, in the same order the
+// lists name them, and says which of them have written something.
+func (s *Store) QuestionAskees(ctx context.Context, questionID int64) ([]AskeeStanding, error) {
+	rows, err := s.q(ctx).Query(ctx, `
+		SELECT u.id, u.display_name,
+		       EXISTS (SELECT 1 FROM family.entries e
+		                WHERE e.question_id = a.question_id
+		                  AND e.author_user_id = a.user_id
+		                  AND e.is_draft = false)
+		FROM family.question_askees a
+		JOIN core.users u ON u.id = a.user_id
+		WHERE a.question_id = $1
+		ORDER BY u.display_name`, questionID)
+	if err != nil {
+		return nil, fmt.Errorf("askees of question %d: %w", questionID, err)
+	}
+	defer rows.Close()
+
+	var out []AskeeStanding
+	for rows.Next() {
+		var a AskeeStanding
+		if err := rows.Scan(&a.UserID, &a.Name, &a.Answered); err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
 func (s *Store) Question(ctx context.Context, questionID int64) (*QuestionDetail, error) {
 	var q QuestionDetail
 	err := s.q(ctx).QueryRow(ctx, `

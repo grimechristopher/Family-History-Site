@@ -330,10 +330,10 @@
       figure.className = 'pedigree-figure';
       figure.dataset.line = String(rootIndex);
 
-      var caption = document.createElement('figcaption');
-      caption.className = 'pedigree-caption';
-      caption.textContent = rootData.name;
-      figure.appendChild(caption);
+      // No caption. The first box of the chart is that person, with their name in
+      // it, so a heading above it only said the same thing twice. The name is
+      // still on the chart's aria-label, where it is the only way to know whose
+      // pedigree this is without reading the whole thing.
 
       var scroller = document.createElement('div');
       scroller.className = 'pedigree-scroll';

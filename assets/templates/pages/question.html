@@ -5,7 +5,7 @@
   <p class="card-subject">{{.Question.SubjectName}}{{if .Question.Topic}} &middot; {{.Question.Topic}}{{end}}</p>
   <h1 class="panel-title">{{.Question.Body}}</h1>
   <p class="chips">
-    <span class="chip chip-asked">Asked of {{.Question.AskedOfName}}</span>
+    <span class="chip chip-asked">Asked of {{.AskedOfNames}}</span>
     {{if .PrimaryAnswers}}<span class="chip chip-done">Answered</span>{{end}}
     {{if .OtherAnswers}}<span class="chip">{{len .OtherAnswers}} from others</span>{{end}}
     {{if .Question.Edited}}<span class="chip">reworded</span>{{end}}
@@ -66,14 +66,16 @@
 
 {{define "answers"}}
 <div id="answers">
-  {{if .PrimaryAnswers}}
-    {{range .PrimaryAnswers}}{{template "answer" .}}{{end}}
-  {{else if not .ViewerIsAskedOf}}
-    {{/* Only worth saying to somebody else. Told to the person who was asked, it
-         refers to them in the third person, and the form below already says the
-         question is theirs. */}}
+  {{range .PrimaryAnswers}}{{template "answer" .}}{{end}}
+
+  {{/* Everybody still to answer, named. A question put to four brothers is
+       waiting on whichever of them have not written yet, and one of them having
+       answered says nothing about the other three. The viewer is left out of the
+       list by the handler: told to the person asked, this refers to them in the
+       third person, and the form below already says the question is theirs. */}}
+  {{if .Awaiting}}
     <div class="panel panel-empty">
-      <p class="lede">{{.Question.AskedOfName}} hasn&rsquo;t answered this one yet.</p>
+      <p class="lede">{{.AwaitingNames}} {{if gt (len .Awaiting) 1}}haven{{else}}hasn{{end}}&rsquo;t answered this one yet.</p>
     </div>
   {{end}}
 

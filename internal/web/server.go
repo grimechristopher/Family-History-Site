@@ -242,6 +242,11 @@ type pageData struct {
 	MyAnswerBody    string
 	MyAnswerIsDraft bool
 	ViewerIsAskedOf bool
+	// Askees is everybody the question was put to, and Awaiting the ones still to
+	// answer -- minus the viewer, who is told the question is theirs by the form
+	// rather than referred to in the third person above it.
+	Askees   []store.AskeeStanding
+	Awaiting []string
 
 	// stories
 	Stories []storyView
@@ -265,6 +270,22 @@ type pageData struct {
 	Subject *store.SubjectProgress
 	Members []store.TreePerson
 }
+
+// AskedOfNames names everybody the question was put to, for the chip that used to
+// name only one of them.
+func (d pageData) AskedOfNames() string {
+	names := make([]string, 0, len(d.Askees))
+	for _, a := range d.Askees {
+		names = append(names, a.Name)
+	}
+	if len(names) == 0 && d.Question != nil {
+		return d.Question.AskedOfName
+	}
+	return store.NameSentence(names)
+}
+
+// AwaitingNames names the people who have not answered yet.
+func (d pageData) AwaitingNames() string { return store.NameSentence(d.Awaiting) }
 
 func (s *Server) newPageData(r *http.Request, title string) pageData {
 	d := pageData{
