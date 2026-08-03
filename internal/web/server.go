@@ -419,6 +419,7 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("POST /people/remove", inFamilies(s.handleRemovePerson))
 	mux.Handle("POST /people/email", inFamilies(s.handleChangeEmail))
 	mux.Handle("POST /people/person", inFamilies(s.handleSetPerson))
+	mux.Handle("POST /people/askable", inFamilies(s.handleSetAskable))
 
 	return s.securityHeaders(mux)
 }

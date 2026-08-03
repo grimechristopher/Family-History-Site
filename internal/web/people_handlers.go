@@ -459,3 +459,49 @@ func (s *Server) handleSetPerson(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/people?family="+url.QueryEscape(fam.Slug)+
 		"&note="+url.QueryEscape(note), http.StatusSeeOther)
 }
+
+// handleSetAskable turns whether somebody can be asked a question on or off.
+//
+// Independent of role: a contributor is askable by default and an admin is not,
+// but either can be flipped by hand -- an admin running a line on a relative's
+// behalf may also be somebody whose own memories are worth asking for.
+func (s *Server) handleSetAskable(w http.ResponseWriter, r *http.Request) {
+	fam, err := s.familyFromForm(r)
+	if err != nil {
+		http.Error(w, "Pick which family they're in.", http.StatusBadRequest)
+		return
+	}
+	userID, err := strconv.ParseInt(r.FormValue("user_id"), 10, 64)
+	if err != nil {
+		http.Error(w, "that wasn't somebody", http.StatusBadRequest)
+		return
+	}
+
+	member, err := s.Store.Member(r.Context(), fam.ID, userID)
+	if errors.Is(err, store.ErrNotFound) {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	if !s.mayManage(r, fam.ID, member) {
+		http.Error(w, "Only an admin can change an admin's entry.", http.StatusForbidden)
+		return
+	}
+
+	askable := r.FormValue("askable") != ""
+	if err := s.Store.SetMemberAskable(r.Context(), fam.ID, userID, askable); err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	note := member.DisplayName + " can now be asked questions."
+	if !askable {
+		note = member.DisplayName + " won't be offered as someone to ask."
+	}
+	s.Log.Info("changed askable", "family", fam.Slug, "who", member.DisplayName,
+		"askable", askable, "by", auth.User(r.Context()).DisplayName)
+	http.Redirect(w, r, "/people?family="+url.QueryEscape(fam.Slug)+
+		"&note="+url.QueryEscape(note), http.StatusSeeOther)
+}

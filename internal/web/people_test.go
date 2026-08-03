@@ -553,3 +553,78 @@ func TestNewContributorCanBeAskedImmediately(t *testing.T) {
 		t.Errorf("Cousin Ashley has %d questions, want 1", count)
 	}
 }
+
+// Same permission rule as the rest of the edit panel: anyone in the line may flip
+// a contributor's flag, but only an admin may flip another admin's.
+func TestOnlyAnAdminMayFlipAnotherAdminsAskableFlag(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	dad := h.signIn("dad@example.com")
+
+	chris, err := h.store.UserByEmail(ctx, "chris@example.com")
+	if err != nil {
+		t.Fatalf("UserByEmail: %v", err)
+	}
+	mom, err := h.store.UserByEmail(ctx, "mom@example.com")
+	if err != nil {
+		t.Fatalf("UserByEmail: %v", err)
+	}
+	fam, err := h.store.FamilyBySlug(ctx, "home")
+	if err != nil {
+		t.Fatalf("FamilyBySlug: %v", err)
+	}
+	famCtx := store.WithFamily(ctx, fam.ID)
+
+	// Dad, a contributor, cannot flip the admin's flag.
+	rec := h.post("/people/askable", url.Values{
+		"family": {"home"}, "user_id": {fmt.Sprint(chris.ID)}, "askable": {"1"},
+	}, dad)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("a contributor flipping the admin's flag: status %d, want 403", rec.Code)
+	}
+	m, err := h.store.Member(famCtx, fam.ID, chris.ID)
+	if err != nil {
+		t.Fatalf("Member: %v", err)
+	}
+	if m.Askable {
+		t.Error("a contributor should not have been able to make the admin askable")
+	}
+
+	// But manages a fellow contributor's.
+	rec = h.post("/people/askable", url.Values{
+		"family": {"home"}, "user_id": {fmt.Sprint(mom.ID)}, "askable": {""},
+	}, dad)
+	if rec.Code == http.StatusForbidden {
+		t.Fatalf("a contributor should be able to flip a fellow contributor's flag")
+	}
+	m, err = h.store.Member(famCtx, fam.ID, mom.ID)
+	if err != nil {
+		t.Fatalf("Member: %v", err)
+	}
+	if m.Askable {
+		t.Error("mom should no longer be askable")
+	}
+
+	// An admin may flip another admin's flag.
+	christina, err := h.store.UpsertUserIn(famCtx, "christina@example.com", "Christina")
+	if err != nil {
+		t.Fatalf("UpsertUserIn: %v", err)
+	}
+	if err := h.store.AddMember(famCtx, fam.ID, christina, store.RoleAdmin); err != nil {
+		t.Fatalf("AddMember: %v", err)
+	}
+	admin2 := h.signIn("christina@example.com")
+	rec = h.post("/people/askable", url.Values{
+		"family": {"home"}, "user_id": {fmt.Sprint(chris.ID)}, "askable": {"1"},
+	}, admin2)
+	if rec.Code == http.StatusForbidden {
+		t.Fatalf("an admin should be able to flip another admin's flag: %s", rec.Body.String())
+	}
+	m, err = h.store.Member(famCtx, fam.ID, chris.ID)
+	if err != nil {
+		t.Fatalf("Member: %v", err)
+	}
+	if !m.Askable {
+		t.Error("chris should now be askable")
+	}
+}
