@@ -98,11 +98,15 @@ func (s *Store) AnswersTo(ctx context.Context, questionID int64) ([]Entry, error
 
 // QuestionDetail is a question plus the context needed to render it.
 type QuestionDetail struct {
-	ID            int64
-	Body          string
-	Topic         *string
-	SubjectName   string
-	SubjectSlug   string
+	ID          int64
+	Body        string
+	Topic       *string
+	SubjectName string
+	SubjectSlug string
+	// FamilySlug is the line the subject belongs to, needed to link back to the
+	// subject's own page -- a subject slug is only unique within its line, and
+	// "further-back" is reused by every one of them.
+	FamilySlug    string
 	AskedOfUserID int64
 	AskedOfName   string
 	// Edited marks a question somebody reworded by hand, which is also what keeps
@@ -152,14 +156,15 @@ func (s *Store) QuestionAskees(ctx context.Context, questionID int64) ([]AskeeSt
 func (s *Store) Question(ctx context.Context, questionID int64) (*QuestionDetail, error) {
 	var q QuestionDetail
 	err := s.q(ctx).QueryRow(ctx, `
-		SELECT q.id, q.body, q.topic, s.display_name, s.slug, q.asked_of_user_id, u.display_name,
-		       q.edited_at IS NOT NULL
+		SELECT q.id, q.body, q.topic, s.display_name, s.slug, f.slug,
+		       q.asked_of_user_id, u.display_name, q.edited_at IS NOT NULL
 		FROM family.questions q
 		JOIN family.subjects s ON s.id = q.subject_id
+		JOIN core.families f ON f.id = s.family_id
 		JOIN core.users u ON u.id = q.asked_of_user_id
 		WHERE q.id = $1 AND q.archived_at IS NULL`, questionID).
-		Scan(&q.ID, &q.Body, &q.Topic, &q.SubjectName, &q.SubjectSlug, &q.AskedOfUserID,
-			&q.AskedOfName, &q.Edited)
+		Scan(&q.ID, &q.Body, &q.Topic, &q.SubjectName, &q.SubjectSlug, &q.FamilySlug,
+			&q.AskedOfUserID, &q.AskedOfName, &q.Edited)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}

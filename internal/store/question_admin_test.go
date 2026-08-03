@@ -196,3 +196,49 @@ func TestRemovingAQuestionKeepsItsAnswers(t *testing.T) {
 		t.Errorf("removing the question destroyed %d answer(s)", 1-after)
 	}
 }
+
+// The breadcrumb on the question page needs to know which line the question's
+// subject belongs to, to link back to it correctly.
+func TestQuestionCarriesItsFamily(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+
+	famID, err := s.CreateFamily(ctx, "carries", "The Carries line")
+	if err != nil {
+		t.Fatalf("CreateFamily: %v", err)
+	}
+	fctx := WithFamily(WithFamilies(ctx, []int64{famID}), famID)
+
+	var questionID int64
+	err = s.InTx(fctx, func(db DBTX) error {
+		uid, err := UpsertUser(fctx, db, "grandchild@example.com", "Grandchild")
+		if err != nil {
+			return err
+		}
+		if err := AddMemberTx(fctx, db, famID, uid, RoleContributor); err != nil {
+			return err
+		}
+		subjectID, err := UpsertSubject(fctx, db, Subject{
+			Slug: "grandma-rose", Kind: "individual", DisplayName: "Grandma Rose", SortOrder: 1,
+		})
+		if err != nil {
+			return err
+		}
+		questionID, err = UpsertImportedQuestion(fctx, db, ImportedQuestion{
+			SubjectID: subjectID, AskedOfUserID: uid,
+			Body: "What was her garden like?", SortOrder: 1, ImportKey: "rose-1",
+		})
+		return err
+	})
+	if err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	q, err := s.Question(fctx, questionID)
+	if err != nil {
+		t.Fatalf("Question: %v", err)
+	}
+	if q.FamilySlug != "carries" {
+		t.Errorf("FamilySlug = %q, want %q", q.FamilySlug, "carries")
+	}
+}
