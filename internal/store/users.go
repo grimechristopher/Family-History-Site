@@ -74,13 +74,17 @@ func (s *Store) UserByDisplayName(ctx context.Context, name string) (*User, erro
 // questions" leads to an empty page.
 // familySlug narrows to the people who answer in one line. Frank belongs only to
 // the Lucero line, so choosing the Grime line should not go on offering him.
+// Contributors lists everybody in this line who can be asked a question and
+// already has one waiting -- the "Whose questions" filter on the browsable
+// questions page. Offering somebody with nothing to filter by is a dead end, so
+// this requires history; Askable below does not.
 func (s *Store) Contributors(ctx context.Context, familySlug string) ([]*User, error) {
 	rows, err := s.q(ctx).Query(ctx, `
 		SELECT DISTINCT `+prefixed(userColumns, "u.")+`
 		  FROM core.users u
 		  JOIN core.family_members m ON m.user_id = u.id
 		  JOIN core.families f ON f.id = m.family_id
-		 WHERE m.family_id = ANY($1) AND m.removed_at IS NULL AND m.role = 'contributor'
+		 WHERE m.family_id = ANY($1) AND m.removed_at IS NULL AND m.askable
 		   AND ($2 = '' OR f.slug = $2)
 		   AND EXISTS (SELECT 1 FROM family.questions q
 		                JOIN family.question_askees qa ON qa.question_id = q.id
@@ -88,6 +92,37 @@ func (s *Store) Contributors(ctx context.Context, familySlug string) ([]*User, e
 		                 AND q.family_id = m.family_id
 		                 AND q.archived_at IS NULL)
 		 GROUP BY u.id, u.email, u.supabase_user_id, u.display_name
+		 ORDER BY u.display_name`, FamilyIDsFrom(ctx), familySlug)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []*User
+	for rows.Next() {
+		u, err := scanUser(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, u)
+	}
+	return out, rows.Err()
+}
+
+// Askable lists everybody in this line who can be asked a question, with no
+// history required. The checkbox that offers who a new question goes to, and the
+// handler that validates it, both need this rather than Contributors: otherwise
+// nobody added after the initial import could ever be asked their first thing,
+// since the very query that decides who's offered would require a question that
+// doesn't exist yet.
+func (s *Store) Askable(ctx context.Context, familySlug string) ([]*User, error) {
+	rows, err := s.q(ctx).Query(ctx, `
+		SELECT DISTINCT `+prefixed(userColumns, "u.")+`
+		  FROM core.users u
+		  JOIN core.family_members m ON m.user_id = u.id
+		  JOIN core.families f ON f.id = m.family_id
+		 WHERE m.family_id = ANY($1) AND m.removed_at IS NULL AND m.askable
+		   AND ($2 = '' OR f.slug = $2)
 		 ORDER BY u.display_name`, FamilyIDsFrom(ctx), familySlug)
 	if err != nil {
 		return nil, err

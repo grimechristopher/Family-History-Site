@@ -172,3 +172,122 @@ func TestSetMemberAskableFlipsEitherWay(t *testing.T) {
 		t.Error("expected an error setting askable for somebody not in the family")
 	}
 }
+
+// Askable offers everybody who can be asked a question, with no history required
+// -- the checkbox on a person's page must offer somebody added five minutes ago
+// just as readily as somebody who has answered fifty questions.
+//
+// Contributors is the older, narrower query for the "Whose questions" filter: it
+// still requires a question to already exist, but now reads the same askable
+// flag rather than hard-coding "role = contributor", so an askable admin who has
+// been asked something shows up there too.
+func TestAskableAndContributorsReadTheSameFlag(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+
+	famID, err := s.CreateFamily(ctx, "reads", "The Reads line")
+	if err != nil {
+		t.Fatalf("CreateFamily: %v", err)
+	}
+	fctx := WithFamily(WithFamilies(ctx, []int64{famID}), famID)
+
+	var newContributor, askableAdmin, ordinaryContributor, subjectID int64
+	err = s.InTx(fctx, func(db DBTX) error {
+		var err error
+		newContributor, err = UpsertUser(fctx, db, "new@example.com", "New Contributor")
+		if err != nil {
+			return err
+		}
+		if err := AddMemberTx(fctx, db, famID, newContributor, RoleContributor); err != nil {
+			return err
+		}
+
+		askableAdmin, err = UpsertUser(fctx, db, "askable-admin@example.com", "Askable Admin")
+		if err != nil {
+			return err
+		}
+		if err := AddMemberTx(fctx, db, famID, askableAdmin, RoleAdmin); err != nil {
+			return err
+		}
+
+		ordinaryContributor, err = UpsertUser(fctx, db, "ordinary@example.com", "Ordinary Contributor")
+		if err != nil {
+			return err
+		}
+		if err := AddMemberTx(fctx, db, famID, ordinaryContributor, RoleContributor); err != nil {
+			return err
+		}
+
+		subjectID, err = UpsertSubject(fctx, db, Subject{
+			Slug: "grandpa", Kind: "individual", DisplayName: "Grandpa", SortOrder: 1,
+		})
+		return err
+	})
+	if err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	// Nobody has been asked anything yet, so Contributors offers nobody, but
+	// Askable already offers the two contributors -- not the admin, who is not
+	// askable by default.
+	contributors, err := s.Contributors(fctx, "reads")
+	if err != nil {
+		t.Fatalf("Contributors: %v", err)
+	}
+	if len(contributors) != 0 {
+		t.Errorf("Contributors before anybody has a question = %v, want none", names(contributors))
+	}
+	askable, err := s.Askable(fctx, "reads")
+	if err != nil {
+		t.Fatalf("Askable: %v", err)
+	}
+	got := map[string]bool{}
+	for _, u := range askable {
+		got[u.DisplayName] = true
+	}
+	if !got["New Contributor"] || !got["Ordinary Contributor"] {
+		t.Errorf("Askable = %v, want both contributors with no history yet", names(askable))
+	}
+	if got["Askable Admin"] {
+		t.Error("an admin should not be askable before being flipped on")
+	}
+
+	// Flip the admin on and ask them something. Now Contributors should finally
+	// offer them too.
+	if err := s.SetMemberAskable(fctx, famID, askableAdmin, true); err != nil {
+		t.Fatalf("SetMemberAskable: %v", err)
+	}
+	err = s.InTx(fctx, func(db DBTX) error {
+		_, err := UpsertImportedQuestion(fctx, db, ImportedQuestion{
+			SubjectID: subjectID, AskedOfUserID: askableAdmin,
+			Body: "What do you remember?", SortOrder: 1, ImportKey: "admin-q1",
+		})
+		return err
+	})
+	if err != nil {
+		t.Fatalf("ask the admin something: %v", err)
+	}
+
+	contributors, err = s.Contributors(fctx, "reads")
+	if err != nil {
+		t.Fatalf("Contributors: %v", err)
+	}
+	if len(contributors) != 1 || contributors[0].DisplayName != "Askable Admin" {
+		t.Errorf("Contributors after asking the askable admin = %v, want [Askable Admin]", names(contributors))
+	}
+
+	// Turning a contributor's own flag off removes them from Askable, even
+	// though they might already have history.
+	if err := s.SetMemberAskable(fctx, famID, ordinaryContributor, false); err != nil {
+		t.Fatalf("SetMemberAskable: %v", err)
+	}
+	askable, err = s.Askable(fctx, "reads")
+	if err != nil {
+		t.Fatalf("Askable: %v", err)
+	}
+	for _, u := range askable {
+		if u.DisplayName == "Ordinary Contributor" {
+			t.Error("Ordinary Contributor should no longer be askable")
+		}
+	}
+}
