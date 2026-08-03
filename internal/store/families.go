@@ -244,6 +244,24 @@ func (s *Store) SetMemberPerson(ctx context.Context, familyID, userID int64, per
 	return nil
 }
 
+// SetMemberAskable turns whether somebody can be asked a question on or off,
+// independent of their role. A contributor is askable by default and an admin is
+// not, but either can be flipped by hand: an admin running a line on a relative's
+// behalf may also be somebody whose own memories are worth asking for.
+func (s *Store) SetMemberAskable(ctx context.Context, familyID, userID int64, askable bool) error {
+	tag, err := s.q(ctx).Exec(ctx, `
+		UPDATE core.family_members SET askable = $3
+		 WHERE family_id = $1 AND user_id = $2`, familyID, userID, askable)
+	if err != nil {
+		return fmt.Errorf("set askable for user %d: %w", userID, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("set askable for user %d: they are not a member of family %d",
+			userID, familyID)
+	}
+	return nil
+}
+
 // UpsertUserIn creates or updates an identity on the request's transaction.
 func (s *Store) UpsertUserIn(ctx context.Context, email, displayName string) (int64, error) {
 	return UpsertUser(ctx, s.q(ctx), email, displayName)

@@ -120,3 +120,55 @@ func TestAddMemberTxPreservesAHandFlippedAskableFlag(t *testing.T) {
 		t.Error("re-adding a member should not reset a hand-flipped askable flag")
 	}
 }
+
+// Flipping the flag is how an admin who also has memories worth asking for gets
+// offered, without giving up running the line.
+func TestSetMemberAskableFlipsEitherWay(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+
+	famID, err := s.CreateFamily(ctx, "flip", "The Flip line")
+	if err != nil {
+		t.Fatalf("CreateFamily: %v", err)
+	}
+	fctx := WithFamily(WithFamilies(ctx, []int64{famID}), famID)
+
+	var adminID int64
+	err = s.InTx(fctx, func(db DBTX) error {
+		var err error
+		adminID, err = UpsertUser(fctx, db, "aunt@example.com", "Aunt")
+		if err != nil {
+			return err
+		}
+		return AddMemberTx(fctx, db, famID, adminID, RoleAdmin)
+	})
+	if err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	if err := s.SetMemberAskable(fctx, famID, adminID, true); err != nil {
+		t.Fatalf("SetMemberAskable(true): %v", err)
+	}
+	m, err := s.Member(fctx, famID, adminID)
+	if err != nil {
+		t.Fatalf("Member: %v", err)
+	}
+	if !m.Askable {
+		t.Error("the admin should now be askable")
+	}
+
+	if err := s.SetMemberAskable(fctx, famID, adminID, false); err != nil {
+		t.Fatalf("SetMemberAskable(false): %v", err)
+	}
+	m, err = s.Member(fctx, famID, adminID)
+	if err != nil {
+		t.Fatalf("Member: %v", err)
+	}
+	if m.Askable {
+		t.Error("the admin should be not-askable again")
+	}
+
+	if err := s.SetMemberAskable(fctx, famID, 999999, true); err == nil {
+		t.Error("expected an error setting askable for somebody not in the family")
+	}
+}
