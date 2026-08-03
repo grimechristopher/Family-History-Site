@@ -2074,3 +2074,23 @@ func TestArrivingForTheFirstTimeIsNotToldTheyWereSignedOut(t *testing.T) {
 		t.Error("an expired session is given no explanation")
 	}
 }
+
+// After adding a question about somebody, the only way back used to be "All
+// questions" -- the whole browsable list, not the person the question was about.
+func TestQuestionPageLinksBackToThePerson(t *testing.T) {
+	h := newHarness(t)
+	dad := h.signIn("dad@example.com")
+
+	body := h.get(fmt.Sprintf("/questions/%d", h.dadQuestion), dad).Body.String()
+
+	nav := regexp.MustCompile(`(?s)<nav class="crumbs"[^>]*>.*?</nav>`).FindString(body)
+	if nav == "" {
+		t.Fatal("no breadcrumb nav on the question page")
+	}
+	if !strings.Contains(nav, `href="/subjects/peter-samuel-hale?family=home"`) {
+		t.Errorf("breadcrumb does not link back to the person: %s", nav)
+	}
+	if !strings.Contains(nav, "Peter Samuel Hale") {
+		t.Errorf("breadcrumb does not name the person: %s", nav)
+	}
+}
