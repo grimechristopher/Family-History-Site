@@ -77,6 +77,22 @@
               </div>
             </form>
 
+            {{/* Independent of role: a contributor defaults to askable and an
+                 admin does not, but either can be flipped by hand -- an admin
+                 running a line on a relative's behalf may also have memories
+                 worth asking for. */}}
+            <form method="post" action="/people/askable">
+              <input type="hidden" name="family" value="{{$.ShownFamily}}">
+              <input type="hidden" name="user_id" value="{{.UserID}}">
+              <label class="askee">
+                <input type="checkbox" name="askable" value="1" {{if .Askable}}checked{{end}}>
+                <span>Can be asked questions</span>
+              </label>
+              <div class="btn-row">
+                <button class="btn btn-quiet" type="submit">Save</button>
+              </div>
+            </form>
+
             <form method="post" action="/people/remove"
                   data-confirm="Remove {{.DisplayName}} from this line?{{if .Written}} What they have written stays.{{end}}">
               <input type="hidden" name="family" value="{{$.ShownFamily}}">

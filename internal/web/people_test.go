@@ -628,3 +628,44 @@ func TestOnlyAnAdminMayFlipAnotherAdminsAskableFlag(t *testing.T) {
 		t.Error("chris should now be askable")
 	}
 }
+
+// The checkbox lives in the same edit panel as the email and tree-person forms,
+// so flipping it there has to actually change who's offered.
+func TestAskableCheckboxOnThePeoplePage(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	dad := h.signIn("dad@example.com")
+
+	mom, err := h.store.UserByEmail(ctx, "mom@example.com")
+	if err != nil {
+		t.Fatalf("UserByEmail: %v", err)
+	}
+
+	panel := regexp.MustCompile(`(?s)user_id" value="` + fmt.Sprint(mom.ID) + `".*?</details>`)
+
+	body := h.get("/people", dad).Body.String()
+	block := panel.FindString(body)
+	if block == "" {
+		t.Fatal("no edit panel for mom on the page")
+	}
+	if !strings.Contains(block, `name="askable"`) {
+		t.Fatal("no askable checkbox in mom's panel")
+	}
+	if !strings.Contains(block, "checked") {
+		t.Error("mom is a contributor, so her checkbox should start checked")
+	}
+
+	// Flip it off through the page's own form.
+	rec := h.post("/people/askable", url.Values{
+		"family": {"home"}, "user_id": {fmt.Sprint(mom.ID)}, "askable": {""},
+	}, dad)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("flipping the checkbox: status %d, %s", rec.Code, rec.Body.String())
+	}
+
+	body = h.get("/people", dad).Body.String()
+	block = panel.FindString(body)
+	if strings.Contains(block, "checked") {
+		t.Error("mom's checkbox should now be unchecked")
+	}
+}
