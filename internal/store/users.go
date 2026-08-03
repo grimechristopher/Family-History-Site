@@ -66,18 +66,18 @@ func (s *Store) UserByDisplayName(ctx context.Context, name string) (*User, erro
 		`SELECT `+userColumns+` FROM core.users WHERE display_name = $1`, name))
 }
 
-// Contributors are the people this family actually asks something of.
+// Contributors are the people this family actually asks something of, in a line
+// that already has something waiting -- the "Whose questions" filter on the
+// browsable questions page. Offering somebody with nothing to filter by is a dead
+// end, so this still requires history, unlike Askable below.
 //
-// Having at least one question is the test, not the role. A spouse who belongs to
-// the other side of the family is a member here so she can read her husband's
-// answers, but nothing is asked of her here -- offering her under "whose
-// questions" leads to an empty page.
+// Askable is the test, not the role. A spouse who belongs to the other side of
+// the family is a member here so she can read her husband's answers, but nothing
+// is asked of her here -- offering her under "whose questions" leads to an empty
+// page.
+//
 // familySlug narrows to the people who answer in one line. Frank belongs only to
 // the Lucero line, so choosing the Grime line should not go on offering him.
-// Contributors lists everybody in this line who can be asked a question and
-// already has one waiting -- the "Whose questions" filter on the browsable
-// questions page. Offering somebody with nothing to filter by is a dead end, so
-// this requires history; Askable below does not.
 func (s *Store) Contributors(ctx context.Context, familySlug string) ([]*User, error) {
 	rows, err := s.q(ctx).Query(ctx, `
 		SELECT DISTINCT `+prefixed(userColumns, "u.")+`
