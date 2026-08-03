@@ -428,7 +428,10 @@ func (s *Server) handleAskQuestion(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not read the form", http.StatusBadRequest)
 		return
 	}
-	contributors, err := s.Store.Contributors(r.Context(), subject.FamilySlug)
+	// Askable, not Contributors: validating against the same list the form on the
+	// subject's page was built from, which offers somebody the moment they're
+	// added rather than only once they already have a question.
+	contributors, err := s.Store.Askable(r.Context(), subject.FamilySlug)
 	if err != nil {
 		s.serverError(w, r, err)
 		return

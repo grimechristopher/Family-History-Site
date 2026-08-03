@@ -185,11 +185,14 @@ func (s *Server) handleSubject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The people who answer in this person's line, not everybody the viewer can
-	// see. Unscoped, Rosemary's page -- an Ayres great-aunt -- offered Frank, Tony,
-	// Inez, Robert and Violeta from Ashley's side, and the handler behind the form
-	// then refused them with "Choose who the question is for."
-	contributors, err := s.Store.Contributors(r.Context(), subject.FamilySlug)
+	// Everybody in this person's line who can be asked, not everybody the viewer
+	// can see. Unscoped, Rosemary's page -- an Ayres great-aunt -- offered Frank,
+	// Tony, Inez, Robert and Violeta from Ashley's side, and the handler behind the
+	// form then refused them with "Choose who the question is for."
+	//
+	// Askable, not Contributors: this offers somebody the moment they're added,
+	// not only once something has already been asked of them.
+	contributors, err := s.Store.Askable(r.Context(), subject.FamilySlug)
 	if err != nil {
 		s.serverError(w, r, err)
 		return

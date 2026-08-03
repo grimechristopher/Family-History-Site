@@ -504,3 +504,52 @@ func TestAddingToSomebodyNobodyHasAskedAbout(t *testing.T) {
 		t.Error("she is still not in the list of people something is recorded about")
 	}
 }
+
+// The checkbox that offers who a question can be asked of must not require a
+// question to already exist -- otherwise nobody added after the initial import
+// could ever be asked their first thing. This is what was blocking Ashley, her
+// cousin, and anybody else added since.
+func TestNewContributorCanBeAskedImmediately(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	chris := h.signIn("chris@example.com")
+
+	fam, err := h.store.FamilyBySlug(ctx, "home")
+	if err != nil {
+		t.Fatalf("FamilyBySlug: %v", err)
+	}
+	famCtx := store.WithFamily(ctx, fam.ID)
+
+	rec := h.post("/people", url.Values{
+		"family":       {"home"},
+		"display_name": {"Cousin Ashley"},
+		"email":        {"ashley@example.com"},
+	}, chris)
+	if rec.Code == http.StatusBadRequest {
+		t.Fatalf("adding a new contributor: %s", rec.Body.String())
+	}
+
+	page := h.get("/subjects/peter-samuel-hale", chris).Body.String()
+	if !strings.Contains(page, `name="asked_of" value="Cousin Ashley"`) {
+		t.Error("a brand-new contributor should be offered as someone to ask, with nothing asked of them yet")
+	}
+
+	rec = h.post("/subjects/peter-samuel-hale/questions", url.Values{
+		"asked_of": {"Cousin Ashley"}, "body": {"What games did you play with him?"},
+	}, chris)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("asking the new contributor: status %d, %s", rec.Code, rec.Body.String())
+	}
+
+	ashley, err := h.store.UserByEmail(ctx, "ashley@example.com")
+	if err != nil {
+		t.Fatalf("UserByEmail: %v", err)
+	}
+	count, err := h.store.CountQuestionsFor(famCtx, ashley.ID)
+	if err != nil {
+		t.Fatalf("CountQuestionsFor: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("Cousin Ashley has %d questions, want 1", count)
+	}
+}
