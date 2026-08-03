@@ -116,12 +116,16 @@ func (s *Store) AddMember(ctx context.Context, familyID, userID int64, role stri
 func AddMemberTx(ctx context.Context, db DBTX, familyID, userID int64, role string) error {
 	// removed_at is cleared, so adding somebody back is bringing them back rather
 	// than leaving a membership that exists and does not work.
+	//
+	// askable only seeds the row on first insert -- it's left out of the ON
+	// CONFLICT SET, so re-adding somebody or changing their role does not undo a
+	// flag already flipped by hand on /people.
 	_, err := db.Exec(ctx, `
-		INSERT INTO core.family_members (family_id, user_id, role)
-		VALUES ($1, $2, $3)
+		INSERT INTO core.family_members (family_id, user_id, role, askable)
+		VALUES ($1, $2, $3, $4)
 		ON CONFLICT (family_id, user_id) DO UPDATE
 		   SET role = EXCLUDED.role, removed_at = NULL`,
-		familyID, userID, role)
+		familyID, userID, role, role != RoleAdmin)
 	if err != nil {
 		return fmt.Errorf("add member %d to family %d: %w", userID, familyID, err)
 	}
@@ -140,6 +144,10 @@ type Member struct {
 	// Removing somebody who has written nothing is housekeeping; removing somebody
 	// who has written is a thing to say out loud first.
 	Written int
+	// Askable is whether they can be offered as an answer to "who should answer
+	// it?" -- independent of role. A contributor defaults to true and an admin to
+	// false, but either can be flipped by hand.
+	Askable bool
 	// Removed marks a membership that has ended. The row stays because everything
 	// they wrote hangs off it.
 	Removed bool
@@ -153,7 +161,8 @@ func (s *Store) Members(ctx context.Context, familyID int64) ([]Member, error) {
 		       coalesce(trim(p.given_name || ' ' || p.surname), ''),
 		       -- What they have written, which decides how removing them reads.
 		       (SELECT count(*) FROM family.entries e
-		         WHERE e.author_user_id = u.id AND e.family_id = m.family_id)
+		         WHERE e.author_user_id = u.id AND e.family_id = m.family_id),
+		       m.askable
 		  FROM core.family_members m
 		  JOIN core.users u ON u.id = m.user_id
 		  LEFT JOIN family.people p ON p.id = m.person_id AND p.family_id = m.family_id
@@ -168,7 +177,7 @@ func (s *Store) Members(ctx context.Context, familyID int64) ([]Member, error) {
 	for rows.Next() {
 		var m Member
 		if err := rows.Scan(&m.UserID, &m.DisplayName, &m.Email, &m.Role, &m.PersonID,
-			&m.PersonName, &m.Written); err != nil {
+			&m.PersonName, &m.Written, &m.Askable); err != nil {
 			return nil, err
 		}
 		out = append(out, m)
@@ -416,12 +425,14 @@ func (s *Store) Member(ctx context.Context, familyID, userID int64) (*Member, er
 		SELECT u.id, u.display_name, u.email, m.role, m.person_id,
 		       coalesce(trim(p.given_name || ' ' || p.surname), ''),
 		       (SELECT count(*) FROM family.entries e
-		         WHERE e.author_user_id = u.id AND e.family_id = m.family_id)
+		         WHERE e.author_user_id = u.id AND e.family_id = m.family_id),
+		       m.askable
 		  FROM core.family_members m
 		  JOIN core.users u ON u.id = m.user_id
 		  LEFT JOIN family.people p ON p.id = m.person_id AND p.family_id = m.family_id
 		 WHERE m.family_id = $1 AND m.user_id = $2 AND m.removed_at IS NULL`, familyID, userID).
-		Scan(&m.UserID, &m.DisplayName, &m.Email, &m.Role, &m.PersonID, &m.PersonName, &m.Written)
+		Scan(&m.UserID, &m.DisplayName, &m.Email, &m.Role, &m.PersonID, &m.PersonName,
+			&m.Written, &m.Askable)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
